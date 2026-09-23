@@ -41,7 +41,9 @@ export const financeiroService = {
     let query = supabase
       .from('transacoes_financeiras')
       .select('*', { count: 'exact' })
-      .order('data', { ascending: false });
+      .order('data', { ascending: false })
+      .order('created_at', { ascending: false })
+      .order('id', { ascending: false });
 
     const search = filters?.search ? sanitizeSearch(filters.search) : '';
     if (search) {
@@ -51,7 +53,7 @@ export const financeiroService = {
     if (filters?.categoria && filters.categoria !== 'all') query = query.eq('categoria', filters.categoria);
     if (filters?.status && filters.status !== 'all') query = query.eq('status', filters.status);
 
-    if (filters?.page && filters.limit) {
+    if (filters?.page !== undefined && filters.limit !== undefined) {
       const start = (filters.page - 1) * filters.limit;
       query = query.range(start, start + filters.limit - 1);
     }
@@ -125,30 +127,21 @@ export const financeiroService = {
   },
 
   getResumo: async (): Promise<{ receitas: number; despesas: number; saldo: number; pendentes: number }> => {
-    const { data, error } = await supabase
-      .from('transacoes_financeiras')
-      .select('tipo, valor, status');
+    const { data, error } = await supabase.rpc('get_financeiro_resumo');
     if (error) throw error;
 
-    let receitas = 0;
-    let despesas = 0;
-    let pendentes = 0;
-
-    for (const row of (data ?? []) as unknown as Pick<TransacaoFinanceiraDbRow, 'tipo' | 'valor' | 'status'>[]) {
-      const valor = Number(row.valor);
-      if (row.status === 'pago') {
-        if (row.tipo === 'receita') receitas += valor;
-        if (row.tipo === 'despesa') despesas += valor;
-      } else {
-        pendentes += valor;
-      }
-    }
+    const resumo = (data?.[0] ?? {}) as {
+      receitas: number | string;
+      despesas: number | string;
+      saldo: number | string;
+      pendentes: number | string;
+    };
 
     return {
-      receitas,
-      despesas,
-      saldo: receitas - despesas,
-      pendentes,
+      receitas: Number(resumo.receitas),
+      despesas: Number(resumo.despesas),
+      saldo: Number(resumo.saldo),
+      pendentes: Number(resumo.pendentes),
     };
   },
 };
