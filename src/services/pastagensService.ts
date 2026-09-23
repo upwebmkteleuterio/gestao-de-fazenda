@@ -26,6 +26,9 @@ type PastagemDbRow = {
 
 type PastagemDbWrite = Omit<PastagemDbRow, 'created_at'> & { created_at?: string };
 
+const toNumberOrUndefined = (value: number | string | null | undefined): number | undefined =>
+  value === null || value === undefined ? undefined : Number(value);
+
 type ServicoDbRow = {
   id: string;
   pasto_id: string;
@@ -41,21 +44,21 @@ const toPastagem = (row: PastagemDbRow): Pastagem => ({
   id: row.id,
   nome_pasto: row.nome_pasto,
   tipo_capim: row.tipo_capim,
-  area_ha: row.area_ha,
-  lotacao_maxima: row.lotacao_maxima,
+  area_ha: Number(row.area_ha),
+  lotacao_maxima: Number(row.lotacao_maxima),
   data_entrada: row.data_entrada,
   data_saida_prevista: row.data_saida_prevista ?? undefined,
-  qtd_manual: row.qtd_manual ?? undefined,
+  qtd_manual: toNumberOrUndefined(row.qtd_manual),
   usar_qtd_manual: row.usar_qtd_manual,
-  vacas_count_manual: row.vacas_count_manual ?? undefined,
-  bezerros_count_manual: row.bezerros_count_manual ?? undefined,
-  matrizes_count_manual: row.matrizes_count_manual ?? undefined,
-  touros_count_manual: row.touros_count_manual ?? undefined,
-  qtd_animais: row.qtd_animais ?? undefined,
-  vacas_count: row.vacas_count ?? undefined,
-  bezerros_count: row.bezerros_count ?? undefined,
-  matrizes_count: row.matrizes_count ?? undefined,
-  touros_count: row.touros_count ?? undefined,
+  vacas_count_manual: toNumberOrUndefined(row.vacas_count_manual),
+  bezerros_count_manual: toNumberOrUndefined(row.bezerros_count_manual),
+  matrizes_count_manual: toNumberOrUndefined(row.matrizes_count_manual),
+  touros_count_manual: toNumberOrUndefined(row.touros_count_manual),
+  qtd_animais: toNumberOrUndefined(row.qtd_animais),
+  vacas_count: toNumberOrUndefined(row.vacas_count),
+  bezerros_count: toNumberOrUndefined(row.bezerros_count),
+  matrizes_count: toNumberOrUndefined(row.matrizes_count),
+  touros_count: toNumberOrUndefined(row.touros_count),
   createdAt: row.created_at,
 });
 

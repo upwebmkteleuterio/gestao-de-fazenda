@@ -69,14 +69,42 @@ const statusReprodutivoPorEvento = (evento: Pick<EventoReproducao, 'resultado_dg
   return 'Diagnóstico';
 };
 
-const syncMatrizStatus = async (evento: EventoReproducao) => {
+const compareEventosMaisRecentes = (a: EventoReproducao, b: EventoReproducao): number => {
+  const dataPrincipalDiff = new Date(b.data_principal).getTime() - new Date(a.data_principal).getTime();
+  if (dataPrincipalDiff !== 0) return dataPrincipalDiff;
+  return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+};
+
+const getEventoMaisRecente = (
+  eventos: EventoReproducao[],
+  animalId: string,
+): EventoReproducao | undefined =>
+  eventos
+    .filter((evento) => evento.animal_id === animalId)
+    .sort(compareEventosMaisRecentes)[0];
+
+const syncMatrizStatus = async (animalId: string, evento?: EventoReproducao) => {
+  if (!evento) {
+    await animaisService.update(animalId, {
+      status_reprodutivo: 'Vazia',
+      touro_cobertura: undefined,
+    });
+    return;
+  }
+
   const updates: Partial<Animal> = {
     status_reprodutivo: statusReprodutivoPorEvento(evento),
   };
   if (evento.dados_protocolo?.touro !== undefined) {
     updates.touro_cobertura = evento.dados_protocolo.touro;
   }
-  await animaisService.update(evento.animal_id, updates);
+  await animaisService.update(animalId, updates);
+};
+
+const syncAffectedMatrizes = async (animalIds: string[], eventos: EventoReproducao[]) => {
+  for (const animalId of new Set(animalIds)) {
+    await syncMatrizStatus(animalId, getEventoMaisRecente(eventos, animalId));
+  }
 };
 
 const buildEventoPayload = (
@@ -173,7 +201,7 @@ export const reproducaoService = {
     if (error) throw error;
 
     const created = toEvento(data as unknown as ReproducaoDbRow);
-    await syncMatrizStatus(created);
+    await syncAffectedMatrizes([created.animal_id], await fetchEventos());
     return created;
   },
 
@@ -193,7 +221,7 @@ export const reproducaoService = {
     if (error) throw error;
 
     const updated = toEvento(data as unknown as ReproducaoDbRow);
-    await syncMatrizStatus(updated);
+    await syncAffectedMatrizes([current.animal_id, updated.animal_id], await fetchEventos());
     return updated;
   },
 
@@ -204,19 +232,7 @@ export const reproducaoService = {
     if (error) throw error;
 
     if (eventToDelete) {
-      const remaining = list
-        .filter((evento) => evento.id !== id && evento.animal_id === eventToDelete.animal_id)
-        .sort((a, b) => new Date(b.data_principal).getTime() - new Date(a.data_principal).getTime());
-      const lastEvento = remaining[0];
-
-      if (lastEvento) {
-        await syncMatrizStatus(lastEvento);
-      } else {
-        await animaisService.update(eventToDelete.animal_id, {
-          status_reprodutivo: 'Vazia',
-          touro_cobertura: undefined,
-        });
-      }
+      await syncAffectedMatrizes([eventToDelete.animal_id], await fetchEventos());
     }
 
     return true;

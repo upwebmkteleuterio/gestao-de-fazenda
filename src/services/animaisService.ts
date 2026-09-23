@@ -33,7 +33,19 @@ type AnimalDbRow = {
 };
 
 type AnimalDbWrite = Omit<AnimalDbRow, 'created_at'> & { created_at?: string };
+type RegistroToqueDbRow = {
+  id: string;
+  animal_id: string;
+  data: string;
+  ano: number;
+  brinco: string;
+  resultado: RegistroToqueAno['resultado'];
+  observacoes: string | null;
+};
 type LegacyArrayRow = { id: string; animais_ids: string[] | null };
+
+const toNumberOrUndefined = (value: number | string | null | undefined): number | undefined =>
+  value === null || value === undefined ? undefined : Number(value);
 
 const toAnimal = (row: AnimalDbRow): Animal => ({
   id: row.id,
@@ -50,7 +62,7 @@ const toAnimal = (row: AnimalDbRow): Animal => ({
   status: row.status,
   motivo_descarte: row.motivo_descarte ?? undefined,
   data_descarte: row.data_descarte ?? undefined,
-  qtd_descartes_brinco: row.qtd_descartes_brinco ?? undefined,
+  qtd_descartes_brinco: toNumberOrUndefined(row.qtd_descartes_brinco),
   categoria: row.categoria,
   pasto_id: row.pasto_id ?? undefined,
   pasto_nome: row.pasto_nome ?? undefined,
@@ -60,11 +72,71 @@ const toAnimal = (row: AnimalDbRow): Animal => ({
   filhos_ids: row.filhos_ids ?? undefined,
   historico_toque: row.historico_toque ?? undefined,
   observacoes: row.observacoes ?? undefined,
-  peso_atual: row.peso_atual ?? undefined,
+  peso_atual: toNumberOrUndefined(row.peso_atual),
   data_pesagem_atual: row.data_pesagem_atual ?? undefined,
   status_sincronizacao: row.status_sincronizacao,
   createdAt: row.created_at,
 });
+
+const toRegistroToque = (row: RegistroToqueDbRow): RegistroToqueAno => ({
+  id: row.id,
+  data: row.data,
+  ano: Number(row.ano),
+  brinco: row.brinco,
+  resultado: row.resultado,
+  observacoes: row.observacoes ?? undefined,
+});
+
+const withNormalizedToques = async (rows: AnimalDbRow[]): Promise<Animal[]> => {
+  const animals = rows.map(toAnimal);
+  if (animals.length === 0) return animals;
+
+  const { data, error } = await supabase
+    .from('registros_toque')
+    .select('id, animal_id, data, ano, brinco, resultado, observacoes')
+    .in('animal_id', animals.map((animal) => animal.id))
+    .order('data', { ascending: false });
+  if (error) throw error;
+
+  const normalizedByAnimal = new Map<string, RegistroToqueAno[]>();
+  ((data ?? []) as unknown as RegistroToqueDbRow[]).forEach((row) => {
+    const records = normalizedByAnimal.get(row.animal_id) ?? [];
+    records.push(toRegistroToque(row));
+    normalizedByAnimal.set(row.animal_id, records);
+  });
+
+  return animals.map((animal) => {
+    const normalized = normalizedByAnimal.get(animal.id);
+    return normalized && normalized.length > 0 ? { ...animal, historico_toque: normalized } : animal;
+  });
+};
+
+const syncNormalizedToques = async (
+  animalId: string,
+  brinco: string,
+  historicoToque: RegistroToqueAno[] | null | undefined,
+): Promise<void> => {
+  const { error: deleteError } = await supabase
+    .from('registros_toque')
+    .delete()
+    .eq('animal_id', animalId);
+  if (deleteError) throw deleteError;
+
+  if (!historicoToque || historicoToque.length === 0) return;
+
+  const payload = historicoToque.map((registro) => ({
+    id: registro.id,
+    animal_id: animalId,
+    data: registro.data,
+    ano: Number(registro.ano),
+    brinco,
+    resultado: registro.resultado,
+    observacoes: registro.observacoes ?? null,
+  }));
+
+  const { error } = await supabase.from('registros_toque').insert(payload);
+  if (error) throw error;
+};
 
 const sanitizeSearch = (value: string) => value.replace(/[^\p{L}\p{N}\s-]/gu, '').trim();
 
@@ -218,7 +290,7 @@ export const animaisService = {
     if (error) throw error;
 
     return {
-      data: ((data ?? []) as unknown as AnimalDbRow[]).map(toAnimal),
+      data: await withNormalizedToques((data ?? []) as unknown as AnimalDbRow[]),
       total: count ?? 0,
     };
   },
@@ -226,7 +298,9 @@ export const animaisService = {
   getById: async (id: string): Promise<Animal | null> => {
     const { data, error } = await supabase.from('animais').select('*').eq('id', id).maybeSingle();
     if (error) throw error;
-    return data ? toAnimal(data as unknown as AnimalDbRow) : null;
+    if (!data) return null;
+    const [animal] = await withNormalizedToques([data as unknown as AnimalDbRow]);
+    return animal ?? null;
   },
 
   create: async (newAnimal: Omit<Animal, 'id' | 'createdAt' | 'status_sincronizacao'>): Promise<Animal> => {
@@ -235,7 +309,9 @@ export const animaisService = {
     const payload = buildAnimalInsert(newAnimal, id, discardCount);
     const { data, error } = await supabase.from('animais').insert(payload).select('*').single();
     if (error) throw error;
-    return toAnimal(data as unknown as AnimalDbRow);
+    await syncNormalizedToques(id, newAnimal.brinco, newAnimal.historico_toque);
+    const [animal] = await withNormalizedToques([data as unknown as AnimalDbRow]);
+    return animal;
   },
 
   update: async (id: string, updates: Partial<Animal>): Promise<Animal> => {
@@ -253,7 +329,13 @@ export const animaisService = {
 
     const { data, error } = await supabase.from('animais').update(patch).eq('id', id).select('*').single();
     if (error) throw error;
-    return toAnimal(data as unknown as AnimalDbRow);
+    await syncNormalizedToques(
+      id,
+      updates.brinco ?? current.brinco,
+      updates.historico_toque ?? current.historico_toque,
+    );
+    const [animal] = await withNormalizedToques([data as unknown as AnimalDbRow]);
+    return animal;
   },
 
   delete: async (id: string): Promise<boolean> => {
@@ -266,7 +348,7 @@ export const animaisService = {
     return true;
   },
 
-  updatePesoAtual: async (animalId: string, peso: number, dataPesagem: string): Promise<void> => {
+  updatePesoAtual: async (animalId: string, peso: number | null, dataPesagem: string | null): Promise<void> => {
     const { error } = await supabase
       .from('animais')
       .update({ peso_atual: peso, data_pesagem_atual: dataPesagem, status_sincronizacao: false })

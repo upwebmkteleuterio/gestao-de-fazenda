@@ -173,7 +173,7 @@ export const FinanceiroPage: React.FC = () => {
         <div className="min-w-0 flex-1">
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white tracking-tight">Gestão Financeira & DRE</h1>
           <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-            Controle de receitas com venda de gado/leite, despesas operacionais e demonstrativo do mês.
+            Controle de receitas com venda de gado/leite, despesas operacionais e demonstrativo acumulado.
           </p>
         </div>
         <div className="flex items-center gap-3 shrink-0">

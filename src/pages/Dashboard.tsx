@@ -9,14 +9,18 @@ import { useAnimais } from '../hooks/useAnimais';
 import { usePesagens } from '../hooks/usePesagens';
 import { useInsumos } from '../hooks/useInsumos';
 import { useFinanceiro } from '../hooks/useFinanceiro';
+import { useReproducao } from '../hooks/useReproducao';
+import { useAuth } from '@/contexts/AuthContext';
 import { useUIStore } from '../store/useUIStore';
 
 export const DashboardPage: React.FC = () => {
   const navigate = useNavigate();
+  const { role } = useAuth();
   const { setActivePage, openSlidePanel } = useUIStore();
   const { animais, isLoading: isLoadingAnimais, isError: isErrorAnimais, refetch: refetchAnimais } = useAnimais();
   const { pesagens, isLoading: isLoadingPesagens } = usePesagens();
   const { insumos } = useInsumos();
+  const { eventos } = useReproducao();
   const { resumo } = useFinanceiro();
 
   // Escuta atalhos de teclado no Dashboard: Alt + A (Novo Animal), Alt + P (Nova Pesagem)
@@ -52,8 +56,16 @@ export const DashboardPage: React.FC = () => {
   // Média de GMD recente
   const pesagensComGMD = pesagens.filter(p => p.gmd_calculado !== undefined);
   const gmdMedio = pesagensComGMD.length > 0
-    ? (pesagensComGMD.reduce((acc, curr) => acc + (curr.gmd_calculado || 0), 0) / pesagensComGMD.length).toFixed(2)
-    : '0.82';
+    ? (pesagensComGMD.reduce((acc, curr) => acc + (curr.gmd_calculado ?? 0), 0) / pesagensComGMD.length).toFixed(2)
+    : null;
+
+  const eventosComResultadoDg = eventos.filter(
+    (evento) => evento.resultado_dg === 'cheia' || evento.resultado_dg === 'vazia',
+  );
+  const eventosCheios = eventosComResultadoDg.filter((evento) => evento.resultado_dg === 'cheia').length;
+  const taxaPrenhez = eventosComResultadoDg.length > 0
+    ? `${Math.round((eventosCheios / eventosComResultadoDg.length) * 100)}%`
+    : '—';
 
   return (
     <div className="space-y-8 animate-fade-in pb-12">
@@ -115,11 +127,11 @@ export const DashboardPage: React.FC = () => {
         />
         <StatCard
           title="Ganho Médio Diário (GMD)"
-          value={`${gmdMedio} kg/dia`}
+          value={gmdMedio === null ? '—' : `${gmdMedio} kg/dia`}
           icon={Activity}
-          trend="up"
-          trendValue="+5.2%"
-          subtitle="Últimos 60 dias"
+          trend={pesagensComGMD.length > 0 ? 'up' : undefined}
+          trendValue={pesagensComGMD.length > 0 ? `${pesagensComGMD.length} pesagens com GMD` : undefined}
+          subtitle={pesagensComGMD.length > 0 ? 'Pesagens com GMD' : 'Sem dados de GMD'}
           onClick={() => {
             setActivePage('Pesagens');
             navigate('/pesagens');
@@ -127,28 +139,30 @@ export const DashboardPage: React.FC = () => {
         />
         <StatCard
           title="Taxa de Prenhez"
-          value="72%"
+          value={taxaPrenhez}
           icon={HeartHandshake}
-          trend="up"
-          trendValue="IATF Recente"
-          subtitle="Matrizes D10 / DG"
+          trend={eventosComResultadoDg.length > 0 ? 'up' : undefined}
+          trendValue={eventosComResultadoDg.length > 0 ? `${eventosComResultadoDg.length} DG avaliados` : undefined}
+          subtitle={eventosComResultadoDg.length > 0 ? 'Cheias / vazias' : 'Sem dados de DG'}
           onClick={() => {
             setActivePage('Manejo Reprodutivo');
             navigate('/reproducao');
           }}
         />
-        <StatCard
-          title="Saldo Financeiro"
-          value={`R$ ${resumo.saldo.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`}
-          icon={DollarSign}
-          trend={resumo.saldo >= 0 ? 'up' : 'down'}
-          trendValue={`Receitas: R$ ${resumo.receitas.toLocaleString()}`}
-          subtitle="Mês Atual"
-          onClick={() => {
-            setActivePage('Financeiro');
-            navigate('/financeiro');
-          }}
-        />
+        {role === 'superadmin' && (
+          <StatCard
+            title="Saldo Financeiro"
+            value={`R$ ${resumo.saldo.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`}
+            icon={DollarSign}
+            trend={resumo.saldo >= 0 ? 'up' : 'down'}
+            trendValue={`Receitas: R$ ${resumo.receitas.toLocaleString()}`}
+            subtitle="Resumo acumulado"
+            onClick={() => {
+              setActivePage('Financeiro');
+              navigate('/financeiro');
+            }}
+          />
+        )}
       </div>
 
       {/* Main Charts & Overview Row */}
@@ -221,10 +235,10 @@ export const DashboardPage: React.FC = () => {
               <div>
                 <p className="font-semibold text-sm text-gray-900 dark:text-gray-100">Diagnóstico DG Toque</p>
                 <p className="text-xs text-blue-700 dark:text-blue-400 mt-0.5">
-                  2 Matrizes pendentes de ultrassom este mês
+                  Consulte os registros de DG no manejo reprodutivo
                 </p>
               </div>
-              <Badge variant="info">Agendado</Badge>
+              <Badge variant="info">Manejo reprodutivo</Badge>
             </div>
           </div>
 

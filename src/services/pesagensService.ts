@@ -46,7 +46,7 @@ const toPesagem = (row: PesagemDbRow): Pesagem => ({
   data_pesagem_anterior: row.data_pesagem_anterior ?? undefined,
   ganho_peso_kg: row.ganho_peso_kg === null ? undefined : Number(row.ganho_peso_kg),
   gmd_calculado: row.gmd_calculado === null ? undefined : Number(row.gmd_calculado),
-  dias_intervalo: row.dias_intervalo ?? undefined,
+  dias_intervalo: row.dias_intervalo === null ? undefined : Number(row.dias_intervalo),
   observacoes: row.observacoes ?? undefined,
   status_sincronizacao: row.status_sincronizacao,
   createdAt: row.created_at,
@@ -56,6 +56,25 @@ const fetchPesagens = async (): Promise<Pesagem[]> => {
   const { data, error } = await supabase.from('pesagens').select('*');
   if (error) throw error;
   return ((data ?? []) as unknown as PesagemDbRow[]).map(toPesagem);
+};
+
+const syncAnimalPesoAtual = async (animalIds: string[], pesagens: Pesagem[]): Promise<void> => {
+  const uniqueAnimalIds = [...new Set(animalIds)];
+
+  await Promise.all(uniqueAnimalIds.map(async (animalId) => {
+    const latest = pesagens
+      .filter((pesagem) => pesagem.animal_id === animalId)
+      .sort((a, b) => {
+        const dateDiff = new Date(b.data_pesagem).getTime() - new Date(a.data_pesagem).getTime();
+        return dateDiff !== 0 ? dateDiff : new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+      })[0];
+
+    await animaisService.updatePesoAtual(
+      animalId,
+      latest?.peso_kg ?? null,
+      latest?.data_pesagem ?? null,
+    );
+  }));
 };
 
 const calcularGMD = (animalId: string, novoPeso: number, dataNova: string, pesagensExistentes: Pesagem[]) => {
@@ -239,13 +258,21 @@ export const pesagensService = {
     const { data, error } = await supabase.from('pesagens').update(patch).eq('id', id).select('*').single();
     if (error) throw error;
 
-    await animaisService.updatePesoAtual(animalId, novoPeso, novaData);
+    const pesagensRestantes = await fetchPesagens();
+    await syncAnimalPesoAtual([current.animal_id, animalId], pesagensRestantes);
     return toPesagem(data as unknown as PesagemDbRow);
   },
 
   delete: async (id: string): Promise<boolean> => {
+    const pesagens = await fetchPesagens();
+    const current = pesagens.find((pesagem) => pesagem.id === id);
     const { error } = await supabase.from('pesagens').delete().eq('id', id);
     if (error) throw error;
+
+    if (current) {
+      const pesagensRestantes = pesagens.filter((pesagem) => pesagem.id !== id);
+      await syncAnimalPesoAtual([current.animal_id], pesagensRestantes);
+    }
     return true;
   },
 };
