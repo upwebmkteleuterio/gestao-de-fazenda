@@ -26,6 +26,7 @@ export const usePastagens = (filters?: { search?: string; status?: string; page?
     mutationFn: ({ id, updates }: { id: string; updates: Partial<Pastagem> }) => pastagensService.update(id, updates),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['pastagens'] });
+      queryClient.invalidateQueries({ queryKey: ['animais'] });
     },
   });
 
@@ -33,6 +34,7 @@ export const usePastagens = (filters?: { search?: string; status?: string; page?
     mutationFn: (id: string) => pastagensService.delete(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['pastagens'] });
+      queryClient.invalidateQueries({ queryKey: ['animais'] });
     },
   });
 

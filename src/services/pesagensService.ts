@@ -183,27 +183,30 @@ export const pesagensService = {
     page?: number;
     limit?: number;
   }): Promise<{ data: Pesagem[]; total: number }> => {
-    let list = enrichPesagensComComparativo(await fetchPesagens());
+    let query = supabase
+      .from('pesagens')
+      .select('*', { count: 'exact' });
 
-    if (filters?.search) {
-      const query = filters.search.toLowerCase();
-      list = list.filter((p) => p.brinco_animal.toLowerCase().includes(query));
-    }
-    if (filters?.tipoAnimal && filters.tipoAnimal !== 'all') {
-      list = list.filter((p) => p.tipo_animal === filters.tipoAnimal);
-    }
-    if (filters?.startDate) list = list.filter((p) => p.data_pesagem >= filters.startDate!);
-    if (filters?.endDate) list = list.filter((p) => p.data_pesagem <= filters.endDate!);
+    if (filters?.search) query = query.ilike('brinco_animal', `%${filters.search}%`);
+    if (filters?.tipoAnimal && filters.tipoAnimal !== 'all') query = query.eq('tipo_animal', filters.tipoAnimal);
+    if (filters?.startDate) query = query.gte('data_pesagem', filters.startDate);
+    if (filters?.endDate) query = query.lte('data_pesagem', filters.endDate);
 
-    list.sort((a, b) => new Date(b.data_pesagem).getTime() - new Date(a.data_pesagem).getTime());
-    const total = list.length;
+    query = query
+      .order('data_pesagem', { ascending: false })
+      .order('created_at', { ascending: false })
+      .order('id', { ascending: false });
 
-    if (filters?.page && filters.limit) {
-      const startIndex = (filters.page - 1) * filters.limit;
-      list = list.slice(startIndex, startIndex + filters.limit);
+    if (filters?.page !== undefined && filters.limit !== undefined) {
+      query = query.range((filters.page - 1) * filters.limit, filters.page * filters.limit - 1);
     }
 
-    return { data: list, total };
+    const { data, count, error } = await query;
+    if (error) throw error;
+    return {
+      data: ((data ?? []) as unknown as PesagemDbRow[]).map(toPesagem),
+      total: count ?? 0,
+    };
   },
 
   getRecent: async (): Promise<Pesagem[]> => {

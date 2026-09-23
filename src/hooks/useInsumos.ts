@@ -14,6 +14,11 @@ export const useInsumos = (
     queryFn: () => insumosService.getAll(categoria, filters),
   });
 
+  const lowStockCountQuery = useQuery({
+    queryKey: ['insumos', 'estoque-baixo-total'],
+    queryFn: () => insumosService.getAll(undefined, { estoqueBaixo: true, page: 1, limit: 1 }),
+  });
+
   const movsQuery = useQuery({
     queryKey: ['movimentacoes_insumos', selectedInsumoId],
     queryFn: () => insumosService.getMovimentacoes(selectedInsumoId),
@@ -23,6 +28,7 @@ export const useInsumos = (
     mutationFn: (item: Omit<Insumo, 'id' | 'createdAt'>) => insumosService.create(item),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['insumos'] });
+      queryClient.invalidateQueries({ queryKey: ['movimentacoes_insumos'] });
       queryClient.invalidateQueries({ queryKey: ['dashboard-summary'] });
     },
   });
@@ -31,6 +37,7 @@ export const useInsumos = (
     mutationFn: ({ id, updates }: { id: string; updates: Partial<Insumo> }) => insumosService.update(id, updates),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['insumos'] });
+      queryClient.invalidateQueries({ queryKey: ['movimentacoes_insumos'] });
       queryClient.invalidateQueries({ queryKey: ['dashboard-summary'] });
     },
   });
@@ -56,6 +63,7 @@ export const useInsumos = (
   return {
     insumos: insumosQuery.data?.data || [],
     totalInsumos: insumosQuery.data?.total || 0,
+    totalEstoqueBaixoCount: lowStockCountQuery.data?.total || 0,
     isLoadingInsumos: insumosQuery.isLoading,
     isErrorInsumos: insumosQuery.isError,
     errorInsumos: insumosQuery.error,

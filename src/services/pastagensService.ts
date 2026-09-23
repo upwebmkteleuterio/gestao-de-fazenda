@@ -111,62 +111,52 @@ const buildPastagemPatch = (updates: Partial<Pastagem>): Partial<PastagemDbWrite
   return patch;
 };
 
-const deriveCounts = async (pastos: Pastagem[]) => {
-  const { data: animais } = await animaisService.getAll();
-
-  return pastos.map((pasto) => {
-    const animaisNoPasto = animais.filter((animal) => animal.pasto_id === pasto.id && animal.status === 'ativo');
-    const autoQtd = animaisNoPasto.length;
-    const qtdFinal = pasto.usar_qtd_manual && typeof pasto.qtd_manual === 'number'
-      ? pasto.qtd_manual
-      : typeof pasto.qtd_manual === 'number' && pasto.qtd_manual > 0 && autoQtd === 0
-        ? pasto.qtd_manual
-        : autoQtd;
-
-    return {
-      ...pasto,
-      qtd_animais: qtdFinal,
-      vacas_count: pasto.vacas_count_manual ?? animaisNoPasto.filter((animal) => ['vaca', 'novilha'].includes(animal.tipo_animal)).length,
-      bezerros_count: pasto.bezerros_count_manual ?? animaisNoPasto.filter((animal) => ['bezerro', 'bezerra'].includes(animal.tipo_animal)).length,
-      matrizes_count: pasto.matrizes_count_manual ?? animaisNoPasto.filter((animal) => animal.tipo_animal === 'matriz').length,
-      touros_count: pasto.touros_count_manual ?? animaisNoPasto.filter((animal) => ['touro', 'garrote'].includes(animal.tipo_animal)).length,
-    };
-  });
-};
-
 export const pastagensService = {
   getAll: async (filters?: { search?: string; status?: string; page?: number; limit?: number }): Promise<{ data: Pastagem[]; total: number }> => {
-    const { data, error } = await supabase.from('pastagens').select('*').order('created_at', { ascending: false });
+    const hasListFilters = Boolean(filters?.search)
+      || Boolean(filters?.status && filters.status !== 'todos')
+      || filters?.page !== undefined
+      || filters?.limit !== undefined;
+
+    if (!hasListFilters) {
+      const { data, error } = await supabase
+        .from('pastagens')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .order('id', { ascending: false });
+      if (error) throw error;
+      const pastagens = ((data ?? []) as unknown as PastagemDbRow[]).map(toPastagem);
+      return { data: pastagens, total: pastagens.length };
+    }
+
+    const { data, error } = await supabase.rpc('get_pastagens_page', {
+      p_search: filters?.search || null,
+      p_status: filters?.status || 'todos',
+      p_page: filters?.page ?? 1,
+      p_limit: filters?.limit ?? 10,
+    });
     if (error) throw error;
 
-    let list = await deriveCounts(((data ?? []) as unknown as PastagemDbRow[]).map(toPastagem));
-
-    if (filters?.search) {
-      const search = filters.search.toLowerCase();
-      list = list.filter((pasto) => pasto.nome_pasto.toLowerCase().includes(search) || pasto.tipo_capim.toLowerCase().includes(search));
-    }
-
-    if (filters?.status && filters.status !== 'todos') {
-      list = list.filter((pasto) => {
-        if (filters.status === 'vazio') return pasto.qtd_animais === 0;
-        if (filters.status === 'excedido') return pasto.qtd_animais > pasto.lotacao_maxima;
-        if (filters.status === 'normal') return pasto.qtd_animais > 0 && pasto.qtd_animais <= pasto.lotacao_maxima;
-        return true;
+    const rows = (data ?? []) as unknown as (PastagemDbRow & { total_count: number | string })[];
+    let total = rows.length > 0 ? Number(rows[0].total_count) : 0;
+    if (rows.length === 0 && filters.page && filters.page > 1) {
+      const { data: firstPage, error: firstPageError } = await supabase.rpc('get_pastagens_page', {
+        p_search: filters.search || null,
+        p_status: filters.status || 'todos',
+        p_page: 1,
+        p_limit: 1,
       });
+      if (firstPageError) throw firstPageError;
+      const firstRow = (firstPage ?? [])[0] as { total_count?: number | string } | undefined;
+      total = firstRow?.total_count === undefined ? 0 : Number(firstRow.total_count);
     }
-
-    const total = list.length;
-    if (filters?.page && filters.limit) {
-      const start = (filters.page - 1) * filters.limit;
-      list = list.slice(start, start + filters.limit);
-    }
-
-    return { data: list, total };
+    return { data: rows.map(toPastagem), total };
   },
 
   getById: async (id: string): Promise<Pastagem | null> => {
-    const result = await pastagensService.getAll();
-    return result.data.find((pasto) => pasto.id === id) ?? null;
+    const { data, error } = await supabase.from('pastagens').select('*').eq('id', id).maybeSingle();
+    if (error) throw error;
+    return data ? toPastagem(data as unknown as PastagemDbRow) : null;
   },
 
   create: async (item: Omit<Pastagem, 'id' | 'createdAt'>): Promise<Pastagem> => {

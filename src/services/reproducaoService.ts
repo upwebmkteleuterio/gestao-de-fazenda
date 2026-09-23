@@ -156,32 +156,34 @@ export const reproducaoService = {
       limit?: number;
     },
   ): Promise<{ data: EventoReproducao[]; total: number }> => {
-    let list = await fetchEventos();
+    let query = supabase
+      .from('eventos_reproducao')
+      .select('*', { count: 'exact' });
 
     if (filters?.search) {
-      const query = filters.search.toLowerCase();
-      list = list.filter(
-        (evento) =>
-          evento.brinco_matriz.toLowerCase().includes(query) ||
-          (evento.dados_protocolo?.touro ?? '').toLowerCase().includes(query),
-      );
+      const search = filters.search.replace(/[^\p{L}\p{N} _-]/gu, ' ');
+      query = query.or(`brinco_matriz.ilike.%${search}%,dados_protocolo->>touro.ilike.%${search}%`);
     }
-    if (filters?.protocolo && filters.protocolo !== 'all') {
-      list = list.filter((evento) => evento.tipo_protocolo === filters.protocolo);
-    }
-    if (filters?.resultadoDg && filters.resultadoDg !== 'all') {
-      list = list.filter((evento) => evento.resultado_dg === filters.resultadoDg);
-    }
-    if (filters?.dataInicio) list = list.filter((evento) => evento.data_principal >= filters.dataInicio!);
-    if (filters?.dataFim) list = list.filter((evento) => evento.data_principal <= filters.dataFim!);
+    if (filters?.protocolo && filters.protocolo !== 'all') query = query.eq('tipo_protocolo', filters.protocolo);
+    if (filters?.resultadoDg && filters.resultadoDg !== 'all') query = query.eq('resultado_dg', filters.resultadoDg);
+    if (filters?.dataInicio) query = query.gte('data_principal', filters.dataInicio);
+    if (filters?.dataFim) query = query.lte('data_principal', filters.dataFim);
 
-    const total = list.length;
-    if (filters?.page && filters.limit) {
-      const startIndex = (filters.page - 1) * filters.limit;
-      list = list.slice(startIndex, startIndex + filters.limit);
+    query = query
+      .order('data_principal', { ascending: false })
+      .order('created_at', { ascending: false })
+      .order('id', { ascending: false });
+
+    if (filters?.page !== undefined && filters.limit !== undefined) {
+      query = query.range((filters.page - 1) * filters.limit, filters.page * filters.limit - 1);
     }
 
-    return { data: list, total };
+    const { data, count, error } = await query;
+    if (error) throw error;
+    return {
+      data: ((data ?? []) as unknown as ReproducaoDbRow[]).map(toEvento),
+      total: count ?? 0,
+    };
   },
 
   getById: async (id: string): Promise<EventoReproducao | null> => {

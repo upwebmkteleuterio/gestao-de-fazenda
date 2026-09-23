@@ -183,33 +183,42 @@ const restoreAutomaticMovimentacoes = async (movimentacoes: Awaited<ReturnType<t
 
 export const sanitarioService = {
   getAll: async (filters?: { search?: string; tipo?: string; status?: string; page?: number; limit?: number }): Promise<{ data: ManejoSanitario[]; total: number }> => {
-    const { data, error } = await supabase.from('manejos_sanitarios').select('*').order('data_manejo', { ascending: false });
-    if (error) throw error;
+    let query = supabase
+      .from('manejos_sanitarios')
+      .select('*', { count: 'exact' });
 
-    let list = await getManejos((data ?? []) as unknown as ManejoDbRow[]);
     if (filters?.search) {
-      const search = filters.search.toLowerCase();
-      list = list.filter((manejo) => manejo.nome_lote.toLowerCase().includes(search)
-        || manejo.responsavel_tecnico.toLowerCase().includes(search));
+      const search = filters.search.replace(/[^\p{L}\p{N} _-]/gu, ' ');
+      query = query.or(`nome_lote.ilike.%${search}%,responsavel_tecnico.ilike.%${search}%`);
     }
-    if (filters?.tipo && filters.tipo !== 'all') list = list.filter((manejo) => manejo.tipo_manejo === filters.tipo);
-    if (filters?.status && filters.status !== 'all') list = list.filter((manejo) => manejo.status === filters.status);
+    if (filters?.tipo && filters.tipo !== 'all') query = query.eq('tipo_manejo', filters.tipo);
+    if (filters?.status && filters.status !== 'all') query = query.eq('status', filters.status);
 
-    const total = list.length;
-    if (filters?.page && filters.limit) {
-      const start = (filters.page - 1) * filters.limit;
-      list = list.slice(start, start + filters.limit);
+    query = query
+      .order('data_manejo', { ascending: false })
+      .order('created_at', { ascending: false })
+      .order('id', { ascending: false });
+
+    if (filters?.page !== undefined && filters.limit !== undefined) {
+      query = query.range((filters.page - 1) * filters.limit, filters.page * filters.limit - 1);
     }
-    return { data: list, total };
+
+    const { data, count, error } = await query;
+    if (error) throw error;
+    const rows = (data ?? []) as unknown as ManejoDbRow[];
+    return { data: await getManejos(rows), total: count ?? 0 };
   },
 
   getStats: async (): Promise<{ andamento: number; concluido: number }> => {
-    const { data, error } = await supabase.from('manejos_sanitarios').select('status');
-    if (error) throw error;
-    const statuses = (data ?? []) as unknown as Array<{ status: ManejoSanitario['status'] }>;
+    const [andamentoResult, concluidoResult] = await Promise.all([
+      supabase.from('manejos_sanitarios').select('id', { count: 'exact', head: true }).eq('status', 'andamento'),
+      supabase.from('manejos_sanitarios').select('id', { count: 'exact', head: true }).eq('status', 'concluido'),
+    ]);
+    if (andamentoResult.error) throw andamentoResult.error;
+    if (concluidoResult.error) throw concluidoResult.error;
     return {
-      andamento: statuses.filter((row) => row.status === 'andamento').length,
-      concluido: statuses.filter((row) => row.status === 'concluido').length,
+      andamento: andamentoResult.count ?? 0,
+      concluido: concluidoResult.count ?? 0,
     };
   },
 

@@ -108,23 +108,41 @@ export const removerMovimentacoesPorOrigem = async (origemManejoId: string): Pro
 
 export const insumosService = {
   getAll: async (categoria?: string, filters?: { search?: string; estoqueBaixo?: boolean; page?: number; limit?: number }): Promise<{ data: Insumo[]; total: number }> => {
-    const rows = await getInsumosRows();
-    let list = rows.map(toInsumo);
+    const isUnpaginatedUnfilteredLookup = !categoria
+      && !filters?.search
+      && !filters?.estoqueBaixo
+      && filters?.page === undefined
+      && filters?.limit === undefined;
 
-    if (categoria && categoria !== 'all') list = list.filter((item) => item.categoria === categoria);
-    if (filters?.search) {
-      const search = filters.search.toLowerCase();
-      list = list.filter((item) => item.nome_produto.toLowerCase().includes(search));
+    if (isUnpaginatedUnfilteredLookup) {
+      const rows = await getInsumosRows();
+      return { data: rows.map(toInsumo), total: rows.length };
     }
-    if (filters?.estoqueBaixo) list = list.filter((item) => item.estoque_atual <= item.estoque_minimo);
 
-    list.sort((a, b) => a.nome_produto.localeCompare(b.nome_produto));
-    const total = list.length;
-    if (filters?.page && filters.limit) {
-      const start = (filters.page - 1) * filters.limit;
-      list = list.slice(start, start + filters.limit);
+    const { data, error } = await supabase.rpc('get_insumos_page', {
+      p_categoria: categoria && categoria !== 'all' ? categoria : null,
+      p_search: filters?.search || null,
+      p_estoque_baixo: filters?.estoqueBaixo ?? false,
+      p_page: filters?.page ?? 1,
+      p_limit: filters?.limit ?? 10,
+    });
+    if (error) throw error;
+
+    const rows = (data ?? []) as unknown as (InsumoDbRow & { total_count: number | string })[];
+    let total = rows.length > 0 ? Number(rows[0].total_count) : 0;
+    if (rows.length === 0 && filters?.page && filters.page > 1) {
+      const { data: firstPage, error: firstPageError } = await supabase.rpc('get_insumos_page', {
+        p_categoria: categoria && categoria !== 'all' ? categoria : null,
+        p_search: filters.search || null,
+        p_estoque_baixo: filters.estoqueBaixo ?? false,
+        p_page: 1,
+        p_limit: 1,
+      });
+      if (firstPageError) throw firstPageError;
+      const firstRow = (firstPage ?? [])[0] as { total_count?: number | string } | undefined;
+      total = firstRow?.total_count === undefined ? 0 : Number(firstRow.total_count);
     }
-    return { data: list, total };
+    return { data: rows.map(toInsumo), total };
   },
 
   getById: async (id: string): Promise<Insumo | null> => {

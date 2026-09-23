@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Plus, 
   Package, 
@@ -49,10 +49,11 @@ export const InsumosPage: React.FC = () => {
   }, [search, apenasEstoqueBaixo, categoriaFilter]);
 
   const { 
-    insumos, 
+    insumos,
     totalInsumos,
-    movimentacoes, 
-    isLoadingInsumos, 
+    totalEstoqueBaixoCount,
+    movimentacoes,
+    isLoadingInsumos,
     isErrorInsumos,
     refetchInsumos,
     createInsumo, 
@@ -62,11 +63,6 @@ export const InsumosPage: React.FC = () => {
   } = useInsumos(categoriaFilter, { search, estoqueBaixo: apenasEstoqueBaixo, page, limit });
 
   const insumosFiltrados = insumos;
-
-  // Contadores de alerta
-  const totalEstoqueBaixoCount = useMemo(() => {
-    return insumos.filter(i => i.estoque_atual <= i.estoque_minimo).length;
-  }, [insumos]);
 
   // Estados dos Painéis / Modais
   const [slideOpen, setSlideOpen] = useState(false);
