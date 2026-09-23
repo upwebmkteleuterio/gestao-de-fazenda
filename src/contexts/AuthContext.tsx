@@ -1,6 +1,7 @@
-import { createContext, useContext, useEffect, useMemo, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
 import type { Session } from '@supabase/supabase-js';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { getAuthErrorMessage } from '@/utils/authError';
 
@@ -38,20 +39,35 @@ function deriveFallbackDisplayName(session: Session | null): string {
   return metadataName?.trim() || session.user.email || 'Usuário';
 }
 
+async function fetchProfile(userId: string): Promise<Profile | null> {
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('display_name')
+    .eq('id', userId)
+    .maybeSingle()
+    .returns<Profile | null>();
+
+  if (error) throw error;
+  return data;
+}
+
 export function SessionContextProvider({ children }: { children: ReactNode }) {
+  const queryClient = useQueryClient();
   const [session, setSession] = useState<Session | null>(null);
-  const [displayName, setDisplayName] = useState('');
   const [isLoading, setIsLoading] = useState(true);
-  const [isLoadingProfile, setIsLoadingProfile] = useState(true);
   const [authError, setAuthError] = useState<string | null>(null);
+  const userId = session?.user.id;
+  const profileQuery = useQuery({
+    queryKey: ['profile', userId],
+    queryFn: () => fetchProfile(userId!),
+    enabled: Boolean(userId),
+  });
 
   useEffect(() => {
     let mounted = true;
     const { data: authListener } = supabase.auth.onAuthStateChange((_event, nextSession) => {
       if (!mounted) return;
       setSession(nextSession);
-      setDisplayName(nextSession ? '' : 'Usuário');
-      setIsLoadingProfile(Boolean(nextSession));
       setAuthError(null);
       setIsLoading(false);
     });
@@ -61,12 +77,8 @@ export function SessionContextProvider({ children }: { children: ReactNode }) {
       if (error) {
         setAuthError(getAuthErrorMessage(error));
         setSession(null);
-        setDisplayName('Usuário');
-        setIsLoadingProfile(false);
       } else {
         setSession(data.session);
-        setDisplayName(data.session ? '' : 'Usuário');
-        setIsLoadingProfile(Boolean(data.session));
       }
       setIsLoading(false);
     });
@@ -77,43 +89,10 @@ export function SessionContextProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  useEffect(() => {
-    let cancelled = false;
+  const displayName = profileQuery.data?.display_name?.trim() || deriveFallbackDisplayName(session);
+  const isLoadingProfile = Boolean(session) && profileQuery.isLoading;
 
-    if (!session) {
-      setDisplayName('Usuário');
-      setIsLoadingProfile(false);
-      return () => {
-        cancelled = true;
-      };
-    }
-
-    setDisplayName('');
-    setIsLoadingProfile(true);
-
-    const loadProfileName = async () => {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('display_name')
-        .eq('id', session.user.id)
-        .maybeSingle()
-        .returns<Profile | null>();
-
-      if (cancelled) return;
-
-      const profileName = !error && data?.display_name?.trim() ? data.display_name.trim() : null;
-      setDisplayName(profileName ?? deriveFallbackDisplayName(session));
-      setIsLoadingProfile(false);
-    };
-
-    void loadProfileName();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [session]);
-
-  const updateDisplayName = async (nextDisplayName: string) => {
+  const updateDisplayName = useCallback(async (nextDisplayName: string) => {
     if (!session) {
       throw new Error('Sua sessão expirou. Entre novamente.');
     }
@@ -129,10 +108,10 @@ export function SessionContextProvider({ children }: { children: ReactNode }) {
       .eq('id', session.user.id);
 
     if (error) throw error;
-    setDisplayName(displayNameToSave);
-  };
+    queryClient.setQueryData<Profile>(['profile', session.user.id], { display_name: displayNameToSave });
+  }, [queryClient, session]);
 
-  const signOut = async () => {
+  const signOut = useCallback(async () => {
     setAuthError(null);
     const { error } = await supabase.auth.signOut();
     if (error) {
@@ -140,10 +119,11 @@ export function SessionContextProvider({ children }: { children: ReactNode }) {
       setAuthError(message);
       throw new Error(message);
     }
+
+    await queryClient.cancelQueries();
+    queryClient.clear();
     setSession(null);
-    setDisplayName('Usuário');
-    setIsLoadingProfile(false);
-  };
+  }, [queryClient]);
 
   const value = useMemo<AuthContextValue>(() => ({
     session,
