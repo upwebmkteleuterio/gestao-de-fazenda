@@ -1,11 +1,27 @@
-import React from 'react';
-import { Link } from 'react-router-dom';
-import { Search, Bell, Sun, Moon, Menu, Sprout } from 'lucide-react';
-import { useUIStore } from '../store/useUIStore';
-import { Button } from './Button';
+import React, { useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+import { Search, Bell, Sun, Moon, Menu, Sprout, LogOut } from 'lucide-react';
+import { useUIStore } from '@/store/useUIStore';
+import { useAuth } from '@/contexts/AuthContext';
+import { Button } from '@/components/Button';
 
 export const Navbar: React.FC = () => {
-  const { theme, toggleTheme, toggleSidebar, setActivePage } = useUIStore();
+  const { theme, toggleTheme, toggleSidebar, setActivePage, showToast } = useUIStore();
+  const { signOut } = useAuth();
+  const navigate = useNavigate();
+  const [isSigningOut, setIsSigningOut] = useState(false);
+
+  const handleSignOut = async () => {
+    setIsSigningOut(true);
+    try {
+      await signOut();
+      navigate('/login', { replace: true });
+    } catch {
+      showToast('Não foi possível encerrar a sessão. Tente novamente.', 'error');
+    } finally {
+      setIsSigningOut(false);
+    }
+  };
 
   return (
     <header className="h-16 bg-white/80 dark:bg-gray-900/80 backdrop-blur-md border-b border-gray-200 dark:border-gray-800 flex items-center justify-between px-4 sm:px-6 z-20 sticky top-0">
@@ -79,6 +95,15 @@ export const Navbar: React.FC = () => {
             src="https://placehold.co/100x100/10b981/ffffff?text=CS"
             alt="Carlos Silva"
           />
+          <Button
+            variant="icon"
+            onClick={handleSignOut}
+            disabled={isSigningOut}
+            title="Sair"
+            aria-label="Sair da conta"
+          >
+            <LogOut className="h-5 w-5" />
+          </Button>
         </div>
       </div>
     </header>
