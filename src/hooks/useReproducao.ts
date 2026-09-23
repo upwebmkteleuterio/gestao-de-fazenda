@@ -30,6 +30,7 @@ export const useReproducao = (filters?: { search?: string; protocolo?: string; r
     mutationFn: (id: string) => reproducaoService.delete(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['reproducao'] });
+      queryClient.invalidateQueries({ queryKey: ['animais'] });
     },
   });
 

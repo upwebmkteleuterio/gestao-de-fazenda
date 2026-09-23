@@ -1,42 +1,75 @@
-import { Pesagem } from '../types/database';
-import { mockPesagens } from '../mocks/pesagens';
+import { supabase } from '@/integrations/supabase/client';
+import { Pesagem } from '@/types/database';
 import { animaisService } from './animaisService';
 
-const STORAGE_KEY = 'farmnexus_pesagens_db';
-
-const getStoredData = (): Pesagem[] => {
-  try {
-    const data = localStorage.getItem(STORAGE_KEY);
-    if (data) return JSON.parse(data);
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(mockPesagens));
-    return mockPesagens;
-  } catch (err) {
-    return mockPesagens;
-  }
+type PesagemDbRow = {
+  id: string;
+  animal_id: string;
+  brinco_animal: string;
+  tipo_animal: Pesagem['tipo_animal'] | null;
+  peso_kg: number;
+  data_pesagem: string;
+  peso_anterior: number | null;
+  data_pesagem_anterior: string | null;
+  ganho_peso_kg: number | null;
+  gmd_calculado: number | null;
+  dias_intervalo: number | null;
+  observacoes: string | null;
+  status_sincronizacao: boolean;
+  created_at: string;
 };
 
-const setStoredData = (data: Pesagem[]): void => {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-  } catch (err) {
-    console.error('Erro ao salvar pesagens:', err);
-  }
+type PesagemDbWrite = {
+  id?: string;
+  animal_id: string;
+  brinco_animal: string;
+  tipo_animal?: Pesagem['tipo_animal'] | null;
+  peso_kg: number;
+  data_pesagem: string;
+  peso_anterior?: number | null;
+  data_pesagem_anterior?: string | null;
+  ganho_peso_kg?: number | null;
+  gmd_calculado?: number | null;
+  dias_intervalo?: number | null;
+  observacoes?: string | null;
+  status_sincronizacao: boolean;
 };
 
-// Lógica de cálculo automático do Ganho Médio Diário (GMD) e busca da pesagem anterior
+const toPesagem = (row: PesagemDbRow): Pesagem => ({
+  id: row.id,
+  animal_id: row.animal_id,
+  brinco_animal: row.brinco_animal,
+  tipo_animal: row.tipo_animal ?? undefined,
+  peso_kg: Number(row.peso_kg),
+  data_pesagem: row.data_pesagem,
+  peso_anterior: row.peso_anterior === null ? undefined : Number(row.peso_anterior),
+  data_pesagem_anterior: row.data_pesagem_anterior ?? undefined,
+  ganho_peso_kg: row.ganho_peso_kg === null ? undefined : Number(row.ganho_peso_kg),
+  gmd_calculado: row.gmd_calculado === null ? undefined : Number(row.gmd_calculado),
+  dias_intervalo: row.dias_intervalo ?? undefined,
+  observacoes: row.observacoes ?? undefined,
+  status_sincronizacao: row.status_sincronizacao,
+  createdAt: row.created_at,
+});
+
+const fetchPesagens = async (): Promise<Pesagem[]> => {
+  const { data, error } = await supabase.from('pesagens').select('*');
+  if (error) throw error;
+  return ((data ?? []) as unknown as PesagemDbRow[]).map(toPesagem);
+};
+
 const calcularGMD = (animalId: string, novoPeso: number, dataNova: string, pesagensExistentes: Pesagem[]) => {
-  // Ordena por data decrescente
   const pesagensAnteriores = pesagensExistentes
-    .filter(p => p.animal_id === animalId && p.data_pesagem < dataNova)
+    .filter((p) => p.animal_id === animalId && p.data_pesagem < dataNova)
     .sort((a, b) => new Date(b.data_pesagem).getTime() - new Date(a.data_pesagem).getTime());
 
   if (pesagensAnteriores.length === 0) {
-    return { 
-      gmd: undefined, 
+    return {
+      gmd: undefined,
       diasIntervalo: undefined,
       pesoAnterior: undefined,
       dataAnterior: undefined,
-      ganhoPeso: undefined
+      ganhoPeso: undefined,
     };
   }
 
@@ -47,30 +80,28 @@ const calcularGMD = (animalId: string, novoPeso: number, dataNova: string, pesag
   const diasCorridos = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 
   if (diasCorridos <= 0) {
-    return { 
-      gmd: undefined, 
+    return {
+      gmd: undefined,
       diasIntervalo: undefined,
       pesoAnterior: ultimaPesagem.peso_kg,
       dataAnterior: ultimaPesagem.data_pesagem,
-      ganhoPeso: 0
+      ganhoPeso: 0,
     };
   }
 
   const ganho = novoPeso - ultimaPesagem.peso_kg;
-  const gmd = Number((ganho / diasCorridos).toFixed(2));
-  return { 
-    gmd, 
+  return {
+    gmd: Number((ganho / diasCorridos).toFixed(2)),
     diasIntervalo: diasCorridos,
     pesoAnterior: ultimaPesagem.peso_kg,
     dataAnterior: ultimaPesagem.data_pesagem,
-    ganhoPeso: Number(ganho.toFixed(2))
+    ganhoPeso: Number(ganho.toFixed(2)),
   };
 };
 
-// Enriquecer pesagens para garantir que ambas as pesagens (anterior e atual) estejam presentes
-const enrichPesagensComComparativo = (list: Pesagem[]): Pesagem[] => {
-  return list.map(item => {
-    const calc = calcularGMD(item.animal_id, item.peso_kg, item.data_pesagem, list.filter(p => p.id !== item.id));
+const enrichPesagensComComparativo = (list: Pesagem[]): Pesagem[] =>
+  list.map((item) => {
+    const calc = calcularGMD(item.animal_id, item.peso_kg, item.data_pesagem, list.filter((p) => p.id !== item.id));
     return {
       ...item,
       peso_anterior: item.peso_anterior ?? calc.pesoAnterior,
@@ -80,6 +111,48 @@ const enrichPesagensComComparativo = (list: Pesagem[]): Pesagem[] => {
       dias_intervalo: item.dias_intervalo ?? calc.diasIntervalo,
     };
   });
+
+const buildPesagemPayload = (
+  item: Omit<Pesagem, 'id' | 'createdAt' | 'status_sincronizacao'>,
+  id: string,
+  calc: ReturnType<typeof calcularGMD>,
+): PesagemDbWrite => ({
+  id,
+  animal_id: item.animal_id,
+  brinco_animal: item.brinco_animal,
+  tipo_animal: item.tipo_animal ?? null,
+  peso_kg: item.peso_kg,
+  data_pesagem: item.data_pesagem,
+  peso_anterior: calc.pesoAnterior ?? null,
+  data_pesagem_anterior: calc.dataAnterior ?? null,
+  ganho_peso_kg: calc.ganhoPeso ?? null,
+  gmd_calculado: calc.gmd ?? null,
+  dias_intervalo: calc.diasIntervalo ?? null,
+  observacoes: item.observacoes ?? null,
+  status_sincronizacao: false,
+});
+
+const buildPesagemPatch = (
+  updates: Partial<Pesagem>,
+  calc: ReturnType<typeof calcularGMD>,
+): Partial<PesagemDbWrite> => {
+  const patch: Partial<PesagemDbWrite> = {
+    peso_anterior: calc.pesoAnterior ?? null,
+    data_pesagem_anterior: calc.dataAnterior ?? null,
+    ganho_peso_kg: calc.ganhoPeso ?? null,
+    gmd_calculado: calc.gmd ?? null,
+    dias_intervalo: calc.diasIntervalo ?? null,
+    status_sincronizacao: false,
+  };
+
+  if (updates.animal_id !== undefined) patch.animal_id = updates.animal_id;
+  if (updates.brinco_animal !== undefined) patch.brinco_animal = updates.brinco_animal;
+  if (updates.tipo_animal !== undefined) patch.tipo_animal = updates.tipo_animal;
+  if (updates.peso_kg !== undefined) patch.peso_kg = updates.peso_kg;
+  if (updates.data_pesagem !== undefined) patch.data_pesagem = updates.data_pesagem;
+  if ('observacoes' in updates) patch.observacoes = updates.observacoes ?? null;
+
+  return patch;
 };
 
 export const pesagensService = {
@@ -90,152 +163,89 @@ export const pesagensService = {
     endDate?: string;
     page?: number;
     limit?: number;
-  }): Promise<{ data: Pesagem[], total: number }> => {
-    return new Promise((resolve) => {
-      setTimeout(() => {
-        let list = enrichPesagensComComparativo(getStoredData());
-        if (filters) {
-          if (filters.search) {
-            const query = filters.search.toLowerCase();
-            list = list.filter(p => p.brinco_animal.toLowerCase().includes(query));
-          }
-          if (filters.tipoAnimal && filters.tipoAnimal !== 'all') {
-            list = list.filter(p => p.tipo_animal === filters.tipoAnimal);
-          }
-          if (filters.startDate) {
-            list = list.filter(p => p.data_pesagem >= filters.startDate!);
-          }
-          if (filters.endDate) {
-            list = list.filter(p => p.data_pesagem <= filters.endDate!);
-          }
-        }
-        // Ordena por data mais recente primeiro
-        list.sort((a, b) => new Date(b.data_pesagem).getTime() - new Date(a.data_pesagem).getTime());
-        
-        const total = list.length;
-        
-        if (filters?.page && filters?.limit) {
-          const startIndex = (filters.page - 1) * filters.limit;
-          list = list.slice(startIndex, startIndex + filters.limit);
-        }
-        
-        resolve({ data: list, total });
-      }, 180);
-    });
+  }): Promise<{ data: Pesagem[]; total: number }> => {
+    let list = enrichPesagensComComparativo(await fetchPesagens());
+
+    if (filters?.search) {
+      const query = filters.search.toLowerCase();
+      list = list.filter((p) => p.brinco_animal.toLowerCase().includes(query));
+    }
+    if (filters?.tipoAnimal && filters.tipoAnimal !== 'all') {
+      list = list.filter((p) => p.tipo_animal === filters.tipoAnimal);
+    }
+    if (filters?.startDate) list = list.filter((p) => p.data_pesagem >= filters.startDate!);
+    if (filters?.endDate) list = list.filter((p) => p.data_pesagem <= filters.endDate!);
+
+    list.sort((a, b) => new Date(b.data_pesagem).getTime() - new Date(a.data_pesagem).getTime());
+    const total = list.length;
+
+    if (filters?.page && filters.limit) {
+      const startIndex = (filters.page - 1) * filters.limit;
+      list = list.slice(startIndex, startIndex + filters.limit);
+    }
+
+    return { data: list, total };
   },
 
   getById: async (id: string): Promise<Pesagem | null> => {
-    return new Promise((resolve) => {
-      setTimeout(() => {
-        const list = enrichPesagensComComparativo(getStoredData());
-        resolve(list.find(p => p.id === id) || null);
-      }, 180);
-    });
+    const list = enrichPesagensComComparativo(await fetchPesagens());
+    return list.find((p) => p.id === id) ?? null;
   },
 
-  create: async (item: Omit<Pesagem, 'id' | 'createdAt' | 'status_sincronizacao'>): Promise<Pesagem> => {
-    return new Promise((resolve) => {
-      setTimeout(async () => {
-        const list = getStoredData();
-        
-        // Calcula GMD e busca pesagem anterior automaticamente
-        const calc = calcularGMD(item.animal_id, item.peso_kg, item.data_pesagem, list);
+  create: async (
+    item: Omit<Pesagem, 'id' | 'createdAt' | 'status_sincronizacao'>,
+  ): Promise<Pesagem> => {
+    const existing = await fetchPesagens();
+    const calc = calcularGMD(item.animal_id, item.peso_kg, item.data_pesagem, existing);
+    const payload = buildPesagemPayload(item, `pes-${crypto.randomUUID()}`, calc);
+    const { data, error } = await supabase.from('pesagens').insert(payload).select('*').single();
+    if (error) throw error;
 
-        const created: Pesagem = {
-          ...item,
-          id: `pes-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
-          peso_anterior: calc.pesoAnterior,
-          data_pesagem_anterior: calc.dataAnterior,
-          ganho_peso_kg: calc.ganhoPeso,
-          gmd_calculado: calc.gmd,
-          dias_intervalo: calc.diasIntervalo,
-          status_sincronizacao: false,
-          createdAt: new Date().toISOString(),
-        };
-
-        const updated = [created, ...list];
-        setStoredData(updated);
-
-        // Atualiza peso atual no animal
-        await animaisService.updatePesoAtual(item.animal_id, item.peso_kg, item.data_pesagem);
-
-        resolve(created);
-      }, 180);
-    });
+    await animaisService.updatePesoAtual(item.animal_id, item.peso_kg, item.data_pesagem);
+    return toPesagem(data as unknown as PesagemDbRow);
   },
 
-  createGroup: async (pesagens: Omit<Pesagem, 'id' | 'createdAt' | 'status_sincronizacao'>[]): Promise<Pesagem[]> => {
-    return new Promise((resolve) => {
-      setTimeout(async () => {
-        const list = getStoredData();
-        const createdList: Pesagem[] = [];
+  createGroup: async (
+    pesagens: Omit<Pesagem, 'id' | 'createdAt' | 'status_sincronizacao'>[],
+  ): Promise<Pesagem[]> => {
+    const existing = await fetchPesagens();
+    const createdList: Pesagem[] = [];
 
-        for (const p of pesagens) {
-          const calc = calcularGMD(p.animal_id, p.peso_kg, p.data_pesagem, list);
-          const newItem: Pesagem = {
-            ...p,
-            id: `pes-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
-            peso_anterior: calc.pesoAnterior,
-            data_pesagem_anterior: calc.dataAnterior,
-            ganho_peso_kg: calc.ganhoPeso,
-            gmd_calculado: calc.gmd,
-            dias_intervalo: calc.diasIntervalo,
-            status_sincronizacao: false,
-            createdAt: new Date().toISOString(),
-          };
-          createdList.push(newItem);
-          await animaisService.updatePesoAtual(p.animal_id, p.peso_kg, p.data_pesagem);
-        }
+    for (const item of pesagens) {
+      const calc = calcularGMD(item.animal_id, item.peso_kg, item.data_pesagem, [...existing, ...createdList]);
+      const payload = buildPesagemPayload(item, `pes-${crypto.randomUUID()}`, calc);
+      const { data, error } = await supabase.from('pesagens').insert(payload).select('*').single();
+      if (error) throw error;
 
-        const updated = [...createdList, ...list];
-        setStoredData(updated);
-        resolve(createdList);
-      }, 180);
-    });
+      const created = toPesagem(data as unknown as PesagemDbRow);
+      createdList.push(created);
+      await animaisService.updatePesoAtual(item.animal_id, item.peso_kg, item.data_pesagem);
+    }
+
+    return createdList;
   },
 
   update: async (id: string, updates: Partial<Pesagem>): Promise<Pesagem> => {
-    return new Promise((resolve, reject) => {
-      setTimeout(async () => {
-        const list = getStoredData();
-        const index = list.findIndex(p => p.id === id);
-        if (index === -1) return reject(new Error('Pesagem não encontrada'));
+    const allPesagens = await fetchPesagens();
+    const current = allPesagens.find((p) => p.id === id);
+    if (!current) throw new Error('Pesagem não encontrada');
 
-        const current = list[index];
-        const novoPeso = updates.peso_kg ?? current.peso_kg;
-        const novaData = updates.data_pesagem ?? current.data_pesagem;
+    const animalId = updates.animal_id ?? current.animal_id;
+    const novoPeso = updates.peso_kg ?? current.peso_kg;
+    const novaData = updates.data_pesagem ?? current.data_pesagem;
+    const calc = calcularGMD(animalId, novoPeso, novaData, allPesagens.filter((p) => p.id !== id));
+    const patch = buildPesagemPatch(updates, calc);
 
-        const calc = calcularGMD(current.animal_id, novoPeso, novaData, list.filter(p => p.id !== id));
+    const { data, error } = await supabase.from('pesagens').update(patch).eq('id', id).select('*').single();
+    if (error) throw error;
 
-        const updatedItem: Pesagem = {
-          ...current,
-          ...updates,
-          peso_anterior: calc.pesoAnterior,
-          data_pesagem_anterior: calc.dataAnterior,
-          ganho_peso_kg: calc.ganhoPeso,
-          gmd_calculado: calc.gmd,
-          dias_intervalo: calc.diasIntervalo,
-          status_sincronizacao: false,
-        };
-
-        list[index] = updatedItem;
-        setStoredData(list);
-
-        await animaisService.updatePesoAtual(current.animal_id, novoPeso, novaData);
-
-        resolve(updatedItem);
-      }, 180);
-    });
+    await animaisService.updatePesoAtual(animalId, novoPeso, novaData);
+    return toPesagem(data as unknown as PesagemDbRow);
   },
 
   delete: async (id: string): Promise<boolean> => {
-    return new Promise((resolve) => {
-      setTimeout(() => {
-        const list = getStoredData();
-        const filtered = list.filter(p => p.id !== id);
-        setStoredData(filtered);
-        resolve(true);
-      }, 180);
-    });
-  }
+    const { error } = await supabase.from('pesagens').delete().eq('id', id);
+    if (error) throw error;
+    return true;
+  },
 };

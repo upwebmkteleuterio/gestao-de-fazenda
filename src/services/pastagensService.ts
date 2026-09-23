@@ -1,202 +1,218 @@
-import { Pastagem, ServicoPastagem } from '../types/database';
-import { mockPastagens, mockServicosPastagem } from '../mocks/pastagens';
-import { animaisService } from './animaisService';
+import { supabase } from '@/integrations/supabase/client';
+import { animaisService } from '@/services/animaisService';
+import { Pastagem, ServicoPastagem } from '@/types/database';
 
-const STORAGE_KEY_PASTOS = 'farmnexus_pastagens_db';
-const STORAGE_KEY_SERVICOS = 'farmnexus_servicos_pastagens_db';
-
-const getStoredPastos = (): Pastagem[] => {
-  try {
-    const data = localStorage.getItem(STORAGE_KEY_PASTOS);
-    if (data) return JSON.parse(data);
-    localStorage.setItem(STORAGE_KEY_PASTOS, JSON.stringify(mockPastagens));
-    return mockPastagens;
-  } catch (err) {
-    return mockPastagens;
-  }
+type PastagemDbRow = {
+  id: string;
+  nome_pasto: string;
+  tipo_capim: string;
+  area_ha: number;
+  lotacao_maxima: number;
+  data_entrada: string;
+  data_saida_prevista: string | null;
+  qtd_manual: number | null;
+  usar_qtd_manual: boolean;
+  vacas_count_manual: number | null;
+  bezerros_count_manual: number | null;
+  matrizes_count_manual: number | null;
+  touros_count_manual: number | null;
+  qtd_animais: number | null;
+  vacas_count: number | null;
+  bezerros_count: number | null;
+  matrizes_count: number | null;
+  touros_count: number | null;
+  created_at: string;
 };
 
-const setStoredPastos = (data: Pastagem[]): void => {
-  try {
-    localStorage.setItem(STORAGE_KEY_PASTOS, JSON.stringify(data));
-  } catch (err) {
-    console.error('Erro ao salvar pastagens:', err);
-  }
+type PastagemDbWrite = Omit<PastagemDbRow, 'created_at'> & { created_at?: string };
+
+type ServicoDbRow = {
+  id: string;
+  pasto_id: string;
+  nome_pasto: string | null;
+  tipo_servico: ServicoPastagem['tipo_servico'];
+  data: string;
+  responsavel: string | null;
+  observacoes: string | null;
+  created_at: string;
 };
 
-const getStoredServicos = (): ServicoPastagem[] => {
-  try {
-    const data = localStorage.getItem(STORAGE_KEY_SERVICOS);
-    if (data) return JSON.parse(data);
-    localStorage.setItem(STORAGE_KEY_SERVICOS, JSON.stringify(mockServicosPastagem));
-    return mockServicosPastagem;
-  } catch (err) {
-    return mockServicosPastagem;
-  }
+const toPastagem = (row: PastagemDbRow): Pastagem => ({
+  id: row.id,
+  nome_pasto: row.nome_pasto,
+  tipo_capim: row.tipo_capim,
+  area_ha: row.area_ha,
+  lotacao_maxima: row.lotacao_maxima,
+  data_entrada: row.data_entrada,
+  data_saida_prevista: row.data_saida_prevista ?? undefined,
+  qtd_manual: row.qtd_manual ?? undefined,
+  usar_qtd_manual: row.usar_qtd_manual,
+  vacas_count_manual: row.vacas_count_manual ?? undefined,
+  bezerros_count_manual: row.bezerros_count_manual ?? undefined,
+  matrizes_count_manual: row.matrizes_count_manual ?? undefined,
+  touros_count_manual: row.touros_count_manual ?? undefined,
+  qtd_animais: row.qtd_animais ?? undefined,
+  vacas_count: row.vacas_count ?? undefined,
+  bezerros_count: row.bezerros_count ?? undefined,
+  matrizes_count: row.matrizes_count ?? undefined,
+  touros_count: row.touros_count ?? undefined,
+  createdAt: row.created_at,
+});
+
+const toServico = (row: ServicoDbRow): ServicoPastagem => ({
+  id: row.id,
+  pasto_id: row.pasto_id,
+  nome_pasto: row.nome_pasto ?? undefined,
+  tipo_servico: row.tipo_servico,
+  data: row.data,
+  responsavel: row.responsavel ?? undefined,
+  observacoes: row.observacoes ?? undefined,
+  createdAt: row.created_at,
+});
+
+const buildPastagemInsert = (item: Omit<Pastagem, 'id' | 'createdAt'>, id: string): PastagemDbWrite => ({
+  id,
+  nome_pasto: item.nome_pasto,
+  tipo_capim: item.tipo_capim,
+  area_ha: item.area_ha,
+  lotacao_maxima: item.lotacao_maxima,
+  data_entrada: item.data_entrada,
+  data_saida_prevista: item.data_saida_prevista ?? null,
+  qtd_manual: item.qtd_manual ?? null,
+  usar_qtd_manual: item.usar_qtd_manual ?? false,
+  vacas_count_manual: item.vacas_count_manual ?? null,
+  bezerros_count_manual: item.bezerros_count_manual ?? null,
+  matrizes_count_manual: item.matrizes_count_manual ?? null,
+  touros_count_manual: item.touros_count_manual ?? null,
+  qtd_animais: 0,
+  vacas_count: 0,
+  bezerros_count: 0,
+  matrizes_count: 0,
+  touros_count: 0,
+});
+
+const buildPastagemPatch = (updates: Partial<Pastagem>): Partial<PastagemDbWrite> => {
+  const patch: Partial<PastagemDbWrite> = {};
+  if (updates.nome_pasto !== undefined) patch.nome_pasto = updates.nome_pasto;
+  if (updates.tipo_capim !== undefined) patch.tipo_capim = updates.tipo_capim;
+  if (updates.area_ha !== undefined) patch.area_ha = updates.area_ha;
+  if (updates.lotacao_maxima !== undefined) patch.lotacao_maxima = updates.lotacao_maxima;
+  if (updates.data_entrada !== undefined) patch.data_entrada = updates.data_entrada;
+  if ('data_saida_prevista' in updates) patch.data_saida_prevista = updates.data_saida_prevista ?? null;
+  if ('qtd_manual' in updates) patch.qtd_manual = updates.qtd_manual ?? null;
+  if (updates.usar_qtd_manual !== undefined) patch.usar_qtd_manual = updates.usar_qtd_manual;
+  if ('vacas_count_manual' in updates) patch.vacas_count_manual = updates.vacas_count_manual ?? null;
+  if ('bezerros_count_manual' in updates) patch.bezerros_count_manual = updates.bezerros_count_manual ?? null;
+  if ('matrizes_count_manual' in updates) patch.matrizes_count_manual = updates.matrizes_count_manual ?? null;
+  if ('touros_count_manual' in updates) patch.touros_count_manual = updates.touros_count_manual ?? null;
+  return patch;
 };
 
-const setStoredServicos = (data: ServicoPastagem[]): void => {
-  try {
-    localStorage.setItem(STORAGE_KEY_SERVICOS, JSON.stringify(data));
-  } catch (err) {
-    console.error('Erro ao salvar servicos pastagens:', err);
-  }
+const deriveCounts = async (pastos: Pastagem[]) => {
+  const { data: animais } = await animaisService.getAll();
+
+  return pastos.map((pasto) => {
+    const animaisNoPasto = animais.filter((animal) => animal.pasto_id === pasto.id && animal.status === 'ativo');
+    const autoQtd = animaisNoPasto.length;
+    const qtdFinal = pasto.usar_qtd_manual && typeof pasto.qtd_manual === 'number'
+      ? pasto.qtd_manual
+      : typeof pasto.qtd_manual === 'number' && pasto.qtd_manual > 0 && autoQtd === 0
+        ? pasto.qtd_manual
+        : autoQtd;
+
+    return {
+      ...pasto,
+      qtd_animais: qtdFinal,
+      vacas_count: pasto.vacas_count_manual ?? animaisNoPasto.filter((animal) => ['vaca', 'novilha'].includes(animal.tipo_animal)).length,
+      bezerros_count: pasto.bezerros_count_manual ?? animaisNoPasto.filter((animal) => ['bezerro', 'bezerra'].includes(animal.tipo_animal)).length,
+      matrizes_count: pasto.matrizes_count_manual ?? animaisNoPasto.filter((animal) => animal.tipo_animal === 'matriz').length,
+      touros_count: pasto.touros_count_manual ?? animaisNoPasto.filter((animal) => ['touro', 'garrote'].includes(animal.tipo_animal)).length,
+    };
+  });
 };
 
 export const pastagensService = {
-  getAll: async (filters?: { search?: string; status?: string; page?: number; limit?: number }): Promise<{ data: Pastagem[], total: number }> => {
-    return new Promise((resolve) => {
-      setTimeout(async () => {
-        const pastos = getStoredPastos();
-        // Recalcula contagem dinâmica de animais por pastagem
-        const res = await animaisService.getAll();
-        const animais = res.data;
-        
-        let pastosComContagem = pastos.map(pasto => {
-          const animaisNoPasto = animais.filter(a => a.pasto_id === pasto.id && a.status === 'ativo');
-          const autoQtd = animaisNoPasto.length;
-          const qtdFinal = (pasto.usar_qtd_manual && typeof pasto.qtd_manual === 'number') 
-            ? pasto.qtd_manual 
-            : (typeof pasto.qtd_manual === 'number' && pasto.qtd_manual > 0 && autoQtd === 0)
-            ? pasto.qtd_manual
-            : autoQtd;
+  getAll: async (filters?: { search?: string; status?: string; page?: number; limit?: number }): Promise<{ data: Pastagem[]; total: number }> => {
+    const { data, error } = await supabase.from('pastagens').select('*').order('created_at', { ascending: false });
+    if (error) throw error;
 
-          return {
-            ...pasto,
-            qtd_animais: qtdFinal,
-            vacas_count: pasto.vacas_count_manual ?? animaisNoPasto.filter(a => ['vaca', 'novilha'].includes(a.tipo_animal)).length,
-            bezerros_count: pasto.bezerros_count_manual ?? animaisNoPasto.filter(a => ['bezerro', 'bezerra'].includes(a.tipo_animal)).length,
-            matrizes_count: pasto.matrizes_count_manual ?? animaisNoPasto.filter(a => a.tipo_animal === 'matriz').length,
-            touros_count: pasto.touros_count_manual ?? animaisNoPasto.filter(a => ['touro', 'garrote'].includes(a.tipo_animal)).length,
-          };
-        });
+    let list = await deriveCounts(((data ?? []) as unknown as PastagemDbRow[]).map(toPastagem));
 
-        // Aplicar filtros
-        if (filters?.search) {
-          const s = filters.search.toLowerCase();
-          pastosComContagem = pastosComContagem.filter(p => 
-            p.nome_pasto.toLowerCase().includes(s) || 
-            p.tipo_capim.toLowerCase().includes(s)
-          );
-        }
+    if (filters?.search) {
+      const search = filters.search.toLowerCase();
+      list = list.filter((pasto) => pasto.nome_pasto.toLowerCase().includes(search) || pasto.tipo_capim.toLowerCase().includes(search));
+    }
 
-        if (filters?.status && filters.status !== 'todos') {
-          pastosComContagem = pastosComContagem.filter(p => {
-            if (filters.status === 'vazio') return p.qtd_animais === 0;
-            if (filters.status === 'excedido') return p.qtd_animais > p.lotacao_maxima;
-            if (filters.status === 'normal') return p.qtd_animais > 0 && p.qtd_animais <= p.lotacao_maxima;
-            return true;
-          });
-        }
+    if (filters?.status && filters.status !== 'todos') {
+      list = list.filter((pasto) => {
+        if (filters.status === 'vazio') return pasto.qtd_animais === 0;
+        if (filters.status === 'excedido') return pasto.qtd_animais > pasto.lotacao_maxima;
+        if (filters.status === 'normal') return pasto.qtd_animais > 0 && pasto.qtd_animais <= pasto.lotacao_maxima;
+        return true;
+      });
+    }
 
-        const total = pastosComContagem.length;
+    const total = list.length;
+    if (filters?.page && filters.limit) {
+      const start = (filters.page - 1) * filters.limit;
+      list = list.slice(start, start + filters.limit);
+    }
 
-        // Paginação
-        if (filters?.page && filters?.limit) {
-          const start = (filters.page - 1) * filters.limit;
-          const end = start + filters.limit;
-          pastosComContagem = pastosComContagem.slice(start, end);
-        }
-
-        resolve({ data: pastosComContagem, total });
-      }, 180);
-    });
+    return { data: list, total };
   },
 
   getById: async (id: string): Promise<Pastagem | null> => {
-    return new Promise((resolve) => {
-      setTimeout(async () => {
-        const res = await pastagensService.getAll();
-        resolve(res.data.find(p => p.id === id) || null);
-      }, 180);
-    });
+    const result = await pastagensService.getAll();
+    return result.data.find((pasto) => pasto.id === id) ?? null;
   },
 
   create: async (item: Omit<Pastagem, 'id' | 'createdAt'>): Promise<Pastagem> => {
-    return new Promise((resolve) => {
-      setTimeout(() => {
-        const list = getStoredPastos();
-        const created: Pastagem = {
-          ...item,
-          id: `pas-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
-          qtd_animais: 0,
-          createdAt: new Date().toISOString(),
-        };
-        const updated = [created, ...list];
-        setStoredPastos(updated);
-        resolve(created);
-      }, 180);
-    });
+    const id = `pas-${crypto.randomUUID()}`;
+    const { data, error } = await supabase.from('pastagens').insert(buildPastagemInsert(item, id)).select('*').single();
+    if (error) throw error;
+    return toPastagem(data as unknown as PastagemDbRow);
   },
 
   update: async (id: string, updates: Partial<Pastagem>): Promise<Pastagem> => {
-    return new Promise((resolve, reject) => {
-      setTimeout(() => {
-        const list = getStoredPastos();
-        const index = list.findIndex(p => p.id === id);
-        if (index === -1) return reject(new Error('Pasto não encontrado'));
+    const patch = buildPastagemPatch(updates);
+    const { data, error } = await supabase.from('pastagens').update(patch).eq('id', id).select('*').single();
+    if (error) throw error;
 
-        const updatedItem = { ...list[index], ...updates };
-        list[index] = updatedItem;
-        setStoredPastos(list);
-        resolve(updatedItem);
-      }, 180);
-    });
+    const updated = await pastagensService.getById(id);
+    return updated ?? toPastagem(data as unknown as PastagemDbRow);
   },
 
   delete: async (id: string): Promise<boolean> => {
-    return new Promise(async (resolve) => {
-      // Remover pasto_id dos animais que estavam nele
-      try {
-        const resAnimais = await animaisService.getAll();
-        const animaisNoPasto = resAnimais.data.filter(a => a.pasto_id === id);
-        for (const animal of animaisNoPasto) {
-          await animaisService.update(animal.id, { pasto_id: undefined });
-        }
-      } catch (e) {
-        console.error('Erro ao limpar animais do pasto removido', e);
-      }
-      
-      setTimeout(() => {
-        // Remover pasto
-        const list = getStoredPastos();
-        setStoredPastos(list.filter(p => p.id !== id));
-        
-        // Cascata: Remover servicos desse pasto
-        const servicos = getStoredServicos();
-        setStoredServicos(servicos.filter(s => s.pasto_id !== id));
-        
-        resolve(true);
-      }, 180);
-    });
+    const animalsResult = await animaisService.getAll({ pasto_id: id });
+    await Promise.all(animalsResult.data.map((animal) => animaisService.update(animal.id, { pasto_id: undefined, pasto_nome: undefined })));
+
+    const { error } = await supabase.from('pastagens').delete().eq('id', id);
+    if (error) throw error;
+    return true;
   },
 
-  // Serviços de Manejo de Pastagem
   getServicos: async (pastoId?: string): Promise<ServicoPastagem[]> => {
-    return new Promise((resolve) => {
-      setTimeout(() => {
-        let servicos = getStoredServicos();
-        if (pastoId) {
-          servicos = servicos.filter(s => s.pasto_id === pastoId);
-        }
-        resolve(servicos);
-      }, 180);
-    });
+    let query = supabase.from('servicos_pastagem').select('*').order('data', { ascending: false });
+    if (pastoId) query = query.eq('pasto_id', pastoId);
+
+    const { data, error } = await query;
+    if (error) throw error;
+    return ((data ?? []) as unknown as ServicoDbRow[]).map(toServico);
   },
 
   addServico: async (item: Omit<ServicoPastagem, 'id' | 'createdAt'>): Promise<ServicoPastagem> => {
-    return new Promise((resolve) => {
-      setTimeout(() => {
-        const list = getStoredServicos();
-        const created: ServicoPastagem = {
-          ...item,
-          id: `ser-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
-          createdAt: new Date().toISOString(),
-        };
-        const updated = [created, ...list];
-        setStoredServicos(updated);
-        resolve(created);
-      }, 180);
-    });
-  }
+    const id = `ser-${crypto.randomUUID()}`;
+    const payload = {
+      id,
+      pasto_id: item.pasto_id,
+      nome_pasto: item.nome_pasto ?? null,
+      tipo_servico: item.tipo_servico,
+      data: item.data,
+      responsavel: item.responsavel ?? null,
+      observacoes: item.observacoes ?? null,
+    };
+    const { data, error } = await supabase.from('servicos_pastagem').insert(payload).select('*').single();
+    if (error) throw error;
+    return toServico(data as unknown as ServicoDbRow);
+  },
 };

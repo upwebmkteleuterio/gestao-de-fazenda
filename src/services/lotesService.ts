@@ -1,31 +1,8 @@
-import { Lote } from '../types/database';
-import { mockLotes } from '../mocks/lotes';
+import { supabase } from '@/integrations/supabase/client';
+import { animaisService } from '@/services/animaisService';
+import { Lote } from '@/types/database';
 
 export type { Lote };
-
-const STORAGE_KEY = 'farmnexus_lotes_db';
-
-const getStoredData = (): Lote[] => {
-  try {
-    const data = localStorage.getItem(STORAGE_KEY);
-    if (data) {
-      return JSON.parse(data);
-    }
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(mockLotes));
-    return mockLotes;
-  } catch (err) {
-    console.error('Erro ao ler localStorage lotes:', err);
-    return mockLotes;
-  }
-};
-
-const setStoredData = (data: Lote[]): void => {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-  } catch (err) {
-    console.error('Erro ao salvar localStorage lotes:', err);
-  }
-};
 
 export interface CreateLoteDTO {
   nome: string;
@@ -34,111 +11,162 @@ export interface CreateLoteDTO {
   pasto_nome?: string;
 }
 
-const updateAnimaisPasto = (animaisIds: string[], pastoId?: string, pastoNome?: string) => {
-  try {
-    const raw = localStorage.getItem('farmnexus_animais_db');
-    if (raw) {
-      const animais = JSON.parse(raw);
-      const updated = animais.map((a: any) => {
-        if (animaisIds.includes(a.id)) {
-          return {
-            ...a,
-            pasto_id: pastoId,
-            pasto_nome: pastoNome,
-          };
-        }
-        return a;
-      });
-      localStorage.setItem('farmnexus_animais_db', JSON.stringify(updated));
-    }
-  } catch (err) {
-    console.error('Erro ao atualizar pasto dos animais do lote:', err);
+type LoteDbRow = {
+  id: string;
+  nome: string;
+  data_criacao: string;
+  animais_ids: string[] | null;
+  pasto_id: string | null;
+  pasto_nome: string | null;
+};
+
+type LoteMembershipRow = { lote_id: string; animal_id: string };
+
+const toLote = (row: LoteDbRow, animaisIds: string[]): Lote => ({
+  id: row.id,
+  nome: row.nome,
+  data_criacao: row.data_criacao,
+  animais_ids: animaisIds,
+  pasto_id: row.pasto_id ?? undefined,
+  pasto_nome: row.pasto_nome ?? undefined,
+});
+
+const getMemberships = async (loteIds?: string[]) => {
+  let query = supabase.from('lote_animais').select('lote_id, animal_id');
+  if (loteIds && loteIds.length > 0) query = query.in('lote_id', loteIds);
+
+  const { data, error } = await query;
+  if (error) throw error;
+  return (data ?? []) as unknown as LoteMembershipRow[];
+};
+
+const withMemberships = (rows: LoteDbRow[], memberships: LoteMembershipRow[]) => {
+  const membershipsByLote = new Map<string, string[]>();
+  for (const membership of memberships) {
+    const current = membershipsByLote.get(membership.lote_id) ?? [];
+    current.push(membership.animal_id);
+    membershipsByLote.set(membership.lote_id, current);
   }
+
+  return rows.map((row) => {
+    const normalizedIds = membershipsByLote.get(row.id);
+    return toLote(row, normalizedIds ?? row.animais_ids ?? []);
+  });
+};
+
+const syncAnimalPasture = async (animalIds: string[], pastoId?: string, pastoNome?: string) => {
+  await Promise.all(animalIds.map((animalId) => animaisService.update(animalId, {
+    pasto_id: pastoId,
+    pasto_nome: pastoNome,
+  })));
+};
+
+const replaceMemberships = async (loteId: string, animalIds: string[]) => {
+  const { error: deleteError } = await supabase.from('lote_animais').delete().eq('lote_id', loteId);
+  if (deleteError) throw deleteError;
+
+  if (animalIds.length === 0) return;
+
+  const { error: insertError } = await supabase.from('lote_animais').insert(
+    animalIds.map((animalId) => ({ lote_id: loteId, animal_id: animalId })),
+  );
+  if (insertError) throw insertError;
+};
+
+const getLoteRow = async (id: string) => {
+  const { data, error } = await supabase.from('lotes').select('*').eq('id', id).maybeSingle();
+  if (error) throw error;
+  return data ? data as unknown as LoteDbRow : null;
 };
 
 export const lotesService = {
-  getAll: async (filters?: { search?: string; page?: number; limit?: number }): Promise<{data: Lote[], total: number}> => {
-    return new Promise((resolve) => {
-      setTimeout(() => {
-        let list = getStoredData();
-        if (filters?.search) {
-          const q = filters.search.toLowerCase();
-          list = list.filter(l => l.nome.toLowerCase().includes(q));
-        }
-        const total = list.length;
-        if (filters?.page && filters?.limit) {
-          const startIndex = (filters.page - 1) * filters.limit;
-          list = list.slice(startIndex, startIndex + filters.limit);
-        }
-        resolve({ data: list, total });
-      }, 180);
-    });
+  getAll: async (filters?: { search?: string; page?: number; limit?: number }): Promise<{ data: Lote[]; total: number }> => {
+    const { data, error } = await supabase.from('lotes').select('*').order('data_criacao', { ascending: false });
+    if (error) throw error;
+
+    const rows = (data ?? []) as unknown as LoteDbRow[];
+    const memberships = await getMemberships(rows.map((row) => row.id));
+    let list = withMemberships(rows, memberships);
+
+    if (filters?.search) {
+      const search = filters.search.toLowerCase();
+      list = list.filter((lote) => lote.nome.toLowerCase().includes(search));
+    }
+
+    const total = list.length;
+    if (filters?.page && filters.limit) {
+      const start = (filters.page - 1) * filters.limit;
+      list = list.slice(start, start + filters.limit);
+    }
+
+    return { data: list, total };
   },
 
   getById: async (id: string): Promise<Lote | null> => {
-    return new Promise((resolve) => {
-      setTimeout(() => {
-        const list = getStoredData();
-        const found = list.find(l => l.id === id) || null;
-        resolve(found);
-      }, 180);
-    });
+    const row = await getLoteRow(id);
+    if (!row) return null;
+    const memberships = await getMemberships([id]);
+    return withMemberships([row], memberships)[0] ?? null;
   },
 
-  create: async (dataOrNome: string | CreateLoteDTO, legacy_animais_ids?: string[]): Promise<Lote> => {
-    return new Promise((resolve) => {
-      setTimeout(() => {
-        const list = getStoredData();
-        const isObject = typeof dataOrNome === 'object';
-        const nome = isObject ? dataOrNome.nome : dataOrNome;
-        const animais_ids = isObject ? dataOrNome.animais_ids : (legacy_animais_ids || []);
-        const pasto_id = isObject ? dataOrNome.pasto_id : undefined;
-        const pasto_nome = isObject ? dataOrNome.pasto_nome : undefined;
+  create: async (dataOrNome: string | CreateLoteDTO, legacyAnimaisIds?: string[]): Promise<Lote> => {
+    const isObject = typeof dataOrNome === 'object';
+    const nome = isObject ? dataOrNome.nome : dataOrNome;
+    const animaisIds = isObject ? dataOrNome.animais_ids : legacyAnimaisIds ?? [];
+    const pastoId = isObject ? dataOrNome.pasto_id : undefined;
+    const pastoNome = isObject ? dataOrNome.pasto_nome : undefined;
+    const id = `lote-${crypto.randomUUID()}`;
 
-        const created: Lote = {
-          id: `lote-${Date.now()}`,
-          nome,
-          data_criacao: new Date().toISOString(),
-          animais_ids,
-          pasto_id,
-          pasto_nome,
-        };
+    const { data, error } = await supabase.from('lotes').insert({
+      id,
+      nome,
+      data_criacao: new Date().toISOString(),
+      animais_ids: animaisIds,
+      pasto_id: pastoId ?? null,
+      pasto_nome: pastoNome ?? null,
+    }).select('*').single();
+    if (error) throw error;
 
-        if (pasto_id && animais_ids.length > 0) {
-          updateAnimaisPasto(animais_ids, pasto_id, pasto_nome);
-        }
+    try {
+      await replaceMemberships(id, animaisIds);
+      if (pastoId && animaisIds.length > 0) await syncAnimalPasture(animaisIds, pastoId, pastoNome);
+    } catch (syncError) {
+      await supabase.from('lotes').delete().eq('id', id);
+      throw syncError;
+    }
 
-        setStoredData([created, ...list]);
-        resolve(created);
-      }, 180);
-    });
+    const row = data as unknown as LoteDbRow;
+    return toLote(row, animaisIds);
   },
 
   update: async (id: string, updates: Partial<Lote>): Promise<Lote> => {
-    return new Promise((resolve, reject) => {
-      setTimeout(() => {
-        const list = getStoredData();
-        const index = list.findIndex(l => l.id === id);
-        if (index === -1) {
-          return reject(new Error('Lote não encontrado'));
-        }
+    const current = await lotesService.getById(id);
+    if (!current) throw new Error('Lote não encontrado');
 
-        const updated: Lote = {
-          ...list[index],
-          ...updates,
-        };
+    const nextAnimaisIds = updates.animais_ids ?? current.animais_ids;
+    const nextPastoId = 'pasto_id' in updates ? updates.pasto_id : current.pasto_id;
+    const nextPastoNome = 'pasto_nome' in updates ? updates.pasto_nome : current.pasto_nome;
+    const patch: Record<string, unknown> = {};
 
-        list[index] = updated;
-        setStoredData(list);
+    if (updates.nome !== undefined) patch.nome = updates.nome;
+    if (updates.data_criacao !== undefined) patch.data_criacao = updates.data_criacao;
+    if (updates.animais_ids !== undefined) patch.animais_ids = updates.animais_ids;
+    if ('pasto_id' in updates) patch.pasto_id = updates.pasto_id ?? null;
+    if ('pasto_nome' in updates) patch.pasto_nome = updates.pasto_nome ?? null;
 
-        // Se o pasto foi atualizado, sincronizar todos os animais do lote
-        if (updates.pasto_id !== undefined || updates.pasto_nome !== undefined) {
-          updateAnimaisPasto(updated.animais_ids, updates.pasto_id, updates.pasto_nome);
-        }
+    const { data, error } = await supabase.from('lotes').update(patch).eq('id', id).select('*').single();
+    if (error) throw error;
 
-        resolve(updated);
-      }, 180);
-    });
+    try {
+      if (updates.animais_ids !== undefined) await replaceMemberships(id, nextAnimaisIds);
+      if ('pasto_id' in updates || 'pasto_nome' in updates) {
+        await syncAnimalPasture(nextAnimaisIds, nextPastoId, nextPastoNome);
+      }
+    } catch (syncError) {
+      throw syncError;
+    }
+
+    return toLote(data as unknown as LoteDbRow, nextAnimaisIds);
   },
 
   moverPasto: async (loteId: string, pastoId: string, pastoNome: string): Promise<Lote> => {
@@ -146,12 +174,7 @@ export const lotesService = {
   },
 
   delete: async (id: string): Promise<void> => {
-    return new Promise((resolve) => {
-      setTimeout(() => {
-        const list = getStoredData();
-        setStoredData(list.filter(l => l.id !== id));
-        resolve();
-      }, 180);
-    });
-  }
+    const { error } = await supabase.from('lotes').delete().eq('id', id);
+    if (error) throw error;
+  },
 };
