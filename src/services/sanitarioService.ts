@@ -1,217 +1,337 @@
-import { ManejoSanitario } from '../types/database';
-import { mockManejosSanitarios } from '../mocks/sanitario';
-import { insumosService } from './insumosService';
+import { supabase } from '@/integrations/supabase/client';
+import { ManejoSanitario, MedicamentoAplicado } from '@/types/database';
+import { insumosService, removerMovimentacoesPorOrigem } from '@/services/insumosService';
 
-const STORAGE_KEY = 'farmnexus_sanitario_db';
+type ManejoDbRow = {
+  id: string;
+  nome_lote: string;
+  data_manejo: string;
+  responsavel_tecnico: string;
+  tipo_manejo: ManejoSanitario['tipo_manejo'];
+  observacoes: string | null;
+  status: ManejoSanitario['status'];
+  medicamentos: unknown;
+  animais_ids: string[] | null;
+  criar_lembrete: boolean;
+  data_lembrete: string | null;
+  status_sincronizacao: boolean;
+  created_at: string;
+};
 
-const getStoredData = (): ManejoSanitario[] => {
-  try {
-    const data = localStorage.getItem(STORAGE_KEY);
-    if (data) return JSON.parse(data);
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(mockManejosSanitarios));
-    return mockManejosSanitarios;
-  } catch (err) {
-    return mockManejosSanitarios;
+type MedicamentoDbRow = {
+  id: string;
+  manejo_id: string;
+  insumo_id: string;
+  nome_produto: string;
+  dose: string;
+  quantidade_total: number | string;
+};
+
+type AnimalRelationRow = { manejo_id: string; animal_id: string };
+
+type Relations = {
+  medicamentos: Map<string, MedicamentoDbRow[]>;
+  animais: Map<string, string[]>;
+};
+
+const toNumber = (value: number | string): number => Number(value);
+
+const legacyMedicamentos = (value: unknown): MedicamentoAplicado[] => {
+  if (!Array.isArray(value)) return [];
+  return value.map((medicamento) => {
+    const item = medicamento as Partial<MedicamentoAplicado>;
+    return {
+      insumo_id: item.insumo_id ?? '',
+      nome_produto: item.nome_produto ?? '',
+      dose: item.dose ?? '',
+      quantidade_total: Number(item.quantidade_total ?? 0),
+    };
+  });
+};
+
+const toMedicamentos = (rows: MedicamentoDbRow[]): MedicamentoAplicado[] => rows.map((row) => ({
+  insumo_id: row.insumo_id,
+  nome_produto: row.nome_produto,
+  dose: row.dose,
+  quantidade_total: toNumber(row.quantidade_total),
+}));
+
+const toManejo = (row: ManejoDbRow, relations: Relations): ManejoSanitario => {
+  const normalizedMedicamentos = relations.medicamentos.get(row.id);
+  const normalizedAnimais = relations.animais.get(row.id);
+  return {
+    id: row.id,
+    nome_lote: row.nome_lote,
+    data_manejo: row.data_manejo,
+    responsavel_tecnico: row.responsavel_tecnico,
+    tipo_manejo: row.tipo_manejo,
+    observacoes: row.observacoes ?? undefined,
+    status: row.status,
+    medicamentos: normalizedMedicamentos === undefined
+      ? legacyMedicamentos(row.medicamentos)
+      : toMedicamentos(normalizedMedicamentos),
+    animais_ids: normalizedAnimais === undefined ? row.animais_ids ?? [] : normalizedAnimais,
+    criar_lembrete: row.criar_lembrete,
+    data_lembrete: row.data_lembrete ?? undefined,
+    status_sincronizacao: row.status_sincronizacao,
+    createdAt: row.created_at,
+  };
+};
+
+const getRelations = async (manejoIds: string[]): Promise<Relations> => {
+  if (manejoIds.length === 0) return { medicamentos: new Map(), animais: new Map() };
+
+  const [medicamentosResult, animaisResult] = await Promise.all([
+    supabase.from('manejo_sanitario_medicamentos').select('*').in('manejo_id', manejoIds),
+    supabase.from('manejo_sanitario_animais').select('*').in('manejo_id', manejoIds),
+  ]);
+  if (medicamentosResult.error) throw medicamentosResult.error;
+  if (animaisResult.error) throw animaisResult.error;
+
+  const medicamentos = new Map<string, MedicamentoDbRow[]>();
+  for (const row of (medicamentosResult.data ?? []) as unknown as MedicamentoDbRow[]) {
+    const current = medicamentos.get(row.manejo_id) ?? [];
+    current.push(row);
+    medicamentos.set(row.manejo_id, current);
+  }
+
+  const animais = new Map<string, string[]>();
+  for (const row of (animaisResult.data ?? []) as unknown as AnimalRelationRow[]) {
+    const current = animais.get(row.manejo_id) ?? [];
+    current.push(row.animal_id);
+    animais.set(row.manejo_id, current);
+  }
+
+  return { medicamentos, animais };
+};
+
+const getManejoRow = async (id: string): Promise<ManejoDbRow | null> => {
+  const { data, error } = await supabase.from('manejos_sanitarios').select('*').eq('id', id).maybeSingle();
+  if (error) throw error;
+  return data as unknown as ManejoDbRow | null;
+};
+
+const getManejos = async (rows: ManejoDbRow[]): Promise<ManejoSanitario[]> => {
+  const relations = await getRelations(rows.map((row) => row.id));
+  return rows.map((row) => toManejo(row, relations));
+};
+
+const syncRelations = async (manejo: ManejoSanitario): Promise<void> => {
+  const { error: deleteMedicamentosError } = await supabase
+    .from('manejo_sanitario_medicamentos')
+    .delete()
+    .eq('manejo_id', manejo.id);
+  if (deleteMedicamentosError) throw deleteMedicamentosError;
+
+  const { error: deleteAnimaisError } = await supabase
+    .from('manejo_sanitario_animais')
+    .delete()
+    .eq('manejo_id', manejo.id);
+  if (deleteAnimaisError) throw deleteAnimaisError;
+
+  if (manejo.medicamentos.length > 0) {
+    const { error } = await supabase.from('manejo_sanitario_medicamentos').insert(
+      manejo.medicamentos.map((medicamento) => ({
+        id: `man-med-${crypto.randomUUID()}`,
+        manejo_id: manejo.id,
+        insumo_id: medicamento.insumo_id,
+        nome_produto: medicamento.nome_produto,
+        dose: medicamento.dose,
+        quantidade_total: medicamento.quantidade_total,
+      })),
+    );
+    if (error) throw error;
+  }
+
+  if (manejo.animais_ids.length > 0) {
+    const { error } = await supabase.from('manejo_sanitario_animais').insert(
+      manejo.animais_ids.map((animalId) => ({ manejo_id: manejo.id, animal_id: animalId })),
+    );
+    if (error) throw error;
   }
 };
 
-const setStoredData = (data: ManejoSanitario[]): void => {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-  } catch (err) {
-    console.error('Erro ao salvar manejo sanitario:', err);
+const generateMovimentacoes = async (manejo: ManejoSanitario): Promise<void> => {
+  for (const medicamento of manejo.medicamentos) {
+    if (medicamento.insumo_id && medicamento.quantidade_total > 0) {
+      await insumosService.registrarMovimentacao({
+        insumo_id: medicamento.insumo_id,
+        nome_insumo: medicamento.nome_produto,
+        tipo: 'saida',
+        quantidade: medicamento.quantidade_total,
+        data_movimento: manejo.data_manejo,
+        origem_manejo_id: manejo.id,
+        observacao: `Baixa automática via Manejo Sanitário ${manejo.nome_lote}`,
+      });
+    }
+  }
+};
+
+const restoreAutomaticMovimentacoes = async (movimentacoes: Awaited<ReturnType<typeof removerMovimentacoesPorOrigem>>) => {
+  for (const movimentacao of movimentacoes) {
+    await insumosService.registrarMovimentacao({
+      insumo_id: movimentacao.insumo_id,
+      nome_insumo: movimentacao.nome_insumo,
+      tipo: movimentacao.tipo,
+      quantidade: toNumber(movimentacao.quantidade),
+      data_movimento: movimentacao.data_movimento,
+      origem_manejo_id: movimentacao.origem_manejo_id ?? undefined,
+      observacao: movimentacao.observacao ?? undefined,
+    });
   }
 };
 
 export const sanitarioService = {
-  getAll: async (filters?: { search?: string; tipo?: string; status?: string; page?: number; limit?: number }): Promise<{data: ManejoSanitario[], total: number}> => {
-    return new Promise((resolve) => {
-      setTimeout(() => {
-        let list = getStoredData();
-        if (filters) {
-          if (filters.search) {
-            const query = filters.search.toLowerCase();
-            list = list.filter(m => m.nome_lote.toLowerCase().includes(query) || m.responsavel_tecnico.toLowerCase().includes(query));
-          }
-          if (filters.tipo && filters.tipo !== 'all') {
-            list = list.filter(m => m.tipo_manejo === filters.tipo);
-          }
-          if (filters.status && filters.status !== 'all') {
-            list = list.filter(m => m.status === filters.status);
-          }
-        }
-        
-        list.sort((a, b) => new Date(b.data_manejo).getTime() - new Date(a.data_manejo).getTime());
-        
-        const total = list.length;
-        if (filters?.page && filters?.limit) {
-          const startIndex = (filters.page - 1) * filters.limit;
-          list = list.slice(startIndex, startIndex + filters.limit);
-        }
-        
-        resolve({ data: list, total });
-      }, 180);
-    });
+  getAll: async (filters?: { search?: string; tipo?: string; status?: string; page?: number; limit?: number }): Promise<{ data: ManejoSanitario[]; total: number }> => {
+    const { data, error } = await supabase.from('manejos_sanitarios').select('*').order('data_manejo', { ascending: false });
+    if (error) throw error;
+
+    let list = await getManejos((data ?? []) as unknown as ManejoDbRow[]);
+    if (filters?.search) {
+      const search = filters.search.toLowerCase();
+      list = list.filter((manejo) => manejo.nome_lote.toLowerCase().includes(search)
+        || manejo.responsavel_tecnico.toLowerCase().includes(search));
+    }
+    if (filters?.tipo && filters.tipo !== 'all') list = list.filter((manejo) => manejo.tipo_manejo === filters.tipo);
+    if (filters?.status && filters.status !== 'all') list = list.filter((manejo) => manejo.status === filters.status);
+
+    const total = list.length;
+    if (filters?.page && filters.limit) {
+      const start = (filters.page - 1) * filters.limit;
+      list = list.slice(start, start + filters.limit);
+    }
+    return { data: list, total };
   },
 
   getStats: async (): Promise<{ andamento: number; concluido: number }> => {
-    return new Promise((resolve) => {
-      setTimeout(() => {
-        const list = getStoredData();
-        const andamento = list.filter(m => m.status === 'andamento').length;
-        const concluido = list.filter(m => m.status === 'concluido').length;
-        resolve({ andamento, concluido });
-      }, 100);
-    });
+    const { data, error } = await supabase.from('manejos_sanitarios').select('status');
+    if (error) throw error;
+    const statuses = (data ?? []) as unknown as Array<{ status: ManejoSanitario['status'] }>;
+    return {
+      andamento: statuses.filter((row) => row.status === 'andamento').length,
+      concluido: statuses.filter((row) => row.status === 'concluido').length,
+    };
   },
 
   getById: async (id: string): Promise<ManejoSanitario | null> => {
-    return new Promise((resolve) => {
-      setTimeout(() => {
-        const list = getStoredData();
-        resolve(list.find(m => m.id === id) || null);
-      }, 180);
-    });
+    const row = await getManejoRow(id);
+    if (!row) return null;
+    const manejos = await getManejos([row]);
+    return manejos[0] ?? null;
   },
 
   create: async (item: Omit<ManejoSanitario, 'id' | 'createdAt' | 'status_sincronizacao'>): Promise<ManejoSanitario> => {
-    return new Promise((resolve) => {
-      setTimeout(async () => {
-        const list = getStoredData();
-        const createdId = `man-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+    const id = `man-${crypto.randomUUID()}`;
+    const manejo: ManejoSanitario = {
+      ...item,
+      id,
+      status_sincronizacao: false,
+      createdAt: '',
+    };
 
-        const created: ManejoSanitario = {
-          ...item,
-          id: createdId,
-          status_sincronizacao: false,
-          createdAt: new Date().toISOString(),
-        };
-
-        // Se o manejo já for criado como 'concluido', dispara a baixa de estoque automática
-        if (created.status === 'concluido' && created.medicamentos.length > 0) {
-          for (const med of created.medicamentos) {
-            if (med.insumo_id && med.quantidade_total > 0) {
-              await insumosService.registrarMovimentacao({
-                insumo_id: med.insumo_id,
-                nome_insumo: med.nome_produto,
-                tipo: 'saida',
-                quantidade: med.quantidade_total,
-                data_movimento: created.data_manejo,
-                origem_manejo_id: createdId,
-                observacao: `Baixa automática via Manejo Sanitário ${created.nome_lote}`,
-              });
-            }
-          }
-        }
-
-        const updated = [created, ...list];
-        setStoredData(updated);
-        resolve(created);
-      }, 180);
+    const { error } = await supabase.from('manejos_sanitarios').insert({
+      id,
+      nome_lote: manejo.nome_lote,
+      data_manejo: manejo.data_manejo,
+      responsavel_tecnico: manejo.responsavel_tecnico,
+      tipo_manejo: manejo.tipo_manejo,
+      observacoes: manejo.observacoes ?? null,
+      status: manejo.status,
+      medicamentos: manejo.medicamentos,
+      animais_ids: manejo.animais_ids,
+      criar_lembrete: manejo.criar_lembrete ?? false,
+      data_lembrete: manejo.data_lembrete ?? null,
+      status_sincronizacao: false,
     });
+    if (error) throw error;
+
+    try {
+      await syncRelations(manejo);
+      if (manejo.status === 'concluido') await generateMovimentacoes(manejo);
+    } catch (createError) {
+      await removerMovimentacoesPorOrigem(id);
+      await supabase.from('manejos_sanitarios').delete().eq('id', id);
+      throw createError;
+    }
+
+    const created = await sanitarioService.getById(id);
+    if (!created) throw new Error('Manejo não encontrado');
+    return created;
   },
 
   update: async (id: string, updates: Partial<ManejoSanitario>): Promise<ManejoSanitario> => {
-    return new Promise((resolve, reject) => {
-      setTimeout(async () => {
-        const list = getStoredData();
-        const index = list.findIndex(m => m.id === id);
-        if (index === -1) return reject(new Error('Manejo não encontrado'));
+    const previous = await sanitarioService.getById(id);
+    if (!previous) throw new Error('Manejo não encontrado');
 
-        const previous = list[index];
-        const updatedItem = { ...previous, ...updates, status_sincronizacao: false };
+    const updated: ManejoSanitario = {
+      ...previous,
+      ...updates,
+      id,
+      status_sincronizacao: false,
+    };
+    const { error } = await supabase.from('manejos_sanitarios').update({
+      nome_lote: updated.nome_lote,
+      data_manejo: updated.data_manejo,
+      responsavel_tecnico: updated.responsavel_tecnico,
+      tipo_manejo: updated.tipo_manejo,
+      observacoes: updated.observacoes ?? null,
+      status: updated.status,
+      medicamentos: updated.medicamentos,
+      animais_ids: updated.animais_ids,
+      criar_lembrete: updated.criar_lembrete ?? false,
+      data_lembrete: updated.data_lembrete ?? null,
+      status_sincronizacao: false,
+    }).eq('id', id);
+    if (error) throw error;
 
-        // Se alterou de 'andamento' para 'concluido', dispara baixa automática de estoque
-        if (previous.status !== 'concluido' && updatedItem.status === 'concluido' && updatedItem.medicamentos.length > 0) {
-          for (const med of updatedItem.medicamentos) {
-            if (med.insumo_id && med.quantidade_total > 0) {
-              await insumosService.registrarMovimentacao({
-                insumo_id: med.insumo_id,
-                nome_insumo: med.nome_produto,
-                tipo: 'saida',
-                quantidade: med.quantidade_total,
-                data_movimento: updatedItem.data_manejo,
-                origem_manejo_id: id,
-                observacao: `Baixa automática via Conclusão do Manejo Sanitário ${updatedItem.nome_lote}`,
-              });
-            }
-          }
-        } 
-        // Se alterou de 'concluido' para 'andamento', reverte a baixa (rollback)
-        else if (previous.status === 'concluido' && updatedItem.status !== 'concluido') {
-          try {
-            const rawMovs = localStorage.getItem('farmnexus_mov_insumos_db');
-            if (rawMovs) {
-              let movs = JSON.parse(rawMovs);
-              const movsToDelete = movs.filter((mov: any) => mov.origem_manejo_id === id);
-              
-              const rawInsumos = localStorage.getItem('farmnexus_insumos_db');
-              if (rawInsumos) {
-                let insumos = JSON.parse(rawInsumos);
-                // Rollback estoque
-                for (const mDel of movsToDelete) {
-                  const idx = insumos.findIndex((ins: any) => ins.id === mDel.insumo_id);
-                  if (idx !== -1 && mDel.tipo === 'saida') {
-                    insumos[idx].estoque_atual += mDel.quantidade;
-                  }
-                }
-                localStorage.setItem('farmnexus_insumos_db', JSON.stringify(insumos));
-              }
-              
-              // Remove as movimentações geradas por este manejo
-              movs = movs.filter((mov: any) => mov.origem_manejo_id !== id);
-              localStorage.setItem('farmnexus_mov_insumos_db', JSON.stringify(movs));
-            }
-          } catch(e) {
-            console.error('Erro ao reverter movimentacoes', e);
-          }
-        }
+    let previousMovimentacoes: Awaited<ReturnType<typeof removerMovimentacoesPorOrigem>> = [];
+    let automaticReplaced = false;
+    try {
+      await syncRelations(updated);
+      if (previous.status === 'concluido') {
+        previousMovimentacoes = await removerMovimentacoesPorOrigem(id);
+        automaticReplaced = true;
+      }
+      if (updated.status === 'concluido') await generateMovimentacoes(updated);
+    } catch (updateError) {
+      if (automaticReplaced) {
+        await removerMovimentacoesPorOrigem(id);
+        await restoreAutomaticMovimentacoes(previousMovimentacoes);
+      }
+      await supabase.from('manejos_sanitarios').update({
+        nome_lote: previous.nome_lote,
+        data_manejo: previous.data_manejo,
+        responsavel_tecnico: previous.responsavel_tecnico,
+        tipo_manejo: previous.tipo_manejo,
+        observacoes: previous.observacoes ?? null,
+        status: previous.status,
+        medicamentos: previous.medicamentos,
+        animais_ids: previous.animais_ids,
+        criar_lembrete: previous.criar_lembrete ?? false,
+        data_lembrete: previous.data_lembrete ?? null,
+        status_sincronizacao: previous.status_sincronizacao,
+      }).eq('id', id);
+      await syncRelations(previous);
+      throw updateError;
+    }
 
-        list[index] = updatedItem;
-        setStoredData(list);
-        resolve(updatedItem);
-      }, 180);
-    });
+    const result = await sanitarioService.getById(id);
+    if (!result) throw new Error('Manejo não encontrado');
+    return result;
   },
 
   delete: async (id: string): Promise<boolean> => {
-    return new Promise((resolve) => {
-      setTimeout(() => {
-        const list = getStoredData();
-        const manejoToDel = list.find(m => m.id === id);
-        setStoredData(list.filter(m => m.id !== id));
-        
-        if (manejoToDel && manejoToDel.status === 'concluido' && manejoToDel.medicamentos.length > 0) {
-          try {
-            const rawMovs = localStorage.getItem('farmnexus_mov_insumos_db');
-            if (rawMovs) {
-              let movs = JSON.parse(rawMovs);
-              const movsToDelete = movs.filter(mov => mov.origem_manejo_id === id);
-              
-              const rawInsumos = localStorage.getItem('farmnexus_insumos_db');
-              if (rawInsumos) {
-                let insumos = JSON.parse(rawInsumos);
-                // Rollback estoque
-                for (const mDel of movsToDelete) {
-                  const idx = insumos.findIndex(ins => ins.id === mDel.insumo_id);
-                  if (idx !== -1 && mDel.tipo === 'saida') {
-                    insumos[idx].estoque_atual += mDel.quantidade;
-                  }
-                }
-                localStorage.setItem('farmnexus_insumos_db', JSON.stringify(insumos));
-              }
-              
-              // Remove as movimentações geradas por este manejo
-              movs = movs.filter(mov => mov.origem_manejo_id !== id);
-              localStorage.setItem('farmnexus_mov_insumos_db', JSON.stringify(movs));
-            }
-          } catch(e) {
-            console.error('Erro ao reverter movimentacoes do manejo sanitario', e);
-          }
-        }
-        
-        resolve(true);
-      }, 180);
-    });
-  }
+    const manejo = await sanitarioService.getById(id);
+    if (!manejo) return true;
+
+    const movimentacoes = manejo.status === 'concluido'
+      ? await removerMovimentacoesPorOrigem(id)
+      : [];
+    const { error } = await supabase.from('manejos_sanitarios').delete().eq('id', id);
+    if (error) {
+      if (movimentacoes.length > 0) await restoreAutomaticMovimentacoes(movimentacoes);
+      throw error;
+    }
+    return true;
+  },
 };

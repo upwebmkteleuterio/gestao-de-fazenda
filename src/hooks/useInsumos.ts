@@ -37,6 +37,7 @@ export const useInsumos = (
     mutationFn: (id: string) => insumosService.delete(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['insumos'] });
+      queryClient.invalidateQueries({ queryKey: ['movimentacoes_insumos'] });
     },
   });
 

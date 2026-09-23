@@ -21,6 +21,7 @@ export const useSanitario = (filters?: { search?: string; tipo?: string; status?
       queryClient.invalidateQueries({ queryKey: ['sanitario'] });
       queryClient.invalidateQueries({ queryKey: ['sanitario-stats'] });
       queryClient.invalidateQueries({ queryKey: ['insumos'] });
+      queryClient.invalidateQueries({ queryKey: ['movimentacoes_insumos'] });
     },
   });
 
@@ -30,6 +31,7 @@ export const useSanitario = (filters?: { search?: string; tipo?: string; status?
       queryClient.invalidateQueries({ queryKey: ['sanitario'] });
       queryClient.invalidateQueries({ queryKey: ['sanitario-stats'] });
       queryClient.invalidateQueries({ queryKey: ['insumos'] });
+      queryClient.invalidateQueries({ queryKey: ['movimentacoes_insumos'] });
     },
   });
 
@@ -38,6 +40,8 @@ export const useSanitario = (filters?: { search?: string; tipo?: string; status?
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['sanitario'] });
       queryClient.invalidateQueries({ queryKey: ['sanitario-stats'] });
+      queryClient.invalidateQueries({ queryKey: ['insumos'] });
+      queryClient.invalidateQueries({ queryKey: ['movimentacoes_insumos'] });
     },
   });
 
