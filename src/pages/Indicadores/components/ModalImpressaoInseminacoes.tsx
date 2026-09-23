@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { X, Printer, Download, Sprout, Eye, FileText, Loader2 } from 'lucide-react';
 import { Button } from '@/components/Button';
-import { InseminacaoRelatorioItem, formatarDataBR, exportarInseminacoesCSV } from '../utils/inseminacaoReportUtils';
+import { InseminacaoRelatorioItem, formatarDataBR, exportarInseminacoesXLSX } from '../utils/inseminacaoReportUtils';
 import { exportarElementoParaPDF } from '@/utils/pdfExport';
 
 interface ModalImpressaoInseminacoesProps {
@@ -36,10 +36,11 @@ export const ModalImpressaoInseminacoes: React.FC<ModalImpressaoInseminacoesProp
   const handleBaixarPdf = async () => {
     setGerandoPdf(true);
     const dataIso = new Date().toISOString().split('T')[0];
-    await exportarElementoParaPDF(
+    const success = await exportarElementoParaPDF(
       'relatorio-inseminacoes-conteudo',
       `relatorio-inseminacoes-farmnexus-${dataIso}.pdf`
     );
+    if (!success) window.alert('Não foi possível gerar o PDF deste relatório. Reduza o volume de dados e tente novamente.');
     setGerandoPdf(false);
   };
 
@@ -74,8 +75,8 @@ export const ModalImpressaoInseminacoes: React.FC<ModalImpressaoInseminacoesProp
 
   if (!isOpen) return null;
 
-  const handleExportCSV = () => {
-    exportarInseminacoesCSV(itens, filtroTexto);
+  const handleExportExcel = () => {
+    exportarInseminacoesXLSX(itens, filtroTexto);
   };
 
   // Estatísticas do relatório
@@ -134,10 +135,10 @@ export const ModalImpressaoInseminacoes: React.FC<ModalImpressaoInseminacoesProp
             <Button
               variant="secondary"
               icon={Download}
-              onClick={handleExportCSV}
-              title="Baixar em formato Excel"
+              onClick={handleExportExcel}
+              title="Baixar planilha Excel"
             >
-              Excel (CSV)
+              Exportar Excel
             </Button>
             <Button
               variant="primary"
@@ -275,7 +276,7 @@ export const ModalImpressaoInseminacoes: React.FC<ModalImpressaoInseminacoesProp
                           {item.brinco_matriz}
                         </td>
                         <td className="py-2 px-3">
-                          {item.animal?.categoria || 'PO'} - {item.animal?.raca || 'Nelore'}
+                          {item.animal?.categoria || '-'} - {item.animal?.raca || '-'}
                         </td>
                         <td className="py-2 px-3 font-medium">
                           {formatarDataBR(item.data_inseminacao)}

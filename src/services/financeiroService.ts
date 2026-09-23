@@ -35,6 +35,8 @@ export const financeiroService = {
     tipo?: string;
     categoria?: string;
     status?: string;
+    startDate?: string;
+    endDate?: string;
     page?: number;
     limit?: number;
   }): Promise<{ data: TransacaoFinanceira[]; total: number }> => {
@@ -52,6 +54,8 @@ export const financeiroService = {
     if (filters?.tipo && filters.tipo !== 'all') query = query.eq('tipo', filters.tipo);
     if (filters?.categoria && filters.categoria !== 'all') query = query.eq('categoria', filters.categoria);
     if (filters?.status && filters.status !== 'all') query = query.eq('status', filters.status);
+    if (filters?.startDate) query = query.gte('data', filters.startDate);
+    if (filters?.endDate) query = query.lt('data', filters.endDate);
 
     if (filters?.page !== undefined && filters.limit !== undefined) {
       const start = (filters.page - 1) * filters.limit;

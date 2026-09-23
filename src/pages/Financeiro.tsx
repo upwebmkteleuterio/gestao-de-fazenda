@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, DollarSign, TrendingUp, TrendingDown, ArrowUpCircle, ArrowDownCircle, Search } from 'lucide-react';
+import { Plus, DollarSign, TrendingUp, TrendingDown, ArrowUpCircle, ArrowDownCircle, Search, CalendarDays } from 'lucide-react';
 import { Button } from '../components/Button';
 import { Card } from '../components/Card';
 import { StatCard } from '../components/StatCard';
@@ -16,23 +16,35 @@ import { Pagination } from '../components/Pagination';
 import { useUIStore } from '../store/useUIStore';
 import { TransacaoFinanceira } from '../types/database';
 
+const getCurrentMonth = () => {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+};
+
 export const FinanceiroPage: React.FC = () => {
   const { showToast } = useUIStore();
   const [search, setSearch] = useState('');
   const [tipo, setTipo] = useState('all');
+  const [categoria, setCategoria] = useState('all');
   const [status, setStatus] = useState('all');
+  const [mesSelecionado, setMesSelecionado] = useState(getCurrentMonth);
   const [page, setPage] = useState(1);
   const limit = 10;
+  const inicioMes = `${mesSelecionado}-01`;
+  const fimMes = new Date(Date.UTC(Number(mesSelecionado.slice(0, 4)), Number(mesSelecionado.slice(5, 7)), 1))
+    .toISOString().slice(0, 10);
 
-  // Reseta para página 1 ao alterar filtros
   useEffect(() => {
     setPage(1);
-  }, [search, tipo, status]);
+  }, [search, tipo, categoria, status, mesSelecionado]);
 
   const { transacoes, totalTransacoes, resumo, isLoadingTransacoes, isErrorTransacoes, refetchTransacoes, createTransacao, updateTransacao, deleteTransacao } = useFinanceiro({
     search,
     tipo,
+    categoria,
     status,
+    startDate: inicioMes,
+    endDate: fimMes,
     page,
     limit,
   });
@@ -217,7 +229,19 @@ export const FinanceiroPage: React.FC = () => {
 
       {/* Tabela de Lançamentos */}
       <Card noPadding>
-        <div className="p-4 border-b border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-800 grid grid-cols-1 md:grid-cols-3 gap-3">
+        <div className="p-4 border-b border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-800 grid grid-cols-1 md:grid-cols-5 gap-3">
+          <div className="relative">
+            <CalendarDays className="w-4 h-4 text-gray-400 absolute left-3 top-3" />
+            <label htmlFor="filter-mes-fin" className="sr-only">Mês dos lançamentos</label>
+            <input
+              id="filter-mes-fin"
+              type="month"
+              value={mesSelecionado}
+              onChange={(e) => { if (e.target.value) setMesSelecionado(e.target.value); }}
+              className="w-full pl-9 pr-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-xl bg-gray-50 dark:bg-gray-900/50 text-gray-900 dark:text-white"
+            />
+            <span className="text-[11px] text-gray-500 dark:text-gray-400 mt-1 block">Mês dos lançamentos</span>
+          </div>
           <Input
             id="filter-search-fin"
             noMargin
@@ -236,6 +260,23 @@ export const FinanceiroPage: React.FC = () => {
               { label: 'Todos os Tipos', value: 'all' },
               { label: 'Receitas', value: 'receita' },
               { label: 'Despesas', value: 'despesa' },
+            ]}
+          />
+
+          <Select
+            id="filter-categoria"
+            noMargin
+            value={categoria}
+            onChange={(e) => { setCategoria(e.target.value); setPage(1); }}
+            options={[
+              { label: 'Todas as Categorias', value: 'all' },
+              { label: 'Venda de Gado', value: 'venda_gado' },
+              { label: 'Venda de Leite', value: 'venda_leite' },
+              { label: 'Compra de Insumos', value: 'compra_insumo' },
+              { label: 'Manutenção', value: 'manutencao' },
+              { label: 'Veterinário', value: 'veterinario' },
+              { label: 'Salários', value: 'salarios' },
+              { label: 'Outros', value: 'outros' },
             ]}
           />
 

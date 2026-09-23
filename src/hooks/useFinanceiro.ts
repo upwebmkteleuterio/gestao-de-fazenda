@@ -3,7 +3,7 @@ import { financeiroService } from '../services/financeiroService';
 import { TransacaoFinanceira } from '../types/database';
 import { useAuth } from '@/contexts/AuthContext';
 
-export const useFinanceiro = (filters?: { search?: string; tipo?: string; categoria?: string; status?: string; page?: number; limit?: number }) => {
+export const useFinanceiro = (filters?: { search?: string; tipo?: string; categoria?: string; status?: string; startDate?: string; endDate?: string; page?: number; limit?: number }) => {
   const queryClient = useQueryClient();
   const { role } = useAuth();
   const isFinanceiroEnabled = role === 'superadmin';

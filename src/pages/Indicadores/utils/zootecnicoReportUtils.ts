@@ -1,4 +1,12 @@
+import * as XLSX from 'xlsx';
 import { Animal, Pesagem } from '@/types/database';
+
+export interface ZootecnicoGmdPasto {
+  pasto_id: string;
+  pasto_nome: string;
+  gmd_medio: number | null;
+  pesagens_count: number;
+}
 
 export interface ZootecnicoKpis {
   taxaDescarte: string;
@@ -13,52 +21,50 @@ export interface ZootecnicoKpis {
   totalAnimais: number;
 }
 
-export function exportarZootecnicosCSV(animais: Animal[], pesagens: Pesagem[], kpis: ZootecnicoKpis) {
-  const dataHoje = new Date().toLocaleDateString('pt-BR');
+export const formatarNumero = (value: number | null | undefined, fractionDigits = 2) =>
+  value === null || value === undefined || Number.isNaN(value) ? '-' : value.toLocaleString('pt-BR', { minimumFractionDigits: fractionDigits, maximumFractionDigits: fractionDigits });
 
-  const linhas: string[] = [
-    'FARMNEXUS AGROPECUÁRIA - RELATÓRIO ZOOTÉCNICO E KPIS',
-    `Data de Emissão: ${dataHoje}`,
-    '',
-    'INDICADORES ZOOTÉCNICOS PRINCIPAIS',
-    `Taxa de Descarte;${kpis.taxaDescarte}%;(${kpis.descartesCount} animais)`,
-    `GMD Médio Geral;${kpis.gmdMedio}`,
-    `Taxa de Prenhez IATF;${kpis.taxaPrenhez}`,
-    `Custo Médio por Cabeça/Mês;${kpis.custoMedio}`,
-    '',
-    'ESTRUTURA DO REBANHO',
-    `Total de Animais;${kpis.totalAnimais}`,
-    `Bezerros(as);${kpis.bezerros}`,
-    `Vacas / Novilhas;${kpis.vacas}`,
-    `Matrizes / Doadoras;${kpis.matrizes}`,
-    `Touros / Reprodutores;${kpis.touros}`,
-    '',
-    'HISTÓRICO DE PESAGENS E GANHO MÉDIO DIÁRIO (GMD)',
-    'Brinco;Tipo;Observações;Data Pesagem;Peso (kg);Peso Anterior (kg);GMD (kg/dia);Dias Intervalo',
+export function exportarZootecnicosXLSX(animais: Animal[], pesagens: Pesagem[], kpis: ZootecnicoKpis, pastos: ZootecnicoGmdPasto[] = []) {
+  if (!animais.length && !pesagens.length) return false;
+  const workbook = XLSX.utils.book_new();
+  const resumo = [
+    ['FARMNEXUS AGROPECUÁRIA - RELATÓRIO ZOOTÉCNICO E KPIS'],
+    ['Data de Emissão', new Date().toLocaleDateString('pt-BR')],
+    [],
+    ['Indicador', 'Valor'],
+    ['Taxa de Descarte', `${kpis.taxaDescarte}%`],
+    ['GMD Médio Geral', kpis.gmdMedio],
+    ['Taxa de Prenhez IATF', kpis.taxaPrenhez],
+    ['Custo Médio por Cabeça/Mês', kpis.custoMedio],
+    ['Total de Animais', kpis.totalAnimais],
+    ['Bezerros(as)', kpis.bezerros],
+    ['Vacas / Novilhas', kpis.vacas],
+    ['Matrizes / Doadoras', kpis.matrizes],
+    ['Touros / Reprodutores', kpis.touros],
   ];
-
-  pesagens.forEach(p => {
-    const colunas = [
-      p.brinco_animal || '',
-      p.tipo_animal || '',
-      p.observacoes || '-',
-      p.data_pesagem ? new Date(p.data_pesagem).toLocaleDateString('pt-BR') : '',
-      p.peso_kg ? p.peso_kg.toString() : '',
-      p.peso_anterior ? p.peso_anterior.toString() : '-',
-      p.gmd_calculado ? p.gmd_calculado.toString() : '-',
-      p.dias_intervalo ? p.dias_intervalo.toString() : '-',
-    ];
-    linhas.push(colunas.join(';'));
-  });
-
-  const conteudoCsv = '\uFEFF' + linhas.join('\r\n');
-  const blob = new Blob([conteudoCsv], { type: 'text/csv;charset=utf-8;' });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement('a');
-  link.setAttribute('href', url);
-  link.setAttribute('download', `relatorio-zootecnico-${new Date().toISOString().split('T')[0]}.csv`);
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
-  URL.revokeObjectURL(url);
+  XLSX.utils.book_append_sheet(workbook, XLSX.utils.aoa_to_sheet(resumo), 'Resumo');
+  XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(pastos.map((pasto) => ({
+    Pasto: pasto.pasto_nome,
+    'GMD Médio (kg/dia)': pasto.gmd_medio,
+    Pesagens: pasto.pesagens_count,
+  }))), 'GMD por Pasto');
+  XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(pesagens.map((p) => ({
+    Brinco: p.brinco_animal,
+    Tipo: p.tipo_animal || '-',
+    'Data Pesagem': p.data_pesagem,
+    'Peso (kg)': p.peso_kg,
+    'Peso Anterior (kg)': p.peso_anterior ?? '-',
+    'GMD (kg/dia)': p.gmd_calculado ?? '-',
+    'Dias Intervalo': p.dias_intervalo ?? '-',
+    Observações: p.observacoes || '',
+  }))), 'Pesagens');
+  XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(animais.map((animal) => ({
+    Brinco: animal.brinco,
+    Tipo: animal.tipo_animal,
+    Categoria: animal.categoria,
+    Status: animal.status,
+    Pasto: animal.pasto_nome || '-',
+  }))), 'Animais');
+  XLSX.writeFile(workbook, `relatorio-zootecnico-${new Date().toISOString().split('T')[0]}.xlsx`);
+  return true;
 }

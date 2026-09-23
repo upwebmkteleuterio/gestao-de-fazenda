@@ -10,7 +10,6 @@ import {
   Package,
   DollarSign,
   BarChart3,
-  Palette,
   ChevronLeft,
   ChevronRight,
   Sprout
@@ -37,7 +36,6 @@ export const Sidebar: React.FC = () => {
     { name: 'Insumos', path: '/insumos', icon: Package },
     { name: 'Financeiro', path: '/financeiro', icon: DollarSign },
     { name: 'Relatórios', path: '/relatorios', icon: BarChart3 },
-    { name: 'UI Kit', path: '/uikit', icon: Palette },
   ];
 
   return (

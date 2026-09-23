@@ -1,3 +1,4 @@
+import { useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { animaisService } from '../services/animaisService';
 import { Animal } from '../types/database';
@@ -9,6 +10,7 @@ export const useAnimais = (filters?: {
   categoria?: string;
   tipo?: string;
   pasto_id?: string;
+  includeHistorico?: boolean;
   page?: number;
   limit?: number;
 }) => {
@@ -48,6 +50,16 @@ export const useAnimais = (filters?: {
       queryClient.invalidateQueries({ queryKey: ['dashboard-summary'] });
     },
   });
+  const fetchAllAnimais = useCallback(async (): Promise<Animal[]> => {
+    const batchSize = 500;
+    const first = await animaisService.getAll({ page: 1, limit: batchSize, includeHistorico: false });
+    const batches = [first.data];
+    for (let page = 2; (page - 1) * batchSize < first.total; page += 1) {
+      const batch = await animaisService.getAll({ page, limit: batchSize, includeHistorico: false });
+      batches.push(batch.data);
+    }
+    return batches.flat();
+  }, []);
 
   return {
     animais: query.data?.data || [],
@@ -56,6 +68,7 @@ export const useAnimais = (filters?: {
     isError: query.isError,
     error: query.error,
     refetch: query.refetch,
+    fetchAllAnimais,
     createAnimal: createMutation.mutateAsync,
     isCreating: createMutation.isPending,
     updateAnimal: updateMutation.mutateAsync,

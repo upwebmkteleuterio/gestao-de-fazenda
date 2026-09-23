@@ -144,30 +144,77 @@ const buildEventoPatch = (
   return patch;
 };
 
+export type ReproducaoReportFilters = {
+  dataEspecifica?: string;
+  dataInicio?: string;
+  dataFim?: string;
+  touro?: string;
+  protocolo?: string;
+  resultadoDg?: string;
+  search?: string;
+  page?: number;
+  limit?: number;
+};
+
+export type ReproducaoReportSummary = {
+  total_count: number;
+  touros_count: number;
+  prenhas_count: number;
+  vazias_count: number;
+  aguardando_count: number;
+  iatf_count: number;
+  datas_com_registros: string[];
+  touros: string[];
+};
+
+const sanitizeSearch = (value: string) => value.replace(/[^\p{L}\p{N} _-]/gu, ' ').trim();
+
+const toReportParams = (filters?: ReproducaoReportFilters) => ({
+  p_data_especifica: filters?.dataEspecifica || null,
+  p_data_inicio: filters?.dataInicio || null,
+  p_data_fim: filters?.dataFim || null,
+  p_touro: filters?.touro && filters.touro !== 'all' ? filters.touro : null,
+  p_protocolo: filters?.protocolo && filters.protocolo !== 'all' ? filters.protocolo : null,
+  p_resultado_dg: filters?.resultadoDg && filters.resultadoDg !== 'all' ? filters.resultadoDg : null,
+  p_search: filters?.search?.trim() ? sanitizeSearch(filters.search) : null,
+});
+
 export const reproducaoService = {
-  getAll: async (
-    filters?: {
-      search?: string;
-      protocolo?: string;
-      resultadoDg?: string;
-      dataInicio?: string;
-      dataFim?: string;
-      page?: number;
-      limit?: number;
-    },
-  ): Promise<{ data: EventoReproducao[]; total: number }> => {
+  getReportSummary: async (filters?: ReproducaoReportFilters): Promise<ReproducaoReportSummary> => {
+    const { data, error } = await supabase.rpc('get_reproducao_report_summary', toReportParams(filters));
+    if (error) throw error;
+    const row = ((data ?? [])[0] ?? {}) as Partial<ReproducaoReportSummary>;
+    return {
+      total_count: Number(row.total_count ?? 0),
+      touros_count: Number(row.touros_count ?? 0),
+      prenhas_count: Number(row.prenhas_count ?? 0),
+      vazias_count: Number(row.vazias_count ?? 0),
+      aguardando_count: Number(row.aguardando_count ?? 0),
+      iatf_count: Number(row.iatf_count ?? 0),
+      datas_com_registros: row.datas_com_registros ?? [],
+      touros: row.touros ?? [],
+    };
+  },
+
+  getAll: async (filters?: ReproducaoReportFilters): Promise<{ data: EventoReproducao[]; total: number }> => {
     let query = supabase
       .from('eventos_reproducao')
       .select('*', { count: 'exact' });
 
-    if (filters?.search) {
-      const search = filters.search.replace(/[^\p{L}\p{N} _-]/gu, ' ');
+    if (filters?.search?.trim()) {
+      const search = filters.search.replace(/[^\p{L}\p{N} _-]/gu, ' ').trim();
       query = query.or(`brinco_matriz.ilike.%${search}%,dados_protocolo->>touro.ilike.%${search}%`);
     }
-    if (filters?.protocolo && filters.protocolo !== 'all') query = query.eq('tipo_protocolo', filters.protocolo);
-    if (filters?.resultadoDg && filters.resultadoDg !== 'all') query = query.eq('resultado_dg', filters.resultadoDg);
+    if (filters?.dataEspecifica) query = query.eq('data_principal', filters.dataEspecifica);
     if (filters?.dataInicio) query = query.gte('data_principal', filters.dataInicio);
     if (filters?.dataFim) query = query.lte('data_principal', filters.dataFim);
+    if (filters?.touro && filters.touro !== 'all') query = query.eq('dados_protocolo->>touro', filters.touro);
+    if (filters?.protocolo && filters.protocolo !== 'all') query = query.eq('tipo_protocolo', filters.protocolo);
+    if (filters?.resultadoDg && filters.resultadoDg !== 'all') {
+      query = filters.resultadoDg === 'pendente'
+        ? query.is('resultado_dg', null)
+        : query.eq('resultado_dg', filters.resultadoDg);
+    }
 
     query = query
       .order('data_principal', { ascending: false })

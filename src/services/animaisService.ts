@@ -263,6 +263,7 @@ export const animaisService = {
     categoria?: string;
     tipo?: string;
     pasto_id?: string;
+    includeHistorico?: boolean;
     page?: number;
     limit?: number;
   }): Promise<{ data: Animal[]; total: number }> => {
@@ -289,8 +290,9 @@ export const animaisService = {
     const { data, count, error } = await query;
     if (error) throw error;
 
+    const rows = (data ?? []) as unknown as AnimalDbRow[];
     return {
-      data: await withNormalizedToques((data ?? []) as unknown as AnimalDbRow[]),
+      data: filters?.includeHistorico === false ? rows.map(toAnimal) : await withNormalizedToques(rows),
       total: count ?? 0,
     };
   },
