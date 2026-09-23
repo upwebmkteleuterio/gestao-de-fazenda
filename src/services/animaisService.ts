@@ -281,7 +281,7 @@ export const animaisService = {
     if (filters?.tipo && filters.tipo !== 'all') query = query.eq('tipo_animal', filters.tipo);
     if (filters?.pasto_id && filters.pasto_id !== 'all') query = query.eq('pasto_id', filters.pasto_id);
 
-    if (filters?.page && filters.limit) {
+    if (filters?.page !== undefined && filters.limit !== undefined) {
       const start = (filters.page - 1) * filters.limit;
       query = query.range(start, start + filters.limit - 1);
     }

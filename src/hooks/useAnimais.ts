@@ -23,6 +23,7 @@ export const useAnimais = (filters?: {
     mutationFn: (newAnimal: Omit<Animal, 'id' | 'createdAt' | 'status_sincronizacao'>) => animaisService.create(newAnimal),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['animais'] });
+      queryClient.invalidateQueries({ queryKey: ['lotes'] });
       queryClient.invalidateQueries({ queryKey: ['pastagens'] });
       queryClient.invalidateQueries({ queryKey: ['dashboard-summary'] });
     },
@@ -32,6 +33,7 @@ export const useAnimais = (filters?: {
     mutationFn: ({ id, updates }: { id: string; updates: Partial<Animal> }) => animaisService.update(id, updates),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['animais'] });
+      queryClient.invalidateQueries({ queryKey: ['lotes'] });
       queryClient.invalidateQueries({ queryKey: ['pastagens'] });
       queryClient.invalidateQueries({ queryKey: ['dashboard-summary'] });
     },
@@ -41,6 +43,7 @@ export const useAnimais = (filters?: {
     mutationFn: (id: string) => animaisService.delete(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['animais'] });
+      queryClient.invalidateQueries({ queryKey: ['lotes'] });
       queryClient.invalidateQueries({ queryKey: ['pastagens'] });
       queryClient.invalidateQueries({ queryKey: ['dashboard-summary'] });
     },

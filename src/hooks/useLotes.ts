@@ -13,6 +13,7 @@ export const useLotes = (filters?: { search?: string; page?: number; limit?: num
     queryClient.invalidateQueries({ queryKey: ['lotes'] });
     queryClient.invalidateQueries({ queryKey: ['animais'] });
     queryClient.invalidateQueries({ queryKey: ['pastagens'] });
+    queryClient.invalidateQueries({ queryKey: ['dashboard-summary'] });
   };
 
   const createMutation = useMutation({

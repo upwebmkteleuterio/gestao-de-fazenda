@@ -32,8 +32,10 @@ const toLote = (row: LoteDbRow, animaisIds: string[]): Lote => ({
 });
 
 const getMemberships = async (loteIds?: string[]) => {
+  if (loteIds && loteIds.length === 0) return [];
+
   let query = supabase.from('lote_animais').select('lote_id, animal_id');
-  if (loteIds && loteIds.length > 0) query = query.in('lote_id', loteIds);
+  if (loteIds) query = query.in('lote_id', loteIds);
 
   const { data, error } = await query;
   if (error) throw error;
@@ -81,25 +83,26 @@ const getLoteRow = async (id: string) => {
 
 export const lotesService = {
   getAll: async (filters?: { search?: string; page?: number; limit?: number }): Promise<{ data: Lote[]; total: number }> => {
-    const { data, error } = await supabase.from('lotes').select('*').order('data_criacao', { ascending: false });
+    let query = supabase
+      .from('lotes')
+      .select('*', { count: 'exact' })
+      .order('data_criacao', { ascending: false });
+
+    if (filters?.search) query = query.ilike('nome', `%${filters.search}%`);
+    if (filters?.page !== undefined && filters.limit !== undefined) {
+      const start = (filters.page - 1) * filters.limit;
+      query = query.range(start, start + filters.limit - 1);
+    }
+
+    const { data, count, error } = await query;
     if (error) throw error;
 
     const rows = (data ?? []) as unknown as LoteDbRow[];
     const memberships = await getMemberships(rows.map((row) => row.id));
-    let list = withMemberships(rows, memberships);
-
-    if (filters?.search) {
-      const search = filters.search.toLowerCase();
-      list = list.filter((lote) => lote.nome.toLowerCase().includes(search));
-    }
-
-    const total = list.length;
-    if (filters?.page && filters.limit) {
-      const start = (filters.page - 1) * filters.limit;
-      list = list.slice(start, start + filters.limit);
-    }
-
-    return { data: list, total };
+    return {
+      data: withMemberships(rows, memberships),
+      total: count ?? 0,
+    };
   },
 
   getById: async (id: string): Promise<Lote | null> => {
