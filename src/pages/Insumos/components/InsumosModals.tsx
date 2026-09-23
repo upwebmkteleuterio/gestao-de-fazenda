@@ -1,0 +1,30 @@
+import React from 'react';
+import { Modal } from '../../../components/Modal';
+import { Button } from '../../../components/Button';
+import { Insumo } from '../../../types/database';
+
+export const InsumosModals = ({
+  modalOpen, setModalOpen, itemToDelete, handleDelete
+}: any) => (
+  <>
+    <Modal
+        isOpen={modalOpen}
+        onClose={() => setModalOpen(false)}
+        title="Excluir Insumo do Estoque"
+        actions={
+          <>
+            <Button variant="danger" onClick={handleDelete}>
+              Sim, Excluir
+            </Button>
+            <Button variant="secondary" onClick={() => setModalOpen(false)}>
+              Cancelar
+            </Button>
+          </>
+        }
+      >
+        <p className="text-sm text-gray-700 dark:text-gray-300">
+          Tem certeza de que deseja remover o insumo <strong>{itemToDelete?.nome_produto}</strong> do almoxarifado?
+        </p>
+      </Modal>
+  </>
+);

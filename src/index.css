@@ -1,0 +1,166 @@
+@import "tailwindcss";
+
+@variant dark (&:where(.dark, .dark *));
+
+@layer base {
+  :root {
+    --font-sans: 'Plus Jakarta Sans', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+  }
+  
+  body {
+    font-family: var(--font-sans);
+    @apply bg-gray-50 text-gray-900 antialiased selection:bg-emerald-200 selection:text-emerald-900 transition-colors duration-200;
+  }
+
+  .dark body {
+    @apply bg-gray-950 text-gray-100 selection:bg-emerald-900 selection:text-emerald-100;
+  }
+}
+
+/* Custom subtle global scrollbar */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(156, 163, 175, 0.5) transparent;
+}
+
+.dark * {
+  scrollbar-color: rgba(75, 85, 99, 0.6) transparent;
+}
+
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  @apply bg-gray-300 dark:bg-gray-700 rounded-full hover:bg-gray-400 dark:hover:bg-gray-600 transition-colors;
+}
+
+/* Custom sidebar bright light-green scrollbar - strictly enforced cross-browser */
+.sidebar-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: #34d399 rgba(6, 78, 59, 0.3);
+}
+
+.sidebar-scrollbar::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.sidebar-scrollbar::-webkit-scrollbar-track {
+  background: rgba(6, 78, 59, 0.2);
+  border-radius: 9999px;
+}
+
+.sidebar-scrollbar::-webkit-scrollbar-thumb {
+  background-color: #34d399;
+  border-radius: 9999px;
+  box-shadow: 0 0 6px rgba(52, 211, 153, 0.5);
+}
+
+.sidebar-scrollbar::-webkit-scrollbar-thumb:hover {
+  background-color: #6ee7b7;
+}
+
+/* Animations */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.2s ease-out forwards;
+}
+
+/* Remove spin arrows from number inputs cross-browser */
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+input[type="number"] {
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+
+/* Remove datalist drop-down indicator arrows */
+input::-webkit-calendar-picker-indicator {
+  display: none !important;
+  -webkit-appearance: none;
+  opacity: 0;
+}
+
+/* Regras de Impressão Profissional para Relatórios */
+@media print {
+  @page {
+    size: A4 portrait;
+    margin: 12mm 10mm 15mm 10mm;
+  }
+
+  body.printing-relatorio #root {
+    display: none !important;
+  }
+
+  body.printing-relatorio {
+    background: #ffffff !important;
+    color: #111827 !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  #relatorio-inseminacoes-modal,
+  #relatorio-zootecnicos-modal {
+    position: static !important;
+    inset: auto !important;
+    background: transparent !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    overflow: visible !important;
+    display: block !important;
+  }
+
+  #relatorio-inseminacoes-card,
+  #relatorio-zootecnicos-card {
+    border: none !important;
+    box-shadow: none !important;
+    max-height: none !important;
+    max-width: 100% !important;
+    width: 100% !important;
+    overflow: visible !important;
+    background: #ffffff !important;
+  }
+
+  #relatorio-inseminacoes-conteudo,
+  #relatorio-zootecnico-conteudo {
+    overflow: visible !important;
+    padding: 0 !important;
+    background: #ffffff !important;
+  }
+
+  .print\:hidden {
+    display: none !important;
+  }
+
+  table {
+    width: 100% !important;
+    border-collapse: collapse !important;
+  }
+
+  tr {
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+}
+

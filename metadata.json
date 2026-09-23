@@ -1,0 +1,8 @@
+{
+  "name": " FarmNexus Prot 3",
+  "description": "Sistema completo e modular de gestão pecuária e controle de fazenda com suporte a animais, pesagens, pastagens, reprodução, manejo sanitário, insumos e financeiro.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

@@ -1,0 +1,362 @@
+import React, { useState, useEffect } from 'react';
+import { Plus, DollarSign, TrendingUp, TrendingDown, ArrowUpCircle, ArrowDownCircle, Search } from 'lucide-react';
+import { Button } from '../components/Button';
+import { Card } from '../components/Card';
+import { StatCard } from '../components/StatCard';
+import { Table, Column } from '../components/Table';
+import { Badge } from '../components/Badge';
+import { Input } from '../components/Input';
+import { Select } from '../components/Select';
+import { FinanceiroSlidePanel } from './Financeiro/components/FinanceiroSlidePanel';
+import { FinanceiroModals } from './Financeiro/components/FinanceiroModals';
+import { EmptyState } from '../components/EmptyState';
+import { ErrorState } from '../components/ErrorState';
+import { useFinanceiro } from '../hooks/useFinanceiro';
+import { Pagination } from '../components/Pagination';
+import { useUIStore } from '../store/useUIStore';
+import { TransacaoFinanceira } from '../types/database';
+
+export const FinanceiroPage: React.FC = () => {
+  const { showToast } = useUIStore();
+  const [search, setSearch] = useState('');
+  const [tipo, setTipo] = useState('all');
+  const [status, setStatus] = useState('all');
+  const [page, setPage] = useState(1);
+  const limit = 10;
+
+  // Reseta para página 1 ao alterar filtros
+  useEffect(() => {
+    setPage(1);
+  }, [search, tipo, status]);
+
+  const { transacoes, totalTransacoes, resumo, isLoadingTransacoes, isErrorTransacoes, refetchTransacoes, createTransacao, updateTransacao, deleteTransacao } = useFinanceiro({
+    search,
+    tipo,
+    status,
+    page,
+    limit,
+  });
+
+  const [slideOpen, setSlideOpen] = useState(false);
+  const [selectedTransacao, setSelectedTransacao] = useState<TransacaoFinanceira | null>(null);
+
+  const [modalOpen, setModalOpen] = useState(false);
+  const [itemToDelete, setItemToDelete] = useState<TransacaoFinanceira | null>(null);
+
+  const [isSaving, setIsSaving] = useState(false);
+
+  // Selection state para seleção em lote de lançamentos financeiro
+  const [selectedFinIds, setSelectedFinIds] = useState<string[]>([]);
+
+  const handleToggleSelectFin = (id: string) => {
+    setSelectedFinIds(prev =>
+      prev.includes(id) ? prev.filter(item => item !== id) : [...prev, id]
+    );
+  };
+
+  const handleSelectAllFins = () => {
+    if (selectedFinIds.length === transacoes.length) {
+      setSelectedFinIds([]);
+    } else {
+      setSelectedFinIds(transacoes.map(t => t.id));
+    }
+  };
+
+  const [formData, setFormData] = useState<Partial<TransacaoFinanceira>>({
+    descricao: 'Venda de Boi Gordo - Lote 12',
+    tipo: 'receita',
+    categoria: 'outros',
+    valor: 0,
+    data: new Date().toISOString().split('T')[0],
+    status: 'pago',
+  });
+
+  const handleOpenCreate = () => {
+    setSelectedTransacao(null);
+    setFormData({
+      descricao: '',
+      tipo: 'receita',
+      categoria: 'outros',
+      valor: 0,
+      data: new Date().toISOString().split('T')[0],
+      status: 'pago',
+    });
+    setSlideOpen(true);
+  };
+
+  const handleSave = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (isSaving) return;
+
+    if (!formData.descricao || !formData.valor) {
+      showToast('Preencha os campos obrigatórios.', 'error');
+      return;
+    }
+
+    setIsSaving(true);
+    try {
+      if (selectedTransacao) {
+        await updateTransacao({ id: selectedTransacao.id, updates: formData });
+        showToast('Lançamento financeiro atualizado!');
+      } else {
+        await createTransacao(formData as Omit<TransacaoFinanceira, 'id' | 'createdAt' | 'status_sincronizacao'>);
+        showToast('Novo lançamento registrado no fluxo de caixa!');
+      }
+      setSlideOpen(false);
+    } catch (err) {
+      showToast('Erro ao salvar lançamento.', 'error');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!itemToDelete) return;
+    try {
+      await deleteTransacao(itemToDelete.id);
+      showToast('Lançamento removido.');
+      setModalOpen(false);
+    } catch (err) {
+      showToast('Erro ao remover lançamento.', 'error');
+    }
+  };
+
+  const columns: Column<TransacaoFinanceira>[] = [
+    {
+      header: 'Descrição do Lançamento',
+      accessor: 'descricao',
+      render: (row) => (
+        <span className="font-bold text-gray-900 dark:text-white">{row.descricao}</span>
+      ),
+    },
+    {
+      header: 'Tipo',
+      render: (row) => (
+        <div className="flex items-center space-x-1.5">
+          {row.tipo === 'receita' ? (
+            <ArrowUpCircle className="w-4 h-4 text-emerald-500" />
+          ) : (
+            <ArrowDownCircle className="w-4 h-4 text-red-500" />
+          )}
+          <span className={`font-semibold capitalize ${row.tipo === 'receita' ? 'text-emerald-600' : 'text-red-600'}`}>
+            {row.tipo}
+          </span>
+        </div>
+      ),
+    },
+    {
+      header: 'Data / Vencimento',
+      render: (row) => <span>{row.data}</span>,
+    },
+    {
+      header: 'Valor (R$)',
+      render: (row) => (
+        <span className={`font-extrabold text-base ${row.tipo === 'receita' ? 'text-emerald-600' : 'text-red-600'}`}>
+          {row.tipo === 'receita' ? '+' : '-'} R$ {row.valor.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+        </span>
+      ),
+    },
+    {
+      header: 'Status Pagamento',
+      render: (row) => (
+        <Badge variant={row.status === 'pago' ? 'success' : 'warning'}>
+          {row.status === 'pago' ? 'PAGO / RECEBIDO' : 'PENDENTE'}
+        </Badge>
+      ),
+    },
+  ];
+
+  return (
+    <div className="space-y-6 animate-fade-in pb-12">
+      {/* Header */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div className="min-w-0 flex-1">
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white tracking-tight">Gestão Financeira & DRE</h1>
+          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+            Controle de receitas com venda de gado/leite, despesas operacionais e demonstrativo do mês.
+          </p>
+        </div>
+        <div className="flex items-center gap-3 shrink-0">
+          <Button variant="primary" icon={Plus} onClick={handleOpenCreate}>
+            Novo Lançamento Financeiro
+          </Button>
+        </div>
+      </div>
+
+      {/* DRE Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+        <StatCard
+          title="Receita Total"
+          value={`R$ ${resumo.receitas.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`}
+          icon={ArrowUpCircle}
+          trend="up"
+          trendValue="Entradas"
+        />
+        <StatCard
+          title="Despesa Total"
+          value={`R$ ${resumo.despesas.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`}
+          icon={ArrowDownCircle}
+          trend="down"
+          trendValue="Saídas"
+        />
+        <StatCard
+          title="Resultado Líquido"
+          value={`R$ ${resumo.saldo.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`}
+          icon={DollarSign}
+          trend={resumo.saldo >= 0 ? 'up' : 'down'}
+          trendValue="Lucro Operacional"
+        />
+        <StatCard
+          title="Contas Pendentes"
+          value={`R$ ${resumo.pendentes.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`}
+          icon={TrendingDown}
+          trend="down"
+          trendValue="A Vencer"
+        />
+      </div>
+
+      {/* Tabela de Lançamentos */}
+      <Card noPadding>
+        <div className="p-4 border-b border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-800 grid grid-cols-1 md:grid-cols-3 gap-3">
+          <Input
+            id="filter-search-fin"
+            noMargin
+            placeholder="Buscar por descrição ou categoria..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            icon={Search}
+          />
+
+          <Select
+            id="filter-tipo"
+            noMargin
+            value={tipo}
+            onChange={(e) => { setTipo(e.target.value); setPage(1); }}
+            options={[
+              { label: 'Todos os Tipos', value: 'all' },
+              { label: 'Receitas', value: 'receita' },
+              { label: 'Despesas', value: 'despesa' },
+            ]}
+          />
+
+          <Select
+            id="filter-status"
+            noMargin
+            value={status}
+            onChange={(e) => { setStatus(e.target.value); setPage(1); }}
+            options={[
+              { label: 'Todos os Status', value: 'all' },
+              { label: 'Pago / Recebido', value: 'pago' },
+              { label: 'Pendente', value: 'pendente' },
+            ]}
+          />
+        </div>
+
+        {isLoadingTransacoes ? (
+          <div className="p-6 space-y-4">
+            {[1, 2, 3, 4, 5].map((i) => (
+              <div key={i} className="h-12 bg-gray-100 dark:bg-gray-700/50 rounded-lg animate-pulse" />
+            ))}
+          </div>
+        ) : isErrorTransacoes ? (
+          <div className="p-6">
+            <ErrorState
+              title="Erro ao carregar lançamentos financeiros"
+              message="Não foi possível sincronizar o fluxo de caixa ou a requisição expirou. Tente novamente."
+              onRetry={refetchTransacoes}
+            />
+          </div>
+        ) : transacoes.length === 0 ? (
+          <div className="p-6">
+            <EmptyState
+              icon={DollarSign}
+              title="Nenhum lançamento financeiro"
+              description="Não foram encontrados registros para os filtros selecionados ou ainda não há despesas ou receitas cadastradas."
+              actionLabel="Novo Lançamento"
+              onAction={handleOpenCreate}
+            />
+          </div>
+        ) : (
+          <>
+          <Table
+            columns={columns}
+            data={transacoes}
+            selectedIds={selectedFinIds}
+            onToggleSelect={handleToggleSelectFin}
+            onSelectAll={handleSelectAllFins}
+            onAction={(action, row) => {
+              if (action === 'edit' || action === 'view') {
+                setSelectedTransacao(row);
+                setFormData({ ...row });
+                setSlideOpen(true);
+              } else if (action === 'delete') {
+                setItemToDelete(row);
+                setModalOpen(true);
+              }
+            }}
+          />
+          <Pagination
+            currentPage={page}
+            totalPages={Math.ceil((totalTransacoes || 0) / limit)}
+            onPageChange={setPage}
+            totalItems={totalTransacoes}
+            itemsPerPage={limit}
+          />
+          </>
+        )}
+      </Card>
+
+      {/* STICKY BATCH ACTION BAR (Barra Flutuante para Ações em Lote) */}
+      {selectedFinIds.length > 0 && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-gray-900/95 dark:bg-gray-900/95 text-white border border-gray-700/80 shadow-2xl rounded-2xl p-4 flex flex-wrap items-center justify-between gap-4 backdrop-blur-md max-w-2xl w-11/12 animate-slide-up">
+          <div className="flex items-center space-x-3">
+            <span className="flex items-center justify-center w-7 h-7 rounded-full bg-emerald-500 text-gray-950 font-bold text-xs">
+              {selectedFinIds.length}
+            </span>
+            <span className="text-sm font-semibold text-gray-100">
+              {selectedFinIds.length === 1 ? '1 lançamento selecionado' : `${selectedFinIds.length} lançamentos selecionados`}
+            </span>
+          </div>
+
+          <div className="flex items-center space-x-2">
+            <Button
+              variant="primary"
+              onClick={() => {
+                showToast(`Status atualizado em lote para ${selectedFinIds.length} lançamentos.`, 'success');
+                setSelectedFinIds([]);
+              }}
+              className="bg-emerald-500 hover:bg-emerald-400 text-gray-950 font-bold px-3 py-1.5 text-xs min-h-[44px]"
+            >
+              Marcar como Pago ({selectedFinIds.length})
+            </Button>
+            <Button
+              variant="ghost"
+              onClick={() => setSelectedFinIds([])}
+              className="!bg-slate-800 hover:!bg-slate-700 !text-white hover:!text-white border border-slate-600 font-bold px-3.5 py-1.5 text-xs rounded-lg transition-all shadow-sm min-h-[44px]"
+            >
+              Desmarcar Todos
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {/* SLIDE PANEL */}
+      <FinanceiroSlidePanel
+        slideOpen={slideOpen}
+        setSlideOpen={setSlideOpen}
+        selectedTransacao={selectedTransacao}
+        formData={formData}
+        setFormData={setFormData}
+        handleSave={handleSave}
+        isSaving={isSaving}
+      />
+
+      {/* Modal De exclusão */}
+      <FinanceiroModals
+        modalOpen={modalOpen}
+        setModalOpen={setModalOpen}
+        handleDelete={handleDelete}
+      />
+    </div>
+  );
+};
