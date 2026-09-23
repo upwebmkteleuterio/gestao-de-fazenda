@@ -15,6 +15,7 @@ export const useReproducao = (filters?: { search?: string; protocolo?: string; r
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['reproducao'] });
       queryClient.invalidateQueries({ queryKey: ['animais'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard-summary'] });
     },
   });
 
@@ -23,6 +24,7 @@ export const useReproducao = (filters?: { search?: string; protocolo?: string; r
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['reproducao'] });
       queryClient.invalidateQueries({ queryKey: ['animais'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard-summary'] });
     },
   });
 
@@ -31,6 +33,7 @@ export const useReproducao = (filters?: { search?: string; protocolo?: string; r
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['reproducao'] });
       queryClient.invalidateQueries({ queryKey: ['animais'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard-summary'] });
     },
   });
 

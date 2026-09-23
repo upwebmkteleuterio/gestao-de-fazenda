@@ -23,6 +23,7 @@ export const useInsumos = (
     mutationFn: (item: Omit<Insumo, 'id' | 'createdAt'>) => insumosService.create(item),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['insumos'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard-summary'] });
     },
   });
 
@@ -30,6 +31,7 @@ export const useInsumos = (
     mutationFn: ({ id, updates }: { id: string; updates: Partial<Insumo> }) => insumosService.update(id, updates),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['insumos'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard-summary'] });
     },
   });
 
@@ -38,6 +40,7 @@ export const useInsumos = (
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['insumos'] });
       queryClient.invalidateQueries({ queryKey: ['movimentacoes_insumos'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard-summary'] });
     },
   });
 
@@ -46,6 +49,7 @@ export const useInsumos = (
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['insumos'] });
       queryClient.invalidateQueries({ queryKey: ['movimentacoes_insumos'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard-summary'] });
     },
   });
 

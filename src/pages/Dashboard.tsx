@@ -1,28 +1,58 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Users, Scale, HeartHandshake, AlertTriangle, DollarSign, Plus, ArrowRight, Activity, Sprout } from 'lucide-react';
-import { StatCard } from '../components/StatCard';
-import { Card } from '../components/Card';
-import { Button } from '../components/Button';
-import { Badge } from '../components/Badge';
-import { useAnimais } from '../hooks/useAnimais';
-import { usePesagens } from '../hooks/usePesagens';
-import { useInsumos } from '../hooks/useInsumos';
-import { useFinanceiro } from '../hooks/useFinanceiro';
-import { useReproducao } from '../hooks/useReproducao';
+import { Users, Scale, HeartHandshake, AlertTriangle, DollarSign, Plus, ArrowRight, Activity, Pencil } from 'lucide-react';
+import { StatCard } from '@/components/StatCard';
+import { Card } from '@/components/Card';
+import { Button } from '@/components/Button';
+import { Badge } from '@/components/Badge';
+import { usePesagensRecentes } from '@/hooks/usePesagens';
+import { useDashboard } from '@/hooks/useDashboard';
 import { useAuth } from '@/contexts/AuthContext';
 import { MeshDriftShader } from '@/components/MeshDriftShader';
-import { useUIStore } from '../store/useUIStore';
+import { useAppSettings } from '@/hooks/useAppSettings';
+import { useUIStore } from '@/store/useUIStore';
 
 export const DashboardPage: React.FC = () => {
   const navigate = useNavigate();
   const { role } = useAuth();
-  const { setActivePage, openSlidePanel } = useUIStore();
-  const { animais, isLoading: isLoadingAnimais, isError: isErrorAnimais, refetch: refetchAnimais } = useAnimais();
-  const { pesagens, isLoading: isLoadingPesagens } = usePesagens();
-  const { insumos } = useInsumos();
-  const { eventos } = useReproducao();
-  const { resumo } = useFinanceiro();
+  const { farmName, updateFarmName, isUpdating: isUpdatingFarm } = useAppSettings();
+  const { setActivePage, openSlidePanel, showToast } = useUIStore();
+  const [isEditingFarmName, setIsEditingFarmName] = React.useState(false);
+  const [farmNameDraft, setFarmNameDraft] = React.useState(farmName);
+  const cancelFarmNameEdit = React.useRef(false);
+  const { summary, isLoading: isLoadingDashboard } = useDashboard();
+  const { pesagens, isLoading: isLoadingPesagens } = usePesagensRecentes();
+
+  React.useEffect(() => {
+    if (!isEditingFarmName) setFarmNameDraft(farmName);
+  }, [farmName, isEditingFarmName]);
+
+  const saveFarmName = async (value: string) => {
+    const nextFarmName = value.trim();
+    if (!nextFarmName) {
+      setFarmNameDraft(farmName);
+      setIsEditingFarmName(false);
+      showToast('Informe um nome para a fazenda.', 'error');
+      return;
+    }
+    if (!updateFarmName) return;
+
+    try {
+      await updateFarmName(nextFarmName);
+      setIsEditingFarmName(false);
+      showToast('Nome da fazenda atualizado com sucesso.', 'success');
+    } catch {
+      showToast('Não foi possível atualizar o nome da fazenda.', 'error');
+    }
+  };
+
+  const handleFarmNameBlur = () => {
+    if (cancelFarmNameEdit.current) {
+      cancelFarmNameEdit.current = false;
+      return;
+    }
+    void saveFarmName(farmNameDraft);
+  };
 
   // Escuta atalhos de teclado no Dashboard: Alt + A (Novo Animal), Alt + P (Nova Pesagem)
   React.useEffect(() => {
@@ -46,27 +76,24 @@ export const DashboardPage: React.FC = () => {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [setActivePage, navigate, openSlidePanel]);
 
-  const totalAnimais = animais.length;
-  const ativos = animais.filter(a => a.status === 'ativo').length;
-  const vacasCount = animais.filter(a => a.tipo_animal === 'vaca' || a.tipo_animal === 'matriz' || a.tipo_animal === 'novilha').length;
-  const bezerrosCount = animais.filter(a => a.tipo_animal === 'bezerro' || a.tipo_animal === 'bezerra').length;
-  const tourosCount = animais.filter(a => a.tipo_animal === 'touro' || a.tipo_animal === 'garrote').length;
-
-  const estoqueCritico = insumos.filter(i => i.estoque_atual <= i.estoque_minimo);
-
-  // Média de GMD recente
-  const pesagensComGMD = pesagens.filter(p => p.gmd_calculado !== undefined);
-  const gmdMedio = pesagensComGMD.length > 0
-    ? (pesagensComGMD.reduce((acc, curr) => acc + (curr.gmd_calculado ?? 0), 0) / pesagensComGMD.length).toFixed(2)
-    : null;
-
-  const eventosComResultadoDg = eventos.filter(
-    (evento) => evento.resultado_dg === 'cheia' || evento.resultado_dg === 'vazia',
-  );
-  const eventosCheios = eventosComResultadoDg.filter((evento) => evento.resultado_dg === 'cheia').length;
-  const taxaPrenhez = eventosComResultadoDg.length > 0
-    ? `${Math.round((eventosCheios / eventosComResultadoDg.length) * 100)}%`
-    : '—';
+  const totalAnimais = summary?.total_animais ?? 0;
+  const ativos = summary?.animais_ativos ?? 0;
+  const vacasCount = summary?.vacas_count ?? 0;
+  const bezerrosCount = summary?.bezerros_count ?? 0;
+  const tourosCount = summary?.touros_count ?? 0;
+  const categorias = summary?.categorias ?? { PO: 0, PA: 0, PC: 0, CO: 0 };
+  const estoqueCritico = summary?.estoque_critico ?? [];
+  const estoqueCriticoTotal = summary?.estoque_critico_total ?? 0;
+  const gmdMedio = summary?.gmd_medio ?? null;
+  const pesagensComGMD = summary?.pesagens_com_gmd ?? 0;
+  const dgTotal = summary?.dg_total ?? 0;
+  const dgCheias = summary?.dg_cheias ?? 0;
+  const taxaPrenhez = dgTotal > 0 ? `${Math.round((dgCheias / dgTotal) * 100)}%` : '—';
+  const receitas = summary?.receitas ?? 0;
+  const despesas = summary?.despesas ?? 0;
+  const pendentes = summary?.pendentes ?? 0;
+  const saldo = summary?.saldo ?? 0;
+  const formatCurrency = (value: number) => value.toLocaleString('pt-BR', { minimumFractionDigits: 2 });
 
   return (
     <div className="space-y-8 animate-fade-in pb-12">
@@ -78,7 +105,49 @@ export const DashboardPage: React.FC = () => {
           <Badge variant="success" className="mb-3 border-emerald-300/30 bg-emerald-500/30 text-emerald-100">
             Painel Geral da Fazenda
           </Badge>
-          <h1 className="text-2xl font-extrabold tracking-tight sm:text-3xl">Fazenda Boa Esperança</h1>
+          {role === 'superadmin' && isEditingFarmName ? (
+            <input
+              type="text"
+              value={farmNameDraft}
+              onChange={(event) => setFarmNameDraft(event.target.value)}
+              onBlur={handleFarmNameBlur}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') {
+                  event.preventDefault();
+                  event.currentTarget.blur();
+                }
+                if (event.key === 'Escape') {
+                  event.preventDefault();
+                  cancelFarmNameEdit.current = true;
+                  setFarmNameDraft(farmName);
+                  setIsEditingFarmName(false);
+                }
+              }}
+              autoFocus
+              disabled={isUpdatingFarm}
+              aria-label="Nome da fazenda"
+              className="w-full max-w-xl rounded-lg border border-emerald-300/60 bg-emerald-950/50 px-3 py-1 text-2xl font-extrabold tracking-tight text-white outline-none ring-2 ring-emerald-400/40 sm:text-3xl"
+            />
+          ) : (
+            <div className="group flex items-center gap-2">
+              <h1 className="text-2xl font-extrabold tracking-tight sm:text-3xl">{farmName}</h1>
+              {role === 'superadmin' && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    cancelFarmNameEdit.current = false;
+                    setFarmNameDraft(farmName);
+                    setIsEditingFarmName(true);
+                  }}
+                  className="rounded-lg p-2 text-emerald-200 opacity-100 transition-opacity hover:bg-emerald-900/60 hover:text-white focus:outline-none focus:ring-2 focus:ring-emerald-300 sm:opacity-0 sm:group-hover:opacity-100"
+                  aria-label="Editar nome da fazenda"
+                  title="Editar nome da fazenda"
+                >
+                  <Pencil className="h-4 w-4" />
+                </button>
+              )}
+            </div>
+          )}
           <p className="mt-2 text-sm leading-relaxed text-emerald-50/85">
             Acompanhe o rebanho, pesagens, manejos sanitários, estoque e fluxo financeiro em tempo real com sincronização em nuvem.
           </p>
@@ -121,7 +190,7 @@ export const DashboardPage: React.FC = () => {
           icon={Users}
           trend="up"
           trendValue={`${ativos} Ativos`}
-          subtitle={`${vacasCount} Vacas / ${bezerrosCount} Bezerros`}
+          subtitle={`${vacasCount} Vacas / ${bezerrosCount} Bezerros / ${tourosCount} Touros`}
           onClick={() => {
             setActivePage('Animais');
             navigate('/animais');
@@ -129,11 +198,11 @@ export const DashboardPage: React.FC = () => {
         />
         <StatCard
           title="Ganho Médio Diário (GMD)"
-          value={gmdMedio === null ? '—' : `${gmdMedio} kg/dia`}
+          value={gmdMedio === null ? '—' : `${gmdMedio.toFixed(2)} kg/dia`}
           icon={Activity}
-          trend={pesagensComGMD.length > 0 ? 'up' : undefined}
-          trendValue={pesagensComGMD.length > 0 ? `${pesagensComGMD.length} pesagens com GMD` : undefined}
-          subtitle={pesagensComGMD.length > 0 ? 'Pesagens com GMD' : 'Sem dados de GMD'}
+          trend={pesagensComGMD > 0 ? 'up' : undefined}
+          trendValue={pesagensComGMD > 0 ? `${pesagensComGMD} pesagens com GMD` : undefined}
+          subtitle={pesagensComGMD > 0 ? 'Pesagens com GMD' : 'Sem dados de GMD'}
           onClick={() => {
             setActivePage('Pesagens');
             navigate('/pesagens');
@@ -143,9 +212,9 @@ export const DashboardPage: React.FC = () => {
           title="Taxa de Prenhez"
           value={taxaPrenhez}
           icon={HeartHandshake}
-          trend={eventosComResultadoDg.length > 0 ? 'up' : undefined}
-          trendValue={eventosComResultadoDg.length > 0 ? `${eventosComResultadoDg.length} DG avaliados` : undefined}
-          subtitle={eventosComResultadoDg.length > 0 ? 'Cheias / vazias' : 'Sem dados de DG'}
+          trend={dgTotal > 0 ? 'up' : undefined}
+          trendValue={dgTotal > 0 ? `${dgTotal} DG avaliados` : undefined}
+          subtitle={dgTotal > 0 ? 'Cheias / vazias' : 'Sem dados de DG'}
           onClick={() => {
             setActivePage('Manejo Reprodutivo');
             navigate('/reproducao');
@@ -154,11 +223,11 @@ export const DashboardPage: React.FC = () => {
         {role === 'superadmin' && (
           <StatCard
             title="Saldo Financeiro"
-            value={`R$ ${resumo.saldo.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`}
+            value={`R$ ${formatCurrency(saldo)}`}
             icon={DollarSign}
-            trend={resumo.saldo >= 0 ? 'up' : 'down'}
-            trendValue={`Receitas: R$ ${resumo.receitas.toLocaleString()}`}
-            subtitle="Resumo acumulado"
+            trend={saldo >= 0 ? 'up' : 'down'}
+            trendValue={`Receitas pagas: R$ ${formatCurrency(receitas)}`}
+            subtitle={`Despesas pagas: R$ ${formatCurrency(despesas)} · Pendentes: R$ ${formatCurrency(pendentes)}`}
             onClick={() => {
               setActivePage('Financeiro');
               navigate('/financeiro');
@@ -173,10 +242,10 @@ export const DashboardPage: React.FC = () => {
         <Card title="Distribuição do Rebanho por Categoria" className="lg:col-span-2">
           <div className="space-y-5 py-2">
             {[
-              { label: 'PO – Puro de Origem', count: animais.filter(a => a.categoria === 'PO').length, color: 'bg-emerald-600' },
-              { label: 'PA – Puro por Avaliação', count: animais.filter(a => a.categoria === 'PA').length, color: 'bg-emerald-500' },
-              { label: 'PC – Puro por Cruzamento', count: animais.filter(a => a.categoria === 'PC').length, color: 'bg-teal-500' },
-              { label: 'CO – Comum', count: animais.filter(a => a.categoria === 'CO').length, color: 'bg-cyan-600' },
+              { label: 'PO – Puro de Origem', count: categorias.PO, color: 'bg-emerald-600' },
+              { label: 'PA – Puro por Avaliação', count: categorias.PA, color: 'bg-emerald-500' },
+              { label: 'PC – Puro por Cruzamento', count: categorias.PC, color: 'bg-teal-500' },
+              { label: 'CO – Comum', count: categorias.CO, color: 'bg-cyan-600' },
             ].map((item) => {
               const percentage = totalAnimais > 0 ? Math.round((item.count / totalAnimais) * 100) : 0;
               return (
@@ -214,23 +283,32 @@ export const DashboardPage: React.FC = () => {
         {/* Alerts & Stock Card */}
         <Card title="Alertas & Estoque Crítico" action={<AlertTriangle className="w-5 h-5 text-amber-500" />}>
           <div className="space-y-4">
-            {estoqueCritico.length === 0 ? (
+            {isLoadingDashboard ? (
+              <div className="h-16 rounded-xl bg-gray-100 dark:bg-gray-800 animate-pulse" />
+            ) : estoqueCritico.length === 0 ? (
               <p className="text-sm text-gray-500 dark:text-gray-400">Nenhum insumo abaixo do estoque mínimo.</p>
             ) : (
-              estoqueCritico.map((item) => (
-                <div
-                  key={item.id}
-                  className="p-3.5 rounded-xl border border-amber-200 dark:border-amber-900/50 bg-amber-50/50 dark:bg-amber-950/20 flex justify-between items-center"
-                >
-                  <div>
-                    <p className="font-semibold text-sm text-gray-900 dark:text-gray-100">{item.nome_produto}</p>
-                    <p className="text-xs text-amber-700 dark:text-amber-400 mt-0.5">
-                      Atual: <span className="font-bold">{item.estoque_atual} {item.unidade_medida}s</span> (Mínimo: {item.estoque_minimo})
-                    </p>
+              <>
+                {estoqueCritico.map((item) => (
+                  <div
+                    key={item.id}
+                    className="p-3.5 rounded-xl border border-amber-200 dark:border-amber-900/50 bg-amber-50/50 dark:bg-amber-950/20 flex justify-between items-center"
+                  >
+                    <div>
+                      <p className="font-semibold text-sm text-gray-900 dark:text-gray-100">{item.nome_produto}</p>
+                      <p className="text-xs text-amber-700 dark:text-amber-400 mt-0.5">
+                        Atual: <span className="font-bold">{item.estoque_atual} {item.unidade_medida}s</span> (Mínimo: {item.estoque_minimo})
+                      </p>
+                    </div>
+                    <Badge variant="warning">Repor Estoque</Badge>
                   </div>
-                  <Badge variant="warning">Repor Estoque</Badge>
-                </div>
-              ))
+                ))}
+                {estoqueCriticoTotal > 20 && (
+                  <p className="text-xs text-amber-700 dark:text-amber-400">
+                    Exibindo 20 de {estoqueCriticoTotal} itens críticos. A lista está parcial.
+                  </p>
+                )}
+              </>
             )}
 
             <div className="p-3.5 rounded-xl border border-blue-200 dark:border-blue-900/50 bg-blue-50/50 dark:bg-blue-950/20 flex justify-between items-center">
@@ -294,7 +372,7 @@ export const DashboardPage: React.FC = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
-                {pesagens.slice(0, 5).map((p) => (
+                {pesagens.map((p) => (
                   <tr key={p.id} className="hover:bg-gray-50 dark:hover:bg-gray-800/50">
                     <td className="px-4 py-3">
                       <span className="font-semibold text-emerald-600 dark:text-emerald-400 block">{p.brinco_animal}</span>

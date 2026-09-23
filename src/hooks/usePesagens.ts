@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { pesagensService } from '../services/pesagensService';
-import { Pesagem } from '../types/database';
+import { pesagensService } from '@/services/pesagensService';
+import { Pesagem } from '@/types/database';
 
 export const usePesagens = (filters?: {
   search?: string;
@@ -22,6 +22,8 @@ export const usePesagens = (filters?: {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['pesagens'] });
       queryClient.invalidateQueries({ queryKey: ['animais'] });
+      queryClient.invalidateQueries({ queryKey: ['pesagens-recentes'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard-summary'] });
     },
   });
 
@@ -30,6 +32,8 @@ export const usePesagens = (filters?: {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['pesagens'] });
       queryClient.invalidateQueries({ queryKey: ['animais'] });
+      queryClient.invalidateQueries({ queryKey: ['pesagens-recentes'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard-summary'] });
     },
   });
 
@@ -38,6 +42,8 @@ export const usePesagens = (filters?: {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['pesagens'] });
       queryClient.invalidateQueries({ queryKey: ['animais'] });
+      queryClient.invalidateQueries({ queryKey: ['pesagens-recentes'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard-summary'] });
     },
   });
 
@@ -46,6 +52,8 @@ export const usePesagens = (filters?: {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['pesagens'] });
       queryClient.invalidateQueries({ queryKey: ['animais'] });
+      queryClient.invalidateQueries({ queryKey: ['pesagens-recentes'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard-summary'] });
     },
   });
 
@@ -64,5 +72,20 @@ export const usePesagens = (filters?: {
     isUpdating: updateMutation.isPending,
     deletePesagem: deleteMutation.mutateAsync,
     isDeleting: deleteMutation.isPending,
+  };
+};
+
+export const usePesagensRecentes = () => {
+  const query = useQuery({
+    queryKey: ['pesagens-recentes'],
+    queryFn: pesagensService.getRecent,
+  });
+
+  return {
+    pesagens: query.data ?? [],
+    isLoading: query.isLoading,
+    isError: query.isError,
+    error: query.error,
+    refetch: query.refetch,
   };
 };

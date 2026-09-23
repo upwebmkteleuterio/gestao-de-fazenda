@@ -1,12 +1,14 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
 import { useUIStore } from '@/store/useUIStore';
 import { Sidebar } from '@/components/Sidebar';
 import { Navbar } from '@/components/Navbar';
 import { Toast } from '@/components/Toast';
+import { AccountSettingsPanel } from '@/components/AccountSettingsPanel';
 
 export const AppLayout: React.FC = () => {
   const { theme, toast, hideToast, slidePanel, closeSlidePanel } = useUIStore();
+  const [isAccountSettingsOpen, setIsAccountSettingsOpen] = useState(false);
   const location = useLocation();
 
   // Listener de Atalho de Teclado Global: 'Esc' para fechar formulários e modais abertos
@@ -43,13 +45,18 @@ export const AppLayout: React.FC = () => {
       {/* Main Container Wrapper */}
       <div className="flex-1 flex flex-col min-w-0 transition-all duration-300">
         {/* Navbar Global */}
-        <Navbar />
+        <Navbar onOpenAccountSettings={() => setIsAccountSettingsOpen(true)} />
 
         {/* Dynamic Page Content Rendered via Outlet */}
         <main className="flex-1 p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto w-full">
           <Outlet />
         </main>
       </div>
+
+      <AccountSettingsPanel
+        isOpen={isAccountSettingsOpen}
+        onClose={() => setIsAccountSettingsOpen(false)}
+      />
 
       {/* Toast Notification Handler Global */}
       {toast && toast.visible && (

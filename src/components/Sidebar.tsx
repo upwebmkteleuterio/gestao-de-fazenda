@@ -18,10 +18,12 @@ import {
 import { BovinoSidebarIcon } from './BovinoSidebarIcon';
 import { useUIStore, PageRoute } from '../store/useUIStore';
 import { useAuth } from '@/contexts/AuthContext';
+import { useAppSettings } from '@/hooks/useAppSettings';
 
 export const Sidebar: React.FC = () => {
   const { setActivePage, sidebarOpen, toggleSidebar } = useUIStore();
   const { role } = useAuth();
+  const { farmName } = useAppSettings();
   const location = useLocation();
 
   const menuItems: { name: PageRoute; path: string; icon: React.ComponentType<{ className?: string }> }[] = [
@@ -136,7 +138,7 @@ export const Sidebar: React.FC = () => {
       {/* Sidebar Footer info */}
       {sidebarOpen && (
         <div className="p-4 m-3 bg-emerald-900/40 dark:bg-gray-900 border border-emerald-800/40 dark:border-gray-800 rounded-xl">
-          <p className="text-xs font-semibold text-emerald-300 dark:text-emerald-400">Fazenda Boa Esperança</p>
+          <p className="text-xs font-semibold text-emerald-300 dark:text-emerald-400 truncate" title={farmName}>{farmName}</p>
           <p className="text-[10px] text-emerald-200/60 dark:text-gray-400 mt-0.5">Status: Sincronizado</p>
         </div>
       )}

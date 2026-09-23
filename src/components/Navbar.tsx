@@ -5,6 +5,10 @@ import { useUIStore } from '@/store/useUIStore';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/Button';
 
+interface NavbarProps {
+  onOpenAccountSettings: () => void;
+}
+
 function getInitials(name: string): string {
   const words = name.trim().split(/\s+/).filter(Boolean);
   if (words.length === 0) return 'U';
@@ -12,7 +16,7 @@ function getInitials(name: string): string {
   return `${words[0][0]}${words[words.length - 1][0]}`.toUpperCase();
 }
 
-export const Navbar: React.FC = () => {
+export const Navbar: React.FC<NavbarProps> = ({ onOpenAccountSettings }) => {
   const { theme, toggleTheme, toggleSidebar, setActivePage, showToast } = useUIStore();
   const { displayName, role, signOut } = useAuth();
   const navigate = useNavigate();
@@ -86,17 +90,23 @@ export const Navbar: React.FC = () => {
 
         {/* User Info */}
         <div className="flex items-center space-x-3 border-l border-gray-200 dark:border-gray-800 pl-4">
-          <div className="hidden sm:block text-right">
-            <p className="font-semibold text-gray-800 dark:text-gray-200 leading-none text-sm">{displayName}</p>
-            <p className="text-emerald-600 dark:text-emerald-400 text-xs mt-1 font-medium">{roleLabel}</p>
-          </div>
-          <div
-            className="h-9 w-9 rounded-full border-2 border-emerald-100 dark:border-emerald-800 bg-emerald-600 text-white flex items-center justify-center text-xs font-semibold shadow-xs"
-            role="img"
-            aria-label={displayName}
+          <button
+            type="button"
+            onClick={onOpenAccountSettings}
+            className="flex items-center space-x-3 rounded-xl px-2 py-1.5 text-left transition-colors hover:bg-gray-100 dark:hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+            aria-label="Abrir configurações da conta"
           >
-            {initials}
-          </div>
+            <div className="hidden sm:block text-right">
+              <p className="font-semibold text-gray-800 dark:text-gray-200 leading-none text-sm">{displayName}</p>
+              <p className="text-emerald-600 dark:text-emerald-400 text-xs mt-1 font-medium">{roleLabel}</p>
+            </div>
+            <div
+              className="h-9 w-9 rounded-full border-2 border-emerald-100 dark:border-emerald-800 bg-emerald-600 text-white flex items-center justify-center text-xs font-semibold shadow-xs"
+              aria-hidden="true"
+            >
+              {initials}
+            </div>
+          </button>
           <Button
             variant="icon"
             onClick={handleSignOut}

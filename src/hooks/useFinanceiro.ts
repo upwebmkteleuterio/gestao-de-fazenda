@@ -25,6 +25,7 @@ export const useFinanceiro = (filters?: { search?: string; tipo?: string; catego
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['financeiro_transacoes'] });
       queryClient.invalidateQueries({ queryKey: ['financeiro_resumo'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard-summary'] });
     },
   });
 
@@ -33,6 +34,7 @@ export const useFinanceiro = (filters?: { search?: string; tipo?: string; catego
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['financeiro_transacoes'] });
       queryClient.invalidateQueries({ queryKey: ['financeiro_resumo'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard-summary'] });
     },
   });
 
@@ -41,6 +43,7 @@ export const useFinanceiro = (filters?: { search?: string; tipo?: string; catego
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['financeiro_transacoes'] });
       queryClient.invalidateQueries({ queryKey: ['financeiro_resumo'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard-summary'] });
     },
   });
 

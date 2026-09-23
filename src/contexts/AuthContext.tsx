@@ -13,6 +13,7 @@ interface AuthContextValue {
   displayName: string;
   isLoading: boolean;
   authError: string | null;
+  updateDisplayName: (displayName: string) => Promise<void>;
   signOut: () => Promise<void>;
 }
 
@@ -97,6 +98,25 @@ export function SessionContextProvider({ children }: { children: ReactNode }) {
     };
   }, [session]);
 
+  const updateDisplayName = async (nextDisplayName: string) => {
+    if (!session) {
+      throw new Error('Sua sessão expirou. Entre novamente.');
+    }
+
+    const displayNameToSave = nextDisplayName.trim();
+    if (!displayNameToSave) {
+      throw new Error('Informe um nome válido.');
+    }
+
+    const { error } = await supabase
+      .from('profiles')
+      .update({ display_name: displayNameToSave })
+      .eq('id', session.user.id);
+
+    if (error) throw error;
+    setDisplayName(displayNameToSave);
+  };
+
   const signOut = async () => {
     setAuthError(null);
     const { error } = await supabase.auth.signOut();
@@ -114,8 +134,9 @@ export function SessionContextProvider({ children }: { children: ReactNode }) {
     displayName,
     isLoading,
     authError,
+    updateDisplayName,
     signOut,
-  }), [authError, displayName, isLoading, session]);
+  }), [authError, displayName, isLoading, session, signOut, updateDisplayName]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

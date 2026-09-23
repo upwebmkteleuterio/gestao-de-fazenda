@@ -24,6 +24,7 @@ export const useAnimais = (filters?: {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['animais'] });
       queryClient.invalidateQueries({ queryKey: ['pastagens'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard-summary'] });
     },
   });
 
@@ -32,6 +33,7 @@ export const useAnimais = (filters?: {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['animais'] });
       queryClient.invalidateQueries({ queryKey: ['pastagens'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard-summary'] });
     },
   });
 
@@ -40,6 +42,7 @@ export const useAnimais = (filters?: {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['animais'] });
       queryClient.invalidateQueries({ queryKey: ['pastagens'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard-summary'] });
     },
   });
 

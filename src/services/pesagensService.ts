@@ -206,6 +206,17 @@ export const pesagensService = {
     return { data: list, total };
   },
 
+  getRecent: async (): Promise<Pesagem[]> => {
+    const { data, error } = await supabase
+      .from('pesagens')
+      .select('id, animal_id, brinco_animal, tipo_animal, peso_kg, data_pesagem, peso_anterior, data_pesagem_anterior, ganho_peso_kg, gmd_calculado, dias_intervalo, observacoes, status_sincronizacao, created_at')
+      .order('data_pesagem', { ascending: false })
+      .order('created_at', { ascending: false })
+      .range(0, 4);
+    if (error) throw error;
+    return ((data ?? []) as unknown as PesagemDbRow[]).map(toPesagem);
+  },
+
   getById: async (id: string): Promise<Pesagem | null> => {
     const list = enrichPesagensComComparativo(await fetchPesagens());
     return list.find((p) => p.id === id) ?? null;
