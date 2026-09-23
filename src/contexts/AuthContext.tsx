@@ -67,6 +67,36 @@ export function SessionContextProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
+  useEffect(() => {
+    let cancelled = false;
+    setDisplayName(deriveFallbackDisplayName(session));
+
+    if (!session) {
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    const loadProfileName = async () => {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('display_name')
+        .eq('id', session.user.id)
+        .maybeSingle()
+        .returns<Profile | null>();
+
+      if (!cancelled && !error && data?.display_name?.trim()) {
+        setDisplayName(data.display_name.trim());
+      }
+    };
+
+    void loadProfileName();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [session]);
+
   const signOut = async () => {
     setAuthError(null);
     const { error } = await supabase.auth.signOut();
@@ -81,10 +111,11 @@ export function SessionContextProvider({ children }: { children: ReactNode }) {
   const value = useMemo<AuthContextValue>(() => ({
     session,
     role: deriveRole(session),
+    displayName,
     isLoading,
     authError,
     signOut,
-  }), [authError, isLoading, session]);
+  }), [authError, displayName, isLoading, session]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

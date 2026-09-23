@@ -11,6 +11,7 @@ import { useInsumos } from '../hooks/useInsumos';
 import { useFinanceiro } from '../hooks/useFinanceiro';
 import { useReproducao } from '../hooks/useReproducao';
 import { useAuth } from '@/contexts/AuthContext';
+import { MeshDriftShader } from '@/components/MeshDriftShader';
 import { useUIStore } from '../store/useUIStore';
 
 export const DashboardPage: React.FC = () => {
@@ -70,17 +71,18 @@ export const DashboardPage: React.FC = () => {
   return (
     <div className="space-y-8 animate-fade-in pb-12">
       {/* Top Banner / Hero */}
-      <div className="bg-gradient-to-r from-emerald-900 via-emerald-800 to-teal-900 text-white rounded-2xl p-6 sm:p-8 shadow-xl relative overflow-hidden">
-        <div className="absolute right-0 top-0 bottom-0 w-1/3 opacity-10 pointer-events-none bg-[radial-gradient(#fff_2px,transparent_2px)] [background-size:16px_16px]" />
+      <div className="relative overflow-hidden rounded-2xl bg-emerald-950 p-6 text-white shadow-xl sm:p-8">
+        <MeshDriftShader />
+        <div className="pointer-events-none absolute inset-0 z-[1] bg-emerald-950/35" />
         <div className="relative z-10 max-w-2xl">
-          <Badge variant="success" className="mb-3 bg-emerald-500/30 text-emerald-200 border-emerald-400/30">
+          <Badge variant="success" className="mb-3 border-emerald-300/30 bg-emerald-500/30 text-emerald-100">
             Painel Geral da Fazenda
           </Badge>
-          <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight">Fazenda Boa Esperança</h1>
-          <p className="text-emerald-100/80 text-sm mt-2 leading-relaxed">
+          <h1 className="text-2xl font-extrabold tracking-tight sm:text-3xl">Fazenda Boa Esperança</h1>
+          <p className="mt-2 text-sm leading-relaxed text-emerald-50/85">
             Acompanhe o rebanho, pesagens, manejos sanitários, estoque e fluxo financeiro em tempo real com sincronização em nuvem.
           </p>
-          <div className="mt-6 flex items-center gap-3 shrink-0 flex-wrap sm:flex-nowrap">
+          <div className="mt-6 flex shrink-0 flex-wrap items-center gap-3 sm:flex-nowrap">
             <Button
               variant="primary"
               icon={Plus}
