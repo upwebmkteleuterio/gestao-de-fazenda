@@ -10,10 +10,15 @@ export type Role = (typeof ROLES)[number];
 interface AuthContextValue {
   session: Session | null;
   role: Role;
+  displayName: string;
   isLoading: boolean;
   authError: string | null;
   signOut: () => Promise<void>;
 }
+
+type Profile = {
+  display_name: string | null;
+};
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
@@ -21,8 +26,19 @@ export function deriveRole(session: Session | null): Role {
   return session?.user.app_metadata?.role === 'superadmin' ? 'superadmin' : 'assistant';
 }
 
+function deriveFallbackDisplayName(session: Session | null): string {
+  if (!session) return 'Usuário';
+
+  const metadata = session.user.user_metadata;
+  const metadataName = [metadata?.display_name, metadata?.full_name, metadata?.name]
+    .find((value): value is string => typeof value === 'string' && value.trim().length > 0);
+
+  return metadataName?.trim() || session.user.email || 'Usuário';
+}
+
 export function SessionContextProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
+  const [displayName, setDisplayName] = useState('Usuário');
   const [isLoading, setIsLoading] = useState(true);
   const [authError, setAuthError] = useState<string | null>(null);
 
