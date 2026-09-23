@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Layers, X, MapPin, ArrowRightLeft } from 'lucide-react';
 import { Button } from '@/components/Button';
-import { Table } from '@/components/Table';
+import { Table, Column } from '@/components/Table';
 import { Animal } from '@/types/database';
 
 interface LoteModalsProps {
@@ -47,6 +47,21 @@ export const LoteModals: React.FC<LoteModalsProps> = ({
 }) => {
   const [showMudarPastoSelect, setShowMudarPastoSelect] = useState(false);
   const [selectedNovoPasto, setSelectedNovoPasto] = useState('');
+  const columns: Column<Animal>[] = [
+    { header: 'ID / Brinco', render: (r) => <span className="font-bold">{r.brinco}</span> },
+    { header: 'Categoria', accessor: 'categoria' },
+    { header: 'Tipo', accessor: 'tipo_animal' },
+    { header: 'Sexo', accessor: 'sexo' },
+    { header: 'Peso Atual', render: (r) => r.peso_atual ? `${r.peso_atual} kg` : '-' },
+    {
+      header: 'Pasto Animal',
+      render: (r) => (
+        <span className="text-xs text-emerald-600 dark:text-emerald-400 font-medium">
+          {r.pasto_nome || '-'}
+        </span>
+      )
+    },
+  ];
 
   return (
     <>
@@ -233,21 +248,7 @@ export const LoteModals: React.FC<LoteModalsProps> = ({
 
               <div className="p-0 overflow-y-auto flex-1 bg-gray-50/50 dark:bg-gray-900/20">
                 <Table
-                  columns={[
-                    { header: 'ID / Brinco', render: (r) => <span className="font-bold">{r.brinco}</span> },
-                    { header: 'Categoria', accessor: 'categoria' },
-                    { header: 'Tipo', accessor: 'tipo_animal' },
-                    { header: 'Sexo', accessor: 'sexo' },
-                    { header: 'Peso Atual', render: (r) => r.peso_atual ? `${r.peso_atual} kg` : '-' },
-                    { 
-                      header: 'Pasto Animal', 
-                      render: (r) => (
-                        <span className="text-xs text-emerald-600 dark:text-emerald-400 font-medium">
-                          {r.pasto_nome || '-'}
-                        </span>
-                      ) 
-                    },
-                  ]}
+                  columns={columns}
                   data={todosAnimais.filter((a) => selectedLote.animais_ids?.includes(a.id))}
                   emptyMessage="Nenhum animal encontrado neste lote."
                   onRowClick={(row) => onRowClickAnimal(row)}
