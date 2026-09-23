@@ -17,9 +17,11 @@ import {
 } from 'lucide-react';
 import { BovinoSidebarIcon } from './BovinoSidebarIcon';
 import { useUIStore, PageRoute } from '../store/useUIStore';
+import { useAuth } from '@/contexts/AuthContext';
 
 export const Sidebar: React.FC = () => {
   const { setActivePage, sidebarOpen, toggleSidebar } = useUIStore();
+  const { role } = useAuth();
   const location = useLocation();
 
   const menuItems: { name: PageRoute; path: string; icon: React.ComponentType<{ className?: string }> }[] = [
@@ -91,7 +93,7 @@ export const Sidebar: React.FC = () => {
             </p>
           )}
           <nav className="space-y-1 px-3">
-            {menuItems.map((item) => {
+            {menuItems.filter((item) => item.path !== '/financeiro' || role === 'superadmin').map((item) => {
               const isActive = location.pathname === item.path || (item.path === '/dashboard' && location.pathname === '/');
               const Icon = item.icon;
 

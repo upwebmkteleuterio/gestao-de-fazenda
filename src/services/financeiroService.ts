@@ -1,135 +1,154 @@
-import { TransacaoFinanceira } from '../types/database';
-import { mockTransacoesFinanceiras } from '../mocks/financeiro';
+import { supabase } from '@/integrations/supabase/client';
+import { TransacaoFinanceira } from '@/types/database';
 
-const STORAGE_KEY = 'farmnexus_financeiro_db';
-
-const getStoredData = (): TransacaoFinanceira[] => {
-  try {
-    const data = localStorage.getItem(STORAGE_KEY);
-    if (data) return JSON.parse(data);
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(mockTransacoesFinanceiras));
-    return mockTransacoesFinanceiras;
-  } catch (err) {
-    return mockTransacoesFinanceiras;
-  }
+type TransacaoFinanceiraDbRow = {
+  id: string;
+  tipo: TransacaoFinanceira['tipo'];
+  categoria: TransacaoFinanceira['categoria'];
+  descricao: string;
+  valor: number | string;
+  data: string;
+  status: TransacaoFinanceira['status'];
+  animal_id: string | null;
+  pasto_id: string | null;
+  created_at: string;
 };
 
-const setStoredData = (data: TransacaoFinanceira[]): void => {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-  } catch (err) {
-    console.error('Erro ao salvar financeiro:', err);
-  }
-};
+const toTransacaoFinanceira = (row: TransacaoFinanceiraDbRow): TransacaoFinanceira => ({
+  id: row.id,
+  tipo: row.tipo,
+  categoria: row.categoria,
+  descricao: row.descricao,
+  valor: Number(row.valor),
+  data: row.data,
+  status: row.status,
+  animal_id: row.animal_id ?? undefined,
+  pasto_id: row.pasto_id ?? undefined,
+  createdAt: row.created_at,
+});
+
+const sanitizeSearch = (value: string) => value.replace(/[^\p{L}\p{N}\s-]/gu, '').trim();
 
 export const financeiroService = {
-  getAll: async (filters?: { search?: string; tipo?: string; categoria?: string; status?: string; page?: number; limit?: number }): Promise<{data: TransacaoFinanceira[], total: number}> => {
-    return new Promise((resolve) => {
-      setTimeout(() => {
-        let list = getStoredData();
-        if (filters) {
-          if (filters.search) {
-            const q = filters.search.toLowerCase();
-            list = list.filter(t => t.descricao.toLowerCase().includes(q) || t.categoria.toLowerCase().includes(q));
-          }
-          if (filters.tipo && filters.tipo !== 'all') {
-            list = list.filter(t => t.tipo === filters.tipo);
-          }
-          if (filters.categoria && filters.categoria !== 'all') {
-            list = list.filter(t => t.categoria === filters.categoria);
-          }
-          if (filters.status && filters.status !== 'all') {
-            list = list.filter(t => t.status === filters.status);
-          }
-        }
-        
-        list.sort((a, b) => new Date(b.data).getTime() - new Date(a.data).getTime());
-        
-        const total = list.length;
-        if (filters?.page && filters?.limit) {
-          const startIndex = (filters.page - 1) * filters.limit;
-          list = list.slice(startIndex, startIndex + filters.limit);
-        }
-        
-        resolve({ data: list, total });
-      }, 180);
-    });
+  getAll: async (filters?: {
+    search?: string;
+    tipo?: string;
+    categoria?: string;
+    status?: string;
+    page?: number;
+    limit?: number;
+  }): Promise<{ data: TransacaoFinanceira[]; total: number }> => {
+    let query = supabase
+      .from('transacoes_financeiras')
+      .select('*', { count: 'exact' })
+      .order('data', { ascending: false });
+
+    const search = filters?.search ? sanitizeSearch(filters.search) : '';
+    if (search) {
+      query = query.or(`descricao.ilike.*${search}*,categoria.ilike.*${search}*`);
+    }
+    if (filters?.tipo && filters.tipo !== 'all') query = query.eq('tipo', filters.tipo);
+    if (filters?.categoria && filters.categoria !== 'all') query = query.eq('categoria', filters.categoria);
+    if (filters?.status && filters.status !== 'all') query = query.eq('status', filters.status);
+
+    if (filters?.page && filters.limit) {
+      const start = (filters.page - 1) * filters.limit;
+      query = query.range(start, start + filters.limit - 1);
+    }
+
+    const { data, count, error } = await query;
+    if (error) throw error;
+
+    return {
+      data: ((data ?? []) as unknown as TransacaoFinanceiraDbRow[]).map(toTransacaoFinanceira),
+      total: count ?? 0,
+    };
   },
 
   getById: async (id: string): Promise<TransacaoFinanceira | null> => {
-    return new Promise((resolve) => {
-      setTimeout(() => {
-        const list = getStoredData();
-        resolve(list.find(t => t.id === id) || null);
-      }, 180);
-    });
+    const { data, error } = await supabase
+      .from('transacoes_financeiras')
+      .select('*')
+      .eq('id', id)
+      .maybeSingle();
+    if (error) throw error;
+    return data ? toTransacaoFinanceira(data as unknown as TransacaoFinanceiraDbRow) : null;
   },
 
   create: async (item: Omit<TransacaoFinanceira, 'id' | 'createdAt'>): Promise<TransacaoFinanceira> => {
-    return new Promise((resolve) => {
-      setTimeout(() => {
-        const list = getStoredData();
-        const created: TransacaoFinanceira = {
-          ...item,
-          id: `fin-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
-          createdAt: new Date().toISOString(),
-        };
-        const updated = [created, ...list];
-        setStoredData(updated);
-        resolve(created);
-      }, 180);
-    });
+    const id = `fin-${crypto.randomUUID()}`;
+    const { data, error } = await supabase
+      .from('transacoes_financeiras')
+      .insert({
+        id,
+        tipo: item.tipo,
+        categoria: item.categoria,
+        descricao: item.descricao,
+        valor: item.valor,
+        data: item.data,
+        status: item.status,
+        animal_id: item.animal_id ?? null,
+        pasto_id: item.pasto_id ?? null,
+      })
+      .select('*')
+      .single();
+    if (error) throw error;
+    return toTransacaoFinanceira(data as unknown as TransacaoFinanceiraDbRow);
   },
 
   update: async (id: string, updates: Partial<TransacaoFinanceira>): Promise<TransacaoFinanceira> => {
-    return new Promise((resolve, reject) => {
-      setTimeout(() => {
-        const list = getStoredData();
-        const index = list.findIndex(t => t.id === id);
-        if (index === -1) return reject(new Error('Transação não encontrada'));
+    const patch: Record<string, unknown> = {};
+    if (updates.tipo !== undefined) patch.tipo = updates.tipo;
+    if (updates.categoria !== undefined) patch.categoria = updates.categoria;
+    if (updates.descricao !== undefined) patch.descricao = updates.descricao;
+    if (updates.valor !== undefined) patch.valor = updates.valor;
+    if (updates.data !== undefined) patch.data = updates.data;
+    if (updates.status !== undefined) patch.status = updates.status;
+    if ('animal_id' in updates) patch.animal_id = updates.animal_id ?? null;
+    if ('pasto_id' in updates) patch.pasto_id = updates.pasto_id ?? null;
 
-        const updatedItem = { ...list[index], ...updates };
-        list[index] = updatedItem;
-        setStoredData(list);
-        resolve(updatedItem);
-      }, 180);
-    });
+    const { data, error } = await supabase
+      .from('transacoes_financeiras')
+      .update(patch)
+      .eq('id', id)
+      .select('*')
+      .maybeSingle();
+    if (error) throw error;
+    if (!data) throw new Error('Transação não encontrada');
+    return toTransacaoFinanceira(data as unknown as TransacaoFinanceiraDbRow);
   },
 
   delete: async (id: string): Promise<boolean> => {
-    return new Promise((resolve) => {
-      setTimeout(() => {
-        const list = getStoredData();
-        setStoredData(list.filter(t => t.id !== id));
-        resolve(true);
-      }, 180);
-    });
+    const { error } = await supabase.from('transacoes_financeiras').delete().eq('id', id);
+    if (error) throw error;
+    return true;
   },
 
-  getResumo: async () => {
-    return new Promise<{ receitas: number; despesas: number; saldo: number; pendentes: number }>((resolve) => {
-      setTimeout(() => {
-        const list = getStoredData();
-        let receitas = 0;
-        let despesas = 0;
-        let pendentes = 0;
+  getResumo: async (): Promise<{ receitas: number; despesas: number; saldo: number; pendentes: number }> => {
+    const { data, error } = await supabase
+      .from('transacoes_financeiras')
+      .select('tipo, valor, status');
+    if (error) throw error;
 
-        for (const t of list) {
-          if (t.status === 'pago') {
-            if (t.tipo === 'receita') receitas += t.valor;
-            if (t.tipo === 'despesa') despesas += t.valor;
-          } else {
-            pendentes += t.valor;
-          }
-        }
+    let receitas = 0;
+    let despesas = 0;
+    let pendentes = 0;
 
-        resolve({
-          receitas,
-          despesas,
-          saldo: receitas - despesas,
-          pendentes
-        });
-      }, 180);
-    });
-  }
+    for (const row of (data ?? []) as unknown as Pick<TransacaoFinanceiraDbRow, 'tipo' | 'valor' | 'status'>[]) {
+      const valor = Number(row.valor);
+      if (row.status === 'pago') {
+        if (row.tipo === 'receita') receitas += valor;
+        if (row.tipo === 'despesa') despesas += valor;
+      } else {
+        pendentes += valor;
+      }
+    }
+
+    return {
+      receitas,
+      despesas,
+      saldo: receitas - despesas,
+      pendentes,
+    };
+  },
 };

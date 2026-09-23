@@ -2,6 +2,7 @@ import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { AppLayout } from '@/layouts/AppLayout';
 import ProtectedRoute from '@/components/ProtectedRoute';
+import SuperadminRoute from '@/components/SuperadminRoute';
 import { LoginPage } from '@/pages/Login';
 
 import { DashboardPage } from '@/pages/Dashboard';
@@ -44,7 +45,9 @@ export function App() {
               <Route path="/sanitario" element={<ManejoSanitarioPage />} />
               <Route path="/manejo-sanitario" element={<Navigate to="/sanitario" replace />} />
               <Route path="/insumos" element={<InsumosPage />} />
-              <Route path="/financeiro" element={<FinanceiroPage />} />
+              <Route element={<SuperadminRoute />}>
+                <Route path="/financeiro" element={<FinanceiroPage />} />
+              </Route>
               <Route path="/relatorios" element={<IndicadoresPage />} />
               <Route path="/indicadores" element={<Navigate to="/relatorios" replace />} />
               <Route path="/uikit" element={<UIKitPage />} />

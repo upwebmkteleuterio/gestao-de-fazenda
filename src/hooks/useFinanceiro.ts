@@ -1,18 +1,23 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { financeiroService } from '../services/financeiroService';
 import { TransacaoFinanceira } from '../types/database';
+import { useAuth } from '@/contexts/AuthContext';
 
 export const useFinanceiro = (filters?: { search?: string; tipo?: string; categoria?: string; status?: string; page?: number; limit?: number }) => {
   const queryClient = useQueryClient();
+  const { role } = useAuth();
+  const isFinanceiroEnabled = role === 'superadmin';
 
   const transacoesQuery = useQuery({
     queryKey: ['financeiro_transacoes', filters],
     queryFn: () => financeiroService.getAll(filters),
+    enabled: isFinanceiroEnabled,
   });
 
   const resumoQuery = useQuery({
     queryKey: ['financeiro_resumo'],
     queryFn: () => financeiroService.getResumo(),
+    enabled: isFinanceiroEnabled,
   });
 
   const createMutation = useMutation({
@@ -40,15 +45,15 @@ export const useFinanceiro = (filters?: { search?: string; tipo?: string; catego
   });
 
   return {
-    transacoes: transacoesQuery.data?.data || [],
-    totalTransacoes: transacoesQuery.data?.total || 0,
-    isLoadingTransacoes: transacoesQuery.isLoading,
-    isErrorTransacoes: transacoesQuery.isError,
-    errorTransacoes: transacoesQuery.error,
+    transacoes: isFinanceiroEnabled ? transacoesQuery.data?.data || [] : [],
+    totalTransacoes: isFinanceiroEnabled ? transacoesQuery.data?.total || 0 : 0,
+    isLoadingTransacoes: isFinanceiroEnabled && transacoesQuery.isLoading,
+    isErrorTransacoes: isFinanceiroEnabled && transacoesQuery.isError,
+    errorTransacoes: isFinanceiroEnabled ? transacoesQuery.error : null,
     refetchTransacoes: transacoesQuery.refetch,
-    resumo: resumoQuery.data || { receitas: 0, despesas: 0, saldo: 0, pendentes: 0 },
-    isLoadingResumo: resumoQuery.isLoading,
-    isErrorResumo: resumoQuery.isError,
+    resumo: isFinanceiroEnabled ? resumoQuery.data || { receitas: 0, despesas: 0, saldo: 0, pendentes: 0 } : { receitas: 0, despesas: 0, saldo: 0, pendentes: 0 },
+    isLoadingResumo: isFinanceiroEnabled && resumoQuery.isLoading,
+    isErrorResumo: isFinanceiroEnabled && resumoQuery.isError,
     refetchResumo: resumoQuery.refetch,
     createTransacao: createMutation.mutateAsync,
     updateTransacao: updateMutation.mutateAsync,
