@@ -12,6 +12,7 @@ interface AuthContextValue {
   role: Role;
   displayName: string;
   isLoading: boolean;
+  isLoadingProfile: boolean;
   authError: string | null;
   updateDisplayName: (displayName: string) => Promise<void>;
   signOut: () => Promise<void>;
@@ -39,8 +40,9 @@ function deriveFallbackDisplayName(session: Session | null): string {
 
 export function SessionContextProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
-  const [displayName, setDisplayName] = useState('Usuário');
+  const [displayName, setDisplayName] = useState('');
   const [isLoading, setIsLoading] = useState(true);
+  const [isLoadingProfile, setIsLoadingProfile] = useState(true);
   const [authError, setAuthError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -48,6 +50,8 @@ export function SessionContextProvider({ children }: { children: ReactNode }) {
     const { data: authListener } = supabase.auth.onAuthStateChange((_event, nextSession) => {
       if (!mounted) return;
       setSession(nextSession);
+      setDisplayName(nextSession ? '' : 'Usuário');
+      setIsLoadingProfile(Boolean(nextSession));
       setAuthError(null);
       setIsLoading(false);
     });
@@ -56,8 +60,13 @@ export function SessionContextProvider({ children }: { children: ReactNode }) {
       if (!mounted) return;
       if (error) {
         setAuthError(getAuthErrorMessage(error));
+        setSession(null);
+        setDisplayName('Usuário');
+        setIsLoadingProfile(false);
       } else {
         setSession(data.session);
+        setDisplayName(data.session ? '' : 'Usuário');
+        setIsLoadingProfile(Boolean(data.session));
       }
       setIsLoading(false);
     });
@@ -70,13 +79,17 @@ export function SessionContextProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     let cancelled = false;
-    setDisplayName(deriveFallbackDisplayName(session));
 
     if (!session) {
+      setDisplayName('Usuário');
+      setIsLoadingProfile(false);
       return () => {
         cancelled = true;
       };
     }
+
+    setDisplayName('');
+    setIsLoadingProfile(true);
 
     const loadProfileName = async () => {
       const { data, error } = await supabase
@@ -86,9 +99,11 @@ export function SessionContextProvider({ children }: { children: ReactNode }) {
         .maybeSingle()
         .returns<Profile | null>();
 
-      if (!cancelled && !error && data?.display_name?.trim()) {
-        setDisplayName(data.display_name.trim());
-      }
+      if (cancelled) return;
+
+      const profileName = !error && data?.display_name?.trim() ? data.display_name.trim() : null;
+      setDisplayName(profileName ?? deriveFallbackDisplayName(session));
+      setIsLoadingProfile(false);
     };
 
     void loadProfileName();
@@ -126,6 +141,8 @@ export function SessionContextProvider({ children }: { children: ReactNode }) {
       throw new Error(message);
     }
     setSession(null);
+    setDisplayName('Usuário');
+    setIsLoadingProfile(false);
   };
 
   const value = useMemo<AuthContextValue>(() => ({
@@ -133,10 +150,11 @@ export function SessionContextProvider({ children }: { children: ReactNode }) {
     role: deriveRole(session),
     displayName,
     isLoading,
+    isLoadingProfile,
     authError,
     updateDisplayName,
     signOut,
-  }), [authError, displayName, isLoading, session, signOut, updateDisplayName]);
+  }), [authError, displayName, isLoading, isLoadingProfile, session, signOut, updateDisplayName]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

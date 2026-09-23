@@ -23,7 +23,7 @@ import { useAppSettings } from '@/hooks/useAppSettings';
 export const Sidebar: React.FC = () => {
   const { setActivePage, sidebarOpen, toggleSidebar } = useUIStore();
   const { role } = useAuth();
-  const { farmName } = useAppSettings();
+  const { farmName, isLoading: isLoadingFarmName } = useAppSettings();
   const location = useLocation();
 
   const menuItems: { name: PageRoute; path: string; icon: React.ComponentType<{ className?: string }> }[] = [
@@ -138,7 +138,11 @@ export const Sidebar: React.FC = () => {
       {/* Sidebar Footer info */}
       {sidebarOpen && (
         <div className="p-4 m-3 bg-emerald-900/40 dark:bg-gray-900 border border-emerald-800/40 dark:border-gray-800 rounded-xl">
-          <p className="text-xs font-semibold text-emerald-300 dark:text-emerald-400 truncate" title={farmName}>{farmName}</p>
+          {isLoadingFarmName ? (
+            <div className="h-3 w-36 animate-pulse rounded bg-emerald-800/70" aria-label="Carregando nome da fazenda" />
+          ) : (
+            <p className="text-xs font-semibold text-emerald-300 dark:text-emerald-400 truncate" title={farmName}>{farmName}</p>
+          )}
           <p className="text-[10px] text-emerald-200/60 dark:text-gray-400 mt-0.5">Status: Sincronizado</p>
         </div>
       )}

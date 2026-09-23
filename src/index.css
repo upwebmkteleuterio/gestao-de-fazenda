@@ -66,6 +66,13 @@
   background-color: #6ee7b7;
 }
 
+/* View Transition theme bubble */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation: none;
+  mix-blend-mode: normal;
+}
+
 /* Animations */
 @keyframes fadeIn {
   from { opacity: 0; transform: translateY(4px); }

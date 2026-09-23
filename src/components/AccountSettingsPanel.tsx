@@ -18,8 +18,13 @@ function getErrorMessage(error: unknown, fallback: string): string {
 }
 
 export const AccountSettingsPanel: React.FC<AccountSettingsPanelProps> = ({ isOpen, onClose }) => {
-  const { session, role, displayName, updateDisplayName } = useAuth();
-  const { farmName, updateFarmName, isUpdating: isUpdatingFarm } = useAppSettings();
+  const { session, role, displayName, isLoadingProfile, updateDisplayName } = useAuth();
+  const {
+    farmName,
+    updateFarmName,
+    isLoading: isLoadingFarmName,
+    isUpdating: isUpdatingFarm,
+  } = useAppSettings();
   const { showToast } = useUIStore();
   const [name, setName] = useState(displayName);
   const [farmNameDraft, setFarmNameDraft] = useState(farmName);
@@ -41,9 +46,12 @@ export const AccountSettingsPanel: React.FC<AccountSettingsPanelProps> = ({ isOp
   }, [displayName, farmName, isOpen]);
 
   const roleLabel = role === 'superadmin' ? 'Administrador' : 'Assistente';
+  const isLoadingAccountData = isLoadingProfile || isLoadingFarmName;
 
   const handleProfileSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (isLoadingAccountData) return;
+
     const nextName = name.trim();
     const nextFarmName = farmNameDraft.trim();
 
@@ -75,6 +83,8 @@ export const AccountSettingsPanel: React.FC<AccountSettingsPanelProps> = ({ isOp
 
   const handlePasswordSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (isLoadingAccountData) return;
+
     setPasswordError(null);
 
     if (!password) {
@@ -124,10 +134,11 @@ export const AccountSettingsPanel: React.FC<AccountSettingsPanelProps> = ({ isOp
           <Input
             id="account-display-name"
             label="Nome"
-            value={name}
+            value={isLoadingProfile ? '' : name}
             onChange={(event) => setName(event.target.value)}
             error={profileError ?? undefined}
             autoComplete="name"
+            disabled={isLoadingProfile}
           />
           <Input
             id="account-email"
@@ -147,8 +158,9 @@ export const AccountSettingsPanel: React.FC<AccountSettingsPanelProps> = ({ isOp
             <Input
               id="account-farm-name"
               label="Nome da fazenda"
-              value={farmNameDraft}
+              value={isLoadingFarmName ? '' : farmNameDraft}
               onChange={(event) => setFarmNameDraft(event.target.value)}
+              disabled={isLoadingFarmName}
             />
           )}
 
@@ -156,7 +168,7 @@ export const AccountSettingsPanel: React.FC<AccountSettingsPanelProps> = ({ isOp
             type="submit"
             variant="primary"
             icon={Save}
-            disabled={isSavingProfile || isUpdatingFarm}
+            disabled={isSavingProfile || isUpdatingFarm || isLoadingAccountData}
             className="w-full justify-center"
           >
             {isSavingProfile ? 'Salvando...' : 'Salvar perfil e fazenda'}
@@ -189,7 +201,7 @@ export const AccountSettingsPanel: React.FC<AccountSettingsPanelProps> = ({ isOp
           <Button
             type="submit"
             variant="secondary"
-            disabled={isSavingPassword}
+            disabled={isSavingPassword || isLoadingAccountData}
             className="w-full justify-center"
           >
             {isSavingPassword ? 'Atualizando...' : 'Atualizar senha'}

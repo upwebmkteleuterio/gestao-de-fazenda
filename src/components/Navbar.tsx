@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Search, Sun, Moon, Menu, Sprout, LogOut } from 'lucide-react';
+import { Search, Menu, Sprout, LogOut } from 'lucide-react';
 import { useUIStore } from '@/store/useUIStore';
 import { useAuth } from '@/contexts/AuthContext';
+import { AnimatedThemeToggler } from '@/components/AnimatedThemeToggler';
 import { Button } from '@/components/Button';
 
 interface NavbarProps {
@@ -17,8 +18,8 @@ function getInitials(name: string): string {
 }
 
 export const Navbar: React.FC<NavbarProps> = ({ onOpenAccountSettings }) => {
-  const { theme, toggleTheme, toggleSidebar, setActivePage, showToast } = useUIStore();
-  const { displayName, role, signOut } = useAuth();
+  const { toggleSidebar, setActivePage, showToast } = useUIStore();
+  const { displayName, isLoadingProfile, role, signOut } = useAuth();
   const navigate = useNavigate();
   const [isSigningOut, setIsSigningOut] = useState(false);
 
@@ -75,36 +76,31 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenAccountSettings }) => {
 
       <div className="flex items-center space-x-3 sm:space-x-4">
         {/* Dark/Light Mode Toggle Button */}
-        <Button
-          variant="icon"
-          onClick={toggleTheme}
-          title={theme === 'dark' ? 'Alternar para Modo Claro' : 'Alternar para Modo Escuro'}
-          aria-label="Alternar Tema"
-        >
-          {theme === 'dark' ? (
-            <Sun className="w-5 h-5 text-amber-400 hover:text-amber-300 transition-colors" />
-          ) : (
-            <Moon className="w-5 h-5 text-gray-600 hover:text-emerald-600 transition-colors" />
-          )}
-        </Button>
+        <AnimatedThemeToggler />
 
         {/* User Info */}
         <div className="flex items-center space-x-3 border-l border-gray-200 dark:border-gray-800 pl-4">
           <button
             type="button"
             onClick={onOpenAccountSettings}
-            className="flex items-center space-x-3 rounded-xl px-2 py-1.5 text-left transition-colors hover:bg-gray-100 dark:hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+            className="flex items-center space-x-3 rounded-xl px-2 py-1.5 text-left transition-colors hover:bg-gray-100 dark:hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-emerald-500 cursor-pointer"
             aria-label="Abrir configurações da conta"
           >
             <div className="hidden sm:block text-right">
-              <p className="font-semibold text-gray-800 dark:text-gray-200 leading-none text-sm">{displayName}</p>
+              {isLoadingProfile ? (
+                <div className="h-4 w-28 animate-pulse rounded bg-gray-200 dark:bg-gray-700" aria-hidden="true" />
+              ) : (
+                <p className="font-semibold text-gray-800 dark:text-gray-200 leading-none text-sm">{displayName}</p>
+              )}
               <p className="text-emerald-600 dark:text-emerald-400 text-xs mt-1 font-medium">{roleLabel}</p>
             </div>
             <div
-              className="h-9 w-9 rounded-full border-2 border-emerald-100 dark:border-emerald-800 bg-emerald-600 text-white flex items-center justify-center text-xs font-semibold shadow-xs"
+              className={isLoadingProfile
+                ? 'h-9 w-9 animate-pulse rounded-full bg-gray-200 dark:bg-gray-700'
+                : 'h-9 w-9 rounded-full border-2 border-emerald-100 dark:border-emerald-800 bg-emerald-600 text-white flex items-center justify-center text-xs font-semibold shadow-xs'}
               aria-hidden="true"
             >
-              {initials}
+              {!isLoadingProfile && initials}
             </div>
           </button>
           <Button

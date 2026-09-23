@@ -3,7 +3,6 @@ import { useAuth } from '@/contexts/AuthContext';
 import { appSettingsService } from '@/services/appSettingsService';
 
 export const APP_SETTINGS_QUERY_KEY = ['app-settings', 'global'] as const;
-const DEFAULT_FARM_NAME = 'Fazenda Boa Esperança';
 
 export function useAppSettings() {
   const queryClient = useQueryClient();
@@ -29,10 +28,12 @@ export function useAppSettings() {
     },
   });
 
+  const isLoading = query.isPending;
+
   return {
     settings: query.data,
-    farmName: query.data?.farm_name?.trim() || DEFAULT_FARM_NAME,
-    isLoading: query.isLoading,
+    farmName: query.isError ? 'Nome indisponível' : isLoading ? '' : query.data?.farm_name?.trim() || 'Nome indisponível',
+    isLoading,
     isError: query.isError,
     updateFarmName: canUpdate ? updateMutation.mutateAsync : undefined,
     isUpdating: canUpdate && updateMutation.isPending,

@@ -15,7 +15,13 @@ import { useUIStore } from '@/store/useUIStore';
 export const DashboardPage: React.FC = () => {
   const navigate = useNavigate();
   const { role } = useAuth();
-  const { farmName, updateFarmName, isUpdating: isUpdatingFarm } = useAppSettings();
+  const {
+    farmName,
+    updateFarmName,
+    isLoading: isLoadingFarmName,
+    isError: isFarmNameError,
+    isUpdating: isUpdatingFarm,
+  } = useAppSettings();
   const { setActivePage, openSlidePanel, showToast } = useUIStore();
   const [isEditingFarmName, setIsEditingFarmName] = React.useState(false);
   const [farmNameDraft, setFarmNameDraft] = React.useState(farmName);
@@ -28,6 +34,8 @@ export const DashboardPage: React.FC = () => {
   }, [farmName, isEditingFarmName]);
 
   const saveFarmName = async (value: string) => {
+    if (isLoadingFarmName || isFarmNameError) return;
+
     const nextFarmName = value.trim();
     if (!nextFarmName) {
       setFarmNameDraft(farmName);
@@ -105,7 +113,12 @@ export const DashboardPage: React.FC = () => {
           <Badge variant="success" className="mb-3 border-emerald-300/30 bg-emerald-500/30 text-emerald-100">
             Painel Geral da Fazenda
           </Badge>
-          {role === 'superadmin' && isEditingFarmName ? (
+          {isLoadingFarmName ? (
+            <div
+              className="h-9 w-72 animate-pulse rounded-md bg-emerald-800/70 sm:h-10 sm:w-96"
+              aria-label="Carregando nome da fazenda"
+            />
+          ) : role === 'superadmin' && isEditingFarmName ? (
             <input
               type="text"
               value={farmNameDraft}
@@ -131,10 +144,11 @@ export const DashboardPage: React.FC = () => {
           ) : (
             <div className="group flex items-center gap-2">
               <h1 className="text-2xl font-extrabold tracking-tight sm:text-3xl">{farmName}</h1>
-              {role === 'superadmin' && (
+              {role === 'superadmin' && !isFarmNameError && (
                 <button
                   type="button"
                   onClick={() => {
+                    if (isLoadingFarmName || isFarmNameError) return;
                     cancelFarmNameEdit.current = false;
                     setFarmNameDraft(farmName);
                     setIsEditingFarmName(true);
