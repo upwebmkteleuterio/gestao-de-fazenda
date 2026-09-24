@@ -4,19 +4,19 @@ import { Button } from '../../../components/Button';
 import { Animal } from '../../../types/database';
 
 export const AnimaisModals = ({
-  modalOpen, setModalOpen, animalToDelete, handleDelete
+  modalOpen, setModalOpen, animalToDelete, handleDelete, isDeleting
 }: any) => (
   <>
     <Modal
         isOpen={modalOpen}
-        onClose={() => setModalOpen(false)}
+        onClose={() => { if (!isDeleting) setModalOpen(false); }}
         title="Confirmar Exclusão de Animal"
         actions={
           <>
-            <Button variant="danger" onClick={handleDelete}>
+            <Button variant="danger" onClick={handleDelete} loading={isDeleting}>
               Sim, Excluir
             </Button>
-            <Button variant="secondary" onClick={() => setModalOpen(false)}>
+            <Button variant="secondary" onClick={() => setModalOpen(false)} disabled={isDeleting}>
               Cancelar
             </Button>
           </>

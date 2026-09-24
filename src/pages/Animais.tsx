@@ -87,6 +87,7 @@ export const AnimaisPage: React.FC = () => {
     modalOpen,
     setModalOpen,
     animalToDelete,
+    isDeleting,
     handleOpenCreate,
     handleOpenView,
     handleCreateFilho,
@@ -220,6 +221,7 @@ export const AnimaisPage: React.FC = () => {
         setModalOpen={setModalOpen}
         animalToDelete={animalToDelete}
         handleDelete={handleDeleteConfirm}
+        isDeleting={isDeleting}
       />
 
       {/* Modais de Criar e Visualizar Lotes */}

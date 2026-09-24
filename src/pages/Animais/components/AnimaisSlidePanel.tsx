@@ -46,10 +46,10 @@ export const AnimaisSlidePanel = ({
         actions={
           slideMode !== 'view' ? (
             <>
-              <Button variant="ghost" onClick={() => setSlideOpen(false)}>
+              <Button variant="ghost" onClick={() => setSlideOpen(false)} disabled={isSaving}>
                 Cancelar
               </Button>
-              <Button variant="primary" onClick={handleSave}>
+              <Button variant="primary" onClick={handleSave} loading={isSaving}>
                 Salvar Animal
               </Button>
             </>

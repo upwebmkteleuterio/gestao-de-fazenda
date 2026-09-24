@@ -27,7 +27,7 @@ const INITIAL_FORM_DATA: Partial<Animal> = {
 export const useAnimalForm = () => {
   const { slidePanel, closeSlidePanel, showToast } = useUIStore();
   const { pastagens } = usePastagens();
-  const { createAnimal, updateAnimal, deleteAnimal } = useAnimais();
+  const { createAnimal, updateAnimal, deleteAnimal, isDeleting } = useAnimais();
 
   const [slideOpen, setSlideOpen] = useState(false);
   const [slideMode, setSlideMode] = useState<'create' | 'edit' | 'view'>('create');
@@ -135,6 +135,7 @@ export const useAnimalForm = () => {
 
   const handleSave = async (e: FormEvent) => {
     e.preventDefault();
+    if (isSaving) return;
     if (!formData.brinco?.trim()) {
       showToast('Por favor, informe o Brinco/ID do animal.', 'error');
       return;
@@ -158,7 +159,7 @@ export const useAnimalForm = () => {
   };
 
   const handleDeleteConfirm = async () => {
-    if (!animalToDelete) return;
+    if (!animalToDelete || isDeleting) return;
     try {
       await deleteAnimal(animalToDelete.id);
       showToast(`Animal ${animalToDelete.brinco} excluído com sucesso.`, 'info');
@@ -188,6 +189,7 @@ export const useAnimalForm = () => {
     modalOpen,
     setModalOpen,
     animalToDelete,
+    isDeleting,
     handleOpenCreate,
     handleOpenEdit,
     handleOpenView,

@@ -75,6 +75,46 @@ const isBrowserOnline = () => (
   && useConnectivityStore.getState().status !== 'offline'
 );
 
+const REMOTE_TIMEOUT_MS = 4000;
+class RemoteTimeoutError extends Error {
+  constructor() {
+    super('A solicitação excedeu o tempo limite de rede');
+    this.name = 'RemoteTimeoutError';
+  }
+}
+
+const withRemoteTimeout = async <T>(request: PromiseLike<T>, timeoutMs = REMOTE_TIMEOUT_MS): Promise<T> => {
+  let timeoutId: ReturnType<typeof setTimeout>;
+  const timeout = new Promise<never>((_, reject) => {
+    timeoutId = setTimeout(() => reject(new RemoteTimeoutError()), timeoutMs);
+  });
+  try {
+    return await Promise.race([Promise.resolve(request), timeout]);
+  } finally {
+    clearTimeout(timeoutId!);
+  }
+};
+
+const getErrorStatus = (error: unknown): number | undefined => {
+  if (!error || typeof error !== 'object') return undefined;
+  const candidate = error as { status?: unknown; statusCode?: unknown };
+  const status = candidate.status ?? candidate.statusCode;
+  return typeof status === 'number' ? status : undefined;
+};
+
+const isTransportError = (error: unknown): boolean => {
+  const status = getErrorStatus(error);
+  if (status !== undefined) return status === 0;
+  if (error instanceof RemoteTimeoutError) return true;
+  if (!isBrowserOnline()) return true;
+  if (!error || typeof error !== 'object') return false;
+  const candidate = error as { name?: unknown; message?: unknown };
+  const name = typeof candidate.name === 'string' ? candidate.name : '';
+  const message = typeof candidate.message === 'string' ? candidate.message : '';
+  return ['TypeError', 'NetworkError', 'AbortError'].includes(name)
+    || /failed to fetch|network request failed|networkerror|load failed|offline/i.test(message);
+};
+
 const getCurrentUserId = async (): Promise<string | undefined> => {
   const { data } = await supabase.auth.getSession();
   return data.session?.user.id;
@@ -266,8 +306,8 @@ const readLocalAnimals = async (userId: string): Promise<{ data: Animal[]; captu
   const data = records
     .filter((record) => !record.data.localDeleted)
     .map((record) => record.data);
-  const snapshot = await getOfflineSnapshot<{ capturedAt: string }>(snapshotKey(userId));
-  return { data, capturedAt: snapshot?.data.capturedAt ?? snapshot?.capturedAt };
+  const snapshot = await getOfflineSnapshot<Animal[]>(snapshotKey(userId));
+  return { data, capturedAt: snapshot?.capturedAt };
 };
 
 const saveLocalAnimal = async (userId: string, animal: Animal, syncStatus: AnimalSyncStatus, syncError?: string, localDeleted = false): Promise<Animal> => {
@@ -313,8 +353,13 @@ const cacheOnlineAnimals = async (userId: string, animals: Animal[], replaceComp
     await deleteOfflineRecords(staleKeys);
   }
 
+  if (!replaceCompleteCache) return pendingAnimals;
+
   const capturedAt = new Date().toISOString();
-  await saveOfflineSnapshot({ key: snapshotKey(userId), scope: userId, data: { capturedAt }, capturedAt });
+  const snapshotAnimals = (await listOfflineRecords<Animal>({ userId, entity: ENTITY }))
+    .filter((record) => !record.data.localDeleted)
+    .map((record) => record.data);
+  await saveOfflineSnapshot({ key: snapshotKey(userId), scope: userId, data: snapshotAnimals, capturedAt });
   return pendingAnimals;
 };
 
@@ -366,6 +411,41 @@ const mergePendingAnimals = (
   };
 };
 
+const queueLocalCreate = async (userId: string, newAnimal: AnimalCreateInput, id: string): Promise<Animal> => {
+  if (remoteSyncInProgress) throw new Error('Conexão indisponível para sincronização');
+  const local = await readLocalAnimals(userId);
+  const discardCount = newAnimal.status === 'descarte'
+    ? local.data.filter((animal) => animal.brinco === newAnimal.brinco && animal.status === 'descarte').length + 1
+    : newAnimal.qtd_descartes_brinco || 0;
+  const animal: Animal = {
+    ...cleanAnimal(newAnimal), id, createdAt: new Date().toISOString(), qtd_descartes_brinco: discardCount,
+    status_sincronizacao: false, syncStatus: 'pending', localDeleted: false,
+  };
+  await saveLocalAnimal(userId, animal, 'pending');
+  await enqueueOutboxOperation<AnimalCreatePayload>({ userId, entity: ENTITY, operation: 'create', payload: { id, animal: cleanAnimal(animal) as AnimalCreateInput } });
+  return animal;
+};
+
+const queueLocalUpdate = async (userId: string, id: string, updates: Partial<Animal>): Promise<Animal> => {
+  if (remoteSyncInProgress) throw new Error('Conexão indisponível para sincronização');
+  const currentRecord = await getOfflineRecord<Animal>(localRecordKey(userId, id));
+  if (!currentRecord || currentRecord.data.localDeleted) throw new Error('Animal não encontrado');
+  const animal: Animal = { ...currentRecord.data, ...cleanAnimal(updates), id, syncStatus: 'pending', syncError: undefined, localDeleted: false };
+  await saveLocalAnimal(userId, animal, 'pending');
+  await enqueueOutboxOperation<AnimalUpdatePayload>({ userId, entity: ENTITY, operation: 'update', payload: { id, updates: cleanAnimal(updates) } });
+  return animal;
+};
+
+const queueLocalDelete = async (userId: string, id: string): Promise<boolean> => {
+  if (remoteSyncInProgress) throw new Error('Conexão indisponível para sincronização');
+  const currentRecord = await getOfflineRecord<Animal>(localRecordKey(userId, id));
+  if (!currentRecord) throw new Error('Animal não encontrado');
+  const animal: Animal = { ...currentRecord.data, syncStatus: 'pending', syncError: undefined, localDeleted: true };
+  await saveLocalAnimal(userId, animal, 'pending', undefined, true);
+  await enqueueOutboxOperation<AnimalDeletePayload>({ userId, entity: ENTITY, operation: 'delete', payload: { id } });
+  return true;
+};
+
 export const animaisService = {
   getAll: async (filters?: { search?: string; sexo?: string; status?: string; categoria?: string; tipo?: string; pasto_id?: string; includeHistorico?: boolean; page?: number; limit?: number }): Promise<{ data: Animal[]; total: number; source: 'remote' | 'local'; capturedAt?: string }> => {
     const userId = await getCurrentUserId();
@@ -376,34 +456,43 @@ export const animaisService = {
       return { ...result, source: 'local', capturedAt: local.capturedAt };
     }
 
-    let query = supabase.from('animais').select('*', { count: 'exact' }).order('created_at', { ascending: false });
-    const search = filters?.search ? sanitizeSearch(filters.search) : '';
-    if (search) query = query.or(`brinco.ilike.*${search}*,raca.ilike.*${search}*,cdc.ilike.*${search}*,cdn.ilike.*${search}*`);
-    if (filters?.sexo && filters.sexo !== 'all') query = query.eq('sexo', filters.sexo);
-    if (filters?.status && filters.status !== 'all') query = query.eq('status', filters.status);
-    if (filters?.categoria && filters.categoria !== 'all') query = query.eq('categoria', filters.categoria);
-    if (filters?.tipo && filters.tipo !== 'all') query = query.eq('tipo_animal', filters.tipo);
-    if (filters?.pasto_id && filters.pasto_id !== 'all') query = query.eq('pasto_id', filters.pasto_id);
-    if (filters?.page !== undefined && filters.limit !== undefined) {
-      const start = (filters.page - 1) * filters.limit;
-      query = query.range(start, start + filters.limit - 1);
-    }
+    try {
+      let query = supabase.from('animais').select('*', { count: 'exact' }).order('created_at', { ascending: false });
+      const search = filters?.search ? sanitizeSearch(filters.search) : '';
+      if (search) query = query.or(`brinco.ilike.*${search}*,raca.ilike.*${search}*,cdc.ilike.*${search}*,cdn.ilike.*${search}*`);
+      if (filters?.sexo && filters.sexo !== 'all') query = query.eq('sexo', filters.sexo);
+      if (filters?.status && filters.status !== 'all') query = query.eq('status', filters.status);
+      if (filters?.categoria && filters.categoria !== 'all') query = query.eq('categoria', filters.categoria);
+      if (filters?.tipo && filters.tipo !== 'all') query = query.eq('tipo_animal', filters.tipo);
+      if (filters?.pasto_id && filters.pasto_id !== 'all') query = query.eq('pasto_id', filters.pasto_id);
+      if (filters?.page !== undefined && filters.limit !== undefined) {
+        const start = (filters.page - 1) * filters.limit;
+        query = query.range(start, start + filters.limit - 1);
+      }
 
-    const { data, count, error } = await query;
-    if (error) throw error;
-    const rows = (data ?? []) as unknown as AnimalDbRow[];
-    const animals = filters?.includeHistorico === false ? rows.map(toAnimal) : await withNormalizedToques(rows);
-    const isCompleteCacheQuery = !filters?.search
-      && (!filters?.sexo || filters.sexo === 'all')
-      && (!filters?.status || filters.status === 'all')
-      && (!filters?.categoria || filters.categoria === 'all')
-      && (!filters?.tipo || filters.tipo === 'all')
-      && (!filters?.pasto_id || filters.pasto_id === 'all')
-      && filters?.page === undefined
-      && filters?.limit === undefined;
-    const pendingAnimals = await cacheOnlineAnimals(userId, animals, isCompleteCacheQuery);
-    const merged = mergePendingAnimals(animals, count ?? 0, pendingAnimals, filters);
-    return { ...merged, source: 'remote' };
+      const { data, count, error } = await withRemoteTimeout(query);
+      if (error) throw error;
+      const rows = (data ?? []) as unknown as AnimalDbRow[];
+      const animals = filters?.includeHistorico === false
+        ? rows.map(toAnimal)
+        : await withRemoteTimeout(withNormalizedToques(rows));
+      const isCompleteCacheQuery = !filters?.search
+        && (!filters?.sexo || filters.sexo === 'all')
+        && (!filters?.status || filters.status === 'all')
+        && (!filters?.categoria || filters.categoria === 'all')
+        && (!filters?.tipo || filters.tipo === 'all')
+        && (!filters?.pasto_id || filters.pasto_id === 'all')
+        && filters?.page === undefined
+        && filters?.limit === undefined;
+      const pendingAnimals = await cacheOnlineAnimals(userId, animals, isCompleteCacheQuery);
+      const merged = mergePendingAnimals(animals, count ?? 0, pendingAnimals, filters);
+      return { ...merged, source: 'remote' };
+    } catch (error) {
+      if (!isTransportError(error)) throw error;
+      const local = await readLocalAnimals(userId);
+      const result = filterLocalAnimals(local.data, filters);
+      return { ...result, source: 'local', capturedAt: local.capturedAt };
+    }
   },
 
   getById: async (id: string): Promise<Animal | null> => {
@@ -414,88 +503,83 @@ export const animaisService = {
       const record = await getOfflineRecord<Animal>(localRecordKey(userId, id));
       return record && !record.data.localDeleted ? record.data : null;
     }
-    const { data, error } = await supabase.from('animais').select('*').eq('id', id).maybeSingle();
-    if (error) throw error;
-    if (!data) return null;
-    const [animal] = await withNormalizedToques([data as unknown as AnimalDbRow]);
-    return animal ?? null;
+    try {
+      const { data, error } = await withRemoteTimeout(supabase.from('animais').select('*').eq('id', id).maybeSingle());
+      if (error) throw error;
+      if (!data) return null;
+      const [animal] = await withRemoteTimeout(withNormalizedToques([data as unknown as AnimalDbRow]));
+      return animal ?? null;
+    } catch (error) {
+      if (!isTransportError(error)) throw error;
+      const record = await getOfflineRecord<Animal>(localRecordKey(userId, id));
+      return record && !record.data.localDeleted ? record.data : null;
+    }
   },
 
   create: async (newAnimal: AnimalCreateInput, clientId?: string): Promise<Animal> => {
     const userId = await getCurrentUserId();
     if (!userId) throw new Error('Sua sessão expirou. Entre novamente.');
     const id = clientId ?? `ani-${crypto.randomUUID()}`;
-    if (!isBrowserOnline()) {
-      if (remoteSyncInProgress) throw new Error('Conexão indisponível para sincronização');
-      const local = await readLocalAnimals(userId);
-      const discardCount = newAnimal.status === 'descarte'
-        ? local.data.filter((animal) => animal.brinco === newAnimal.brinco && animal.status === 'descarte').length + 1
-        : newAnimal.qtd_descartes_brinco || 0;
-      const animal: Animal = {
-        ...cleanAnimal(newAnimal), id, createdAt: new Date().toISOString(), qtd_descartes_brinco: discardCount,
-        status_sincronizacao: false, syncStatus: 'pending', localDeleted: false,
-      };
-      await saveLocalAnimal(userId, animal, 'pending');
-      await enqueueOutboxOperation<AnimalCreatePayload>({ userId, entity: ENTITY, operation: 'create', payload: { id, animal: cleanAnimal(animal) as AnimalCreateInput } });
-      return animal;
-    }
+    if (!isBrowserOnline()) return queueLocalCreate(userId, newAnimal, id);
 
-    const discardCount = newAnimal.status === 'descarte' ? await getDiscardCount(newAnimal.brinco) + 1 : newAnimal.qtd_descartes_brinco || 0;
-    const payload = buildAnimalInsert(newAnimal, id, discardCount);
-    const { data, error } = await supabase.from('animais').insert(payload).select('*').single();
-    if (error) throw error;
-    await syncNormalizedToques(id, newAnimal.brinco, newAnimal.historico_toque);
-    const [animal] = await withNormalizedToques([data as unknown as AnimalDbRow]);
-    return animal;
+    try {
+      const discardCount = newAnimal.status === 'descarte'
+        ? await withRemoteTimeout(getDiscardCount(newAnimal.brinco)) + 1
+        : newAnimal.qtd_descartes_brinco || 0;
+      const payload = buildAnimalInsert(newAnimal, id, discardCount);
+      const { data, error } = await withRemoteTimeout(supabase.from('animais').insert(payload).select('*').single());
+      if (error) throw error;
+      await withRemoteTimeout(syncNormalizedToques(id, newAnimal.brinco, newAnimal.historico_toque));
+      const [animal] = await withRemoteTimeout(withNormalizedToques([data as unknown as AnimalDbRow]));
+      return animal;
+    } catch (error) {
+      if (!isTransportError(error)) throw error;
+      return queueLocalCreate(userId, newAnimal, id);
+    }
   },
 
   update: async (id: string, updates: Partial<Animal>): Promise<Animal> => {
     const userId = await getCurrentUserId();
     if (!userId) throw new Error('Sua sessão expirou. Entre novamente.');
-    if (!isBrowserOnline()) {
-      if (remoteSyncInProgress) throw new Error('Conexão indisponível para sincronização');
-      const currentRecord = await getOfflineRecord<Animal>(localRecordKey(userId, id));
-      if (!currentRecord || currentRecord.data.localDeleted) throw new Error('Animal não encontrado');
-      const animal: Animal = { ...currentRecord.data, ...cleanAnimal(updates), id, syncStatus: 'pending', syncError: undefined, localDeleted: false };
-      await saveLocalAnimal(userId, animal, 'pending');
-      await enqueueOutboxOperation<AnimalUpdatePayload>({ userId, entity: ENTITY, operation: 'update', payload: { id, updates: cleanAnimal(updates) } });
-      return animal;
-    }
+    if (!isBrowserOnline()) return queueLocalUpdate(userId, id, updates);
 
-    const current = await animaisService.getById(id);
-    if (!current) throw new Error('Animal não encontrado');
-    let qtdDescartes = current.qtd_descartes_brinco || 0;
-    if (updates.status === 'descarte' && current.status !== 'descarte') {
-      const brinco = updates.brinco || current.brinco;
-      qtdDescartes = await getDiscardCount(brinco) + 1;
+    try {
+      const current = await withRemoteTimeout(animaisService.getById(id));
+      if (!current) throw new Error('Animal não encontrado');
+      let qtdDescartes = current.qtd_descartes_brinco || 0;
+      if (updates.status === 'descarte' && current.status !== 'descarte') {
+        const brinco = updates.brinco || current.brinco;
+        qtdDescartes = await withRemoteTimeout(getDiscardCount(brinco)) + 1;
+      }
+      const patch = buildAnimalPatch(updates);
+      patch.qtd_descartes_brinco = qtdDescartes;
+      const { data, error } = await withRemoteTimeout(supabase.from('animais').update(patch).eq('id', id).select('*').single());
+      if (error) throw error;
+      await withRemoteTimeout(syncNormalizedToques(id, updates.brinco ?? current.brinco, updates.historico_toque ?? current.historico_toque));
+      const [animal] = await withRemoteTimeout(withNormalizedToques([data as unknown as AnimalDbRow]));
+      return animal;
+    } catch (error) {
+      if (!isTransportError(error)) throw error;
+      return queueLocalUpdate(userId, id, updates);
     }
-    const patch = buildAnimalPatch(updates);
-    patch.qtd_descartes_brinco = qtdDescartes;
-    const { data, error } = await supabase.from('animais').update(patch).eq('id', id).select('*').single();
-    if (error) throw error;
-    await syncNormalizedToques(id, updates.brinco ?? current.brinco, updates.historico_toque ?? current.historico_toque);
-    const [animal] = await withNormalizedToques([data as unknown as AnimalDbRow]);
-    return animal;
   },
 
   delete: async (id: string): Promise<boolean> => {
     const userId = await getCurrentUserId();
     if (!userId) throw new Error('Sua sessão expirou. Entre novamente.');
-    if (!isBrowserOnline()) {
-      if (remoteSyncInProgress) throw new Error('Conexão indisponível para sincronização');
-      const currentRecord = await getOfflineRecord<Animal>(localRecordKey(userId, id));
-      if (!currentRecord) throw new Error('Animal não encontrado');
-      const animal: Animal = { ...currentRecord.data, syncStatus: 'pending', syncError: undefined, localDeleted: true };
-      await saveLocalAnimal(userId, animal, 'pending', undefined, true);
-      await enqueueOutboxOperation<AnimalDeletePayload>({ userId, entity: ENTITY, operation: 'delete', payload: { id } });
+    if (!isBrowserOnline()) return queueLocalDelete(userId, id);
+
+    try {
+      await withRemoteTimeout(syncLegacyArray('lotes', id, id));
+      await withRemoteTimeout(syncLegacyArray('manejos_sanitarios', id, id));
+      await withRemoteTimeout(syncLegacyChildren(id));
+      const { error } = await withRemoteTimeout(supabase.from('animais').delete().eq('id', id));
+      if (error) throw error;
       return true;
+    } catch (error) {
+      if (!isTransportError(error)) throw error;
+      return queueLocalDelete(userId, id);
     }
-    await syncLegacyArray('lotes', id, id);
-    await syncLegacyArray('manejos_sanitarios', id, id);
-    await syncLegacyChildren(id);
-    const { error } = await supabase.from('animais').delete().eq('id', id);
-    if (error) throw error;
-    return true;
   },
 
   updatePesoAtual: async (animalId: string, peso: number | null, dataPesagem: string | null): Promise<void> => {
