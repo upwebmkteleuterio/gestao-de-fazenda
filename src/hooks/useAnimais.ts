@@ -2,10 +2,10 @@ import { useCallback, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/contexts/AuthContext';
 import { useConnectivityStore } from '@/store/useConnectivityStore';
-import { animaisService, AnimalCreateInput } from '../services/animaisService';
+import { animaisService, AnimalCreateInput, syncAnimais } from '../services/animaisService';
 import { Animal } from '../types/database';
 
-export const useAnimais = (filters?: {
+type AnimalFilters = {
   search?: string;
   sexo?: string;
   status?: string;
@@ -15,7 +15,26 @@ export const useAnimais = (filters?: {
   includeHistorico?: boolean;
   page?: number;
   limit?: number;
-}) => {
+};
+
+type AnimalQueryData = {
+  data: Animal[];
+  total: number;
+  source: 'remote' | 'local';
+  capturedAt?: string;
+};
+
+const matchesAnimalFilters = (animal: Animal, filters?: AnimalFilters): boolean => {
+  const search = filters?.search?.trim().toLocaleLowerCase();
+  return (!search || [animal.brinco, animal.raca, animal.cdc, animal.cdn].some((value) => value?.toLocaleLowerCase().includes(search)))
+    && (!filters?.sexo || filters.sexo === 'all' || animal.sexo === filters.sexo)
+    && (!filters?.status || filters.status === 'all' || animal.status === filters.status)
+    && (!filters?.categoria || filters.categoria === 'all' || animal.categoria === filters.categoria)
+    && (!filters?.tipo || filters.tipo === 'all' || animal.tipo_animal === filters.tipo)
+    && (!filters?.pasto_id || filters.pasto_id === 'all' || animal.pasto_id === filters.pasto_id);
+};
+
+export const useAnimais = (filters?: AnimalFilters) => {
   const queryClient = useQueryClient();
   const { session } = useAuth();
   const connectivityStatus = useConnectivityStore((state) => state.status);
@@ -34,25 +53,97 @@ export const useAnimais = (filters?: {
   }, [connectivityStatus, queryClient, userId]);
 
   const invalidateAnimalQueries = () => {
-    queryClient.invalidateQueries({ queryKey: ['animais'] });
-    queryClient.invalidateQueries({ queryKey: ['lotes'] });
-    queryClient.invalidateQueries({ queryKey: ['pastagens'] });
-    queryClient.invalidateQueries({ queryKey: ['dashboard-summary'] });
+    void queryClient.invalidateQueries({ queryKey: ['animais', userId] });
+    void queryClient.invalidateQueries({ queryKey: ['lotes'] });
+    void queryClient.invalidateQueries({ queryKey: ['pastagens'] });
+    void queryClient.invalidateQueries({ queryKey: ['dashboard-summary'] });
+  };
+
+  const syncLocalMutation = () => {
+    if (!userId) return;
+    void syncAnimais(userId)
+      .catch(() => undefined)
+      .finally(invalidateAnimalQueries);
+  };
+
+  const updateLocalAnimalCache = (animal: Animal) => {
+    if (!userId) return;
+    const queries = queryClient.getQueriesData<AnimalQueryData>({ queryKey: ['animais', userId] });
+    queries.forEach(([queryKey, current]) => {
+      if (!current) return;
+      const queryFilters = queryKey[2] as AnimalFilters | undefined;
+      const exists = current.data.some((item) => item.id === animal.id);
+      const matches = matchesAnimalFilters(animal, queryFilters);
+      if (!matches && !exists) return;
+      if (!matches) {
+        const data = current.data.filter((item) => item.id !== animal.id);
+        queryClient.setQueryData<AnimalQueryData>(queryKey, {
+          ...current,
+          data,
+          total: Math.max(0, current.total - (data.length === current.data.length ? 0 : 1)),
+          source: 'local',
+        });
+        return;
+      }
+      if (!exists && queryFilters?.page !== undefined && queryFilters.page !== 1) return;
+      queryClient.setQueryData<AnimalQueryData>(queryKey, {
+        ...current,
+        data: exists
+          ? current.data.map((item) => item.id === animal.id ? animal : item)
+          : [animal, ...current.data],
+        total: exists ? current.total : current.total + 1,
+        source: 'local',
+      });
+    });
+  };
+
+  const removeLocalAnimalFromCache = (id: string) => {
+    if (!userId) return;
+    const queries = queryClient.getQueriesData<AnimalQueryData>({ queryKey: ['animais', userId] });
+    queries.forEach(([queryKey, current]) => {
+      if (!current) return;
+      const data = current.data.filter((item) => item.id !== id);
+      if (data.length === current.data.length) return;
+      queryClient.setQueryData<AnimalQueryData>(queryKey, {
+        ...current,
+        data,
+        total: Math.max(0, current.total - 1),
+        source: 'local',
+      });
+    });
   };
 
   const createMutation = useMutation({
-    mutationFn: (newAnimal: AnimalCreateInput) => animaisService.create(newAnimal),
-    onSuccess: invalidateAnimalQueries,
+    mutationFn: (newAnimal: AnimalCreateInput) => {
+      if (!userId) throw new Error('Sua sessão expirou. Entre novamente.');
+      return animaisService.create(userId, newAnimal);
+    },
+    onSuccess: (animal) => {
+      updateLocalAnimalCache(animal);
+      syncLocalMutation();
+    },
   });
 
   const updateMutation = useMutation({
-    mutationFn: ({ id, updates }: { id: string; updates: Partial<Animal> }) => animaisService.update(id, updates),
-    onSuccess: invalidateAnimalQueries,
+    mutationFn: ({ id, updates }: { id: string; updates: Partial<Animal> }) => {
+      if (!userId) throw new Error('Sua sessão expirou. Entre novamente.');
+      return animaisService.update(userId, id, updates);
+    },
+    onSuccess: (animal) => {
+      updateLocalAnimalCache(animal);
+      syncLocalMutation();
+    },
   });
 
   const deleteMutation = useMutation({
-    mutationFn: (id: string) => animaisService.delete(id),
-    onSuccess: invalidateAnimalQueries,
+    mutationFn: (id: string) => {
+      if (!userId) throw new Error('Sua sessão expirou. Entre novamente.');
+      return animaisService.delete(userId, id);
+    },
+    onSuccess: (_, id) => {
+      removeLocalAnimalFromCache(id);
+      syncLocalMutation();
+    },
   });
 
   const fetchAllAnimais = useCallback(async (): Promise<Animal[]> => {

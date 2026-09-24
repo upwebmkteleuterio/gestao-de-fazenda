@@ -177,7 +177,7 @@ export const pastagensService = {
 
   delete: async (id: string): Promise<boolean> => {
     const animalsResult = await animaisService.getAll({ pasto_id: id });
-    await Promise.all(animalsResult.data.map((animal) => animaisService.update(animal.id, { pasto_id: undefined, pasto_nome: undefined })));
+    await Promise.all(animalsResult.data.map((animal) => animaisService.updateRemote(animal.id, { pasto_id: undefined, pasto_nome: undefined })));
 
     const { error } = await supabase.from('pastagens').delete().eq('id', id);
     if (error) throw error;

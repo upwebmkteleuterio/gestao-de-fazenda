@@ -191,6 +191,24 @@ export const enqueueOutboxOperation = async <TPayload>(input: OutboxOperationInp
   return operation;
 };
 
+export const saveOfflineRecordAndEnqueue = async <TPayload>(
+  record: OfflineRecord,
+  input: OutboxOperationInput<TPayload>,
+): Promise<OutboxOperation<TPayload>> => {
+  const now = createOperationTimestamp();
+  const operation: OutboxOperation<TPayload> = {
+    id: input.id ?? createOperationId(), userId: input.userId, entity: input.entity, operation: input.operation, payload: input.payload,
+    status: 'pending', createdAt: now, updatedAt: now, retryCount: 0, nextRetryAt: null, lastError: null,
+  };
+  const database = await openOfflineDatabase();
+  const transaction = database.transaction([STORE_NAMES.localRecords, STORE_NAMES.outbox], 'readwrite');
+  transaction.objectStore(STORE_NAMES.localRecords).put(record);
+  transaction.objectStore(STORE_NAMES.outbox).put(operation);
+  await transactionToPromise(transaction);
+  database.close();
+  return operation;
+};
+
 export const listOutboxOperations = async <TPayload = unknown>(options: OutboxListOptions = {}): Promise<Array<OutboxOperation<TPayload>>> => {
   const database = await openOfflineDatabase();
   const store = database.transaction(STORE_NAMES.outbox, 'readonly').objectStore(STORE_NAMES.outbox);

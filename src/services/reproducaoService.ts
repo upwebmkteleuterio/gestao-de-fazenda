@@ -85,7 +85,7 @@ const getEventoMaisRecente = (
 
 const syncMatrizStatus = async (animalId: string, evento?: EventoReproducao) => {
   if (!evento) {
-    await animaisService.update(animalId, {
+    await animaisService.updateRemote(animalId, {
       status_reprodutivo: 'Vazia',
       touro_cobertura: undefined,
     });
@@ -98,7 +98,7 @@ const syncMatrizStatus = async (animalId: string, evento?: EventoReproducao) => 
   if (evento.dados_protocolo?.touro !== undefined) {
     updates.touro_cobertura = evento.dados_protocolo.touro;
   }
-  await animaisService.update(animalId, updates);
+  await animaisService.updateRemote(animalId, updates);
 };
 
 const syncAffectedMatrizes = async (animalIds: string[], eventos: EventoReproducao[]) => {

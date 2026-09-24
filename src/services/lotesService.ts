@@ -57,7 +57,7 @@ const withMemberships = (rows: LoteDbRow[], memberships: LoteMembershipRow[]) =>
 };
 
 const syncAnimalPasture = async (animalIds: string[], pastoId?: string, pastoNome?: string) => {
-  await Promise.all(animalIds.map((animalId) => animaisService.update(animalId, {
+  await Promise.all(animalIds.map((animalId) => animaisService.updateRemote(animalId, {
     pasto_id: pastoId,
     pasto_nome: pastoNome,
   })));
