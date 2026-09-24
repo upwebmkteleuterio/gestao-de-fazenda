@@ -1,6 +1,6 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Users, Scale, HeartHandshake, AlertTriangle, DollarSign, Plus, ArrowRight, Activity, Pencil } from 'lucide-react';
+import { Users, Scale, HeartHandshake, AlertTriangle, DollarSign, Plus, ArrowRight, Activity, Pencil, WifiOff } from 'lucide-react';
 import { StatCard } from '@/components/StatCard';
 import { Card } from '@/components/Card';
 import { Button } from '@/components/Button';
@@ -11,6 +11,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { MeshDriftShader } from '@/components/MeshDriftShader';
 import { useAppSettings } from '@/hooks/useAppSettings';
 import { useUIStore } from '@/store/useUIStore';
+import { useConnectivityStore } from '@/store/useConnectivityStore';
 
 export const DashboardPage: React.FC = () => {
   const navigate = useNavigate();
@@ -21,20 +22,35 @@ export const DashboardPage: React.FC = () => {
     isLoading: isLoadingFarmName,
     isError: isFarmNameError,
     isUpdating: isUpdatingFarm,
+    canUpdateFarmName,
+    dataSource: farmNameDataSource,
+    snapshotCapturedAt: farmNameSnapshotCapturedAt,
   } = useAppSettings();
   const { setActivePage, openSlidePanel, showToast } = useUIStore();
+  const connectivityStatus = useConnectivityStore((state) => state.status);
+  const isOffline = connectivityStatus === 'offline' || (typeof navigator !== 'undefined' && !navigator.onLine);
   const [isEditingFarmName, setIsEditingFarmName] = React.useState(false);
   const [farmNameDraft, setFarmNameDraft] = React.useState(farmName);
   const cancelFarmNameEdit = React.useRef(false);
-  const { summary, isLoading: isLoadingDashboard } = useDashboard();
-  const { pesagens, isLoading: isLoadingPesagens } = usePesagensRecentes();
+  const {
+    summary,
+    isLoading: isLoadingDashboard,
+    dataSource: dashboardDataSource,
+    snapshotCapturedAt: dashboardSnapshotCapturedAt,
+  } = useDashboard();
+  const {
+    pesagens,
+    isLoading: isLoadingPesagens,
+    dataSource: pesagensDataSource,
+    snapshotCapturedAt: pesagensSnapshotCapturedAt,
+  } = usePesagensRecentes();
 
   React.useEffect(() => {
     if (!isEditingFarmName) setFarmNameDraft(farmName);
   }, [farmName, isEditingFarmName]);
 
   const saveFarmName = async (value: string) => {
-    if (isLoadingFarmName || isFarmNameError) return;
+    if (isOffline || isLoadingFarmName || isFarmNameError) return;
 
     const nextFarmName = value.trim();
     if (!nextFarmName) {
@@ -68,6 +84,8 @@ export const DashboardPage: React.FC = () => {
       const isAltA = e.altKey && (e.key.toLowerCase() === 'a' || e.code === 'KeyA' || e.key === 'å' || e.key === 'Å');
       const isAltP = e.altKey && (e.key.toLowerCase() === 'p' || e.code === 'KeyP' || e.key === 'π' || e.key === 'Π');
 
+      if (isOffline) return;
+
       if (isAltA) {
         e.preventDefault();
         setActivePage('Animais');
@@ -82,7 +100,19 @@ export const DashboardPage: React.FC = () => {
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [setActivePage, navigate, openSlidePanel]);
+  }, [isOffline, setActivePage, navigate, openSlidePanel]);
+
+  const snapshotTimes = [
+    dashboardDataSource === 'snapshot' ? dashboardSnapshotCapturedAt : null,
+    pesagensDataSource === 'snapshot' ? pesagensSnapshotCapturedAt : null,
+    farmNameDataSource === 'snapshot' ? farmNameSnapshotCapturedAt : null,
+  ].filter((capturedAt): capturedAt is string => Boolean(capturedAt));
+  const latestSnapshotCapturedAt = snapshotTimes
+    .map((capturedAt) => new Date(capturedAt))
+    .sort((left, right) => right.getTime() - left.getTime())[0];
+  const latestSnapshotLabel = latestSnapshotCapturedAt && !Number.isNaN(latestSnapshotCapturedAt.getTime())
+    ? latestSnapshotCapturedAt.toLocaleString('pt-BR')
+    : null;
 
   const totalAnimais = summary?.total_animais ?? 0;
   const ativos = summary?.animais_ativos ?? 0;
@@ -105,6 +135,13 @@ export const DashboardPage: React.FC = () => {
 
   return (
     <div className="space-y-8 animate-fade-in pb-12">
+      {latestSnapshotLabel && (
+        <div className="flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-200" role="status">
+          <WifiOff className="h-4 w-4 shrink-0" aria-hidden="true" />
+          <span>Exibindo dados da última sincronização local: {latestSnapshotLabel}.</span>
+        </div>
+      )}
+
       {/* Top Banner / Hero */}
       <div className="relative overflow-hidden rounded-2xl bg-emerald-950 p-6 text-white shadow-xl sm:p-8">
         <MeshDriftShader />
@@ -144,7 +181,7 @@ export const DashboardPage: React.FC = () => {
           ) : (
             <div className="group flex items-center gap-2">
               <h1 className="text-2xl font-extrabold tracking-tight sm:text-3xl">{farmName}</h1>
-              {role === 'superadmin' && !isFarmNameError && (
+              {role === 'superadmin' && canUpdateFarmName && !isFarmNameError && (
                 <button
                   type="button"
                   onClick={() => {
@@ -169,6 +206,7 @@ export const DashboardPage: React.FC = () => {
             <Button
               variant="primary"
               icon={Plus}
+              disabled={isOffline}
               onClick={() => {
                 setActivePage('Animais');
                 navigate('/animais');
@@ -182,6 +220,7 @@ export const DashboardPage: React.FC = () => {
             <Button
               variant="secondary"
               icon={Scale}
+              disabled={isOffline}
               onClick={() => {
                 setActivePage('Pesagens');
                 navigate('/pesagens');
@@ -205,7 +244,7 @@ export const DashboardPage: React.FC = () => {
           trend="up"
           trendValue={`${ativos} Ativos`}
           subtitle={`${vacasCount} Vacas / ${bezerrosCount} Bezerros / ${tourosCount} Touros`}
-          onClick={() => {
+          onClick={isOffline ? undefined : () => {
             setActivePage('Animais');
             navigate('/animais');
           }}
@@ -217,7 +256,7 @@ export const DashboardPage: React.FC = () => {
           trend={pesagensComGMD > 0 ? 'up' : undefined}
           trendValue={pesagensComGMD > 0 ? `${pesagensComGMD} pesagens com GMD` : undefined}
           subtitle={pesagensComGMD > 0 ? 'Pesagens com GMD' : 'Sem dados de GMD'}
-          onClick={() => {
+          onClick={isOffline ? undefined : () => {
             setActivePage('Pesagens');
             navigate('/pesagens');
           }}
@@ -229,7 +268,7 @@ export const DashboardPage: React.FC = () => {
           trend={dgTotal > 0 ? 'up' : undefined}
           trendValue={dgTotal > 0 ? `${dgTotal} DG avaliados` : undefined}
           subtitle={dgTotal > 0 ? 'Cheias / vazias' : 'Sem dados de DG'}
-          onClick={() => {
+          onClick={isOffline ? undefined : () => {
             setActivePage('Manejo Reprodutivo');
             navigate('/reproducao');
           }}
@@ -242,7 +281,7 @@ export const DashboardPage: React.FC = () => {
             trend={saldo >= 0 ? 'up' : 'down'}
             trendValue={`Receitas pagas: R$ ${formatCurrency(receitas)}`}
             subtitle={`Despesas pagas: R$ ${formatCurrency(despesas)} · Pendentes: R$ ${formatCurrency(pendentes)}`}
-            onClick={() => {
+            onClick={isOffline ? undefined : () => {
               setActivePage('Financeiro');
               navigate('/financeiro');
             }}
@@ -283,6 +322,7 @@ export const DashboardPage: React.FC = () => {
             <span className="text-xs text-gray-500 dark:text-gray-400">Atualizado com os últimos registros do sistema</span>
             <Button
               variant="ghost"
+              disabled={isOffline}
               onClick={() => {
                 setActivePage('Animais');
                 navigate('/animais');
@@ -339,6 +379,7 @@ export const DashboardPage: React.FC = () => {
           <div className="mt-6 pt-4 border-t border-gray-100 dark:border-gray-700">
             <Button
               variant="secondary"
+              disabled={isOffline}
               onClick={() => {
                 setActivePage('Insumos');
                 navigate('/insumos');
@@ -364,6 +405,7 @@ export const DashboardPage: React.FC = () => {
             <p className="text-sm font-medium">Nenhuma pesagem registrada recentemente.</p>
             <Button
               variant="secondary"
+              disabled={isOffline}
               onClick={() => {
                 setActivePage('Pesagens');
                 navigate('/pesagens');
