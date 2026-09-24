@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, DollarSign, TrendingUp, TrendingDown, ArrowUpCircle, ArrowDownCircle, Search, CalendarDays } from 'lucide-react';
+import { Plus, DollarSign, TrendingUp, TrendingDown, ArrowUpCircle, ArrowDownCircle, Search } from 'lucide-react';
 import { Button } from '../components/Button';
 import { Card } from '../components/Card';
 import { StatCard } from '../components/StatCard';
@@ -21,22 +21,52 @@ const getCurrentMonth = () => {
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
 };
 
+const monthNames = [
+  'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
+  'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro',
+];
+
+const getMonthOptions = (year: number) => monthNames.map((label, index) => ({
+  value: `${year}-${String(index + 1).padStart(2, '0')}`,
+  label: `${label} de ${year}`,
+}));
+
+const addOneDay = (date: string) => {
+  const [year, month, day] = date.split('-').map(Number);
+  return new Date(Date.UTC(year, month - 1, day + 1)).toISOString().split('T')[0];
+};
+
 export const FinanceiroPage: React.FC = () => {
   const { showToast } = useUIStore();
   const [search, setSearch] = useState('');
   const [tipo, setTipo] = useState('all');
   const [categoria, setCategoria] = useState('all');
   const [status, setStatus] = useState('all');
-  const [mesSelecionado, setMesSelecionado] = useState(getCurrentMonth);
+  const [periodoSelecionado, setPeriodoSelecionado] = useState(getCurrentMonth);
+  const [dataInicioPersonalizada, setDataInicioPersonalizada] = useState('');
+  const [dataFimPersonalizada, setDataFimPersonalizada] = useState('');
   const [page, setPage] = useState(1);
   const limit = 10;
-  const inicioMes = `${mesSelecionado}-01`;
-  const fimMes = new Date(Date.UTC(Number(mesSelecionado.slice(0, 4)), Number(mesSelecionado.slice(5, 7)), 1))
-    .toISOString().slice(0, 10);
+  const periodoPersonalizado = periodoSelecionado === 'personalizado';
+  const periodoAno = periodoSelecionado.startsWith('ano-');
+  const year = periodoAno
+    ? Number(periodoSelecionado.slice(4))
+    : Number(periodoSelecionado.slice(0, 4)) || new Date().getFullYear();
+  const inicioMes = periodoPersonalizado
+    ? dataInicioPersonalizada || undefined
+    : periodoAno ? `${year}-01-01` : `${periodoSelecionado}-01`;
+  const fimMes = periodoPersonalizado
+    ? dataFimPersonalizada ? addOneDay(dataFimPersonalizada) : undefined
+    : periodoAno ? `${year + 1}-01-01` : addOneDay(`${periodoSelecionado}-01`);
+  const periodoOptions = [
+    { value: `ano-${year}`, label: `Todos os meses de ${year}` },
+    ...getMonthOptions(year),
+    { value: 'personalizado', label: 'Personalizar período' },
+  ];
 
   useEffect(() => {
     setPage(1);
-  }, [search, tipo, categoria, status, mesSelecionado]);
+  }, [search, tipo, categoria, status, periodoSelecionado, dataInicioPersonalizada, dataFimPersonalizada]);
 
   const { transacoes, totalTransacoes, resumo, isLoadingTransacoes, isErrorTransacoes, refetchTransacoes, createTransacao, updateTransacao, deleteTransacao } = useFinanceiro({
     search,
@@ -229,18 +259,38 @@ export const FinanceiroPage: React.FC = () => {
 
       {/* Tabela de Lançamentos */}
       <Card noPadding>
-        <div className="p-4 border-b border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-800 grid grid-cols-1 md:grid-cols-5 gap-3">
-          <div className="relative">
-            <CalendarDays className="w-4 h-4 text-gray-400 absolute left-3 top-3" />
-            <label htmlFor="filter-mes-fin" className="sr-only">Mês dos lançamentos</label>
-            <input
-              id="filter-mes-fin"
-              type="month"
-              value={mesSelecionado}
-              onChange={(e) => { if (e.target.value) setMesSelecionado(e.target.value); }}
-              className="w-full pl-9 pr-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-xl bg-gray-50 dark:bg-gray-900/50 text-gray-900 dark:text-white"
+        <div className="p-4 border-b border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-800 grid grid-cols-1 md:grid-cols-6 gap-3">
+          <div className="md:col-span-2">
+            <Select
+              id="filter-periodo-fin"
+              noMargin
+              label="Período dos lançamentos"
+              value={periodoSelecionado}
+              onChange={(e) => setPeriodoSelecionado(e.target.value)}
+              options={periodoOptions}
             />
-            <span className="text-[11px] text-gray-500 dark:text-gray-400 mt-1 block">Mês dos lançamentos</span>
+            {periodoPersonalizado && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-2">
+                <Input
+                  id="filter-data-inicio-fin"
+                  noMargin
+                  type="date"
+                  label="Data inicial"
+                  value={dataInicioPersonalizada}
+                  max={dataFimPersonalizada || undefined}
+                  onChange={(e) => setDataInicioPersonalizada(e.target.value)}
+                />
+                <Input
+                  id="filter-data-fim-fin"
+                  noMargin
+                  type="date"
+                  label="Data final"
+                  value={dataFimPersonalizada}
+                  min={dataInicioPersonalizada || undefined}
+                  onChange={(e) => setDataFimPersonalizada(e.target.value)}
+                />
+              </div>
+            )}
           </div>
           <Input
             id="filter-search-fin"

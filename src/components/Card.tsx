@@ -36,7 +36,7 @@ export const Card: React.FC<CardProps> = ({
         {action && <div>{action}</div>}
       </div>
     )}
-    <div className={`${noPadding ? '' : 'p-6'} relative z-10 h-full flex flex-col`}>
+    <div className={`${noPadding ? '' : 'p-6'} relative h-full flex flex-col`}>
       {children}
     </div>
   </div>

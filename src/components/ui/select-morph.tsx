@@ -47,6 +47,7 @@ interface MorphContextValue {
   layoutId: string;
   triggerId: string;
   listId: string;
+  panelPosition: { top: number; left: number; width: number } | null;
   disabled: boolean;
 }
 
@@ -84,6 +85,7 @@ export function MorphSelect({
   const [internal, setInternal] = useState(defaultValue);
   const [labels, setLabels] = useState<Map<string, { label: string; count: number }>>(new Map());
   const [placeholder, setPlaceholder] = useState('Select');
+  const [panelPosition, setPanelPosition] = useState<{ top: number; left: number; width: number } | null>(null);
 
   const controlled = value !== undefined;
   const current = controlled ? value : internal;
@@ -135,6 +137,27 @@ export function MorphSelect({
     };
   }, [open]);
 
+  useLayoutEffect(() => {
+    if (!open) {
+      setPanelPosition(null);
+      return;
+    }
+
+    const updatePanelPosition = () => {
+      const rect = rootRef.current?.getBoundingClientRect();
+      if (!rect) return;
+      setPanelPosition({ top: rect.top, left: rect.left, width: rect.width });
+    };
+
+    updatePanelPosition();
+    window.addEventListener('resize', updatePanelPosition);
+    window.addEventListener('scroll', updatePanelPosition, true);
+    return () => {
+      window.removeEventListener('resize', updatePanelPosition);
+      window.removeEventListener('scroll', updatePanelPosition, true);
+    };
+  }, [open]);
+
   const context = useMemo<MorphContextValue>(
     () => ({
       value: current,
@@ -150,9 +173,10 @@ export function MorphSelect({
       layoutId: `${baseId}-surface`,
       triggerId: id ?? `${baseId}-trigger`,
       listId: `${baseId}-list`,
+      panelPosition,
       disabled,
     }),
-    [current, open, select, register, unregister, labels, placeholder, reduce, baseId, id, disabled],
+    [current, open, select, register, unregister, labels, placeholder, reduce, baseId, id, panelPosition, disabled],
   );
 
   return (
@@ -247,8 +271,14 @@ export function MorphSelectContent({ className, children }: MorphSelectContentPr
             role="listbox"
             aria-labelledby={context.triggerId}
             transition={context.reduce ? { duration: 0 } : MORPH}
-            style={{ borderRadius: 12 }}
-            className={cn('absolute inset-x-0 top-0 z-30 overflow-hidden border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 shadow-sm', className)}
+            style={{
+              borderRadius: 12,
+              top: context.panelPosition?.top ?? 0,
+              left: context.panelPosition?.left ?? 0,
+              width: context.panelPosition?.width ?? 0,
+              visibility: context.panelPosition ? 'visible' : 'hidden',
+            }}
+            className={cn('fixed z-[9999] overflow-hidden border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 shadow-lg', className)}
           >
             <motion.button
               type="button"
