@@ -1,4 +1,4 @@
-import { supabase } from '@/integrations/supabase/client';
+import { getCurrentUserId as readCurrentUserId, supabase } from '@/integrations/supabase/client';
 import {
   deleteOfflineRecord,
   deleteOfflineRecords,
@@ -115,10 +115,7 @@ const isTransportError = (error: unknown): boolean => {
     || /failed to fetch|network request failed|networkerror|load failed|offline/i.test(message);
 };
 
-const getCurrentUserId = async (): Promise<string | undefined> => {
-  const { data } = await supabase.auth.getSession();
-  return data.session?.user.id;
-};
+const getCurrentUserId = (): Promise<string | undefined> => readCurrentUserId(isBrowserOnline());
 
 const toNumberOrUndefined = (value: number | string | null | undefined): number | undefined =>
   value === null || value === undefined ? undefined : Number(value);
@@ -583,6 +580,7 @@ export const animaisService = {
   },
 
   updatePesoAtual: async (animalId: string, peso: number | null, dataPesagem: string | null): Promise<void> => {
+    if (!(await getCurrentUserId())) throw new Error('Sua sessão expirou. Entre novamente.');
     const { error } = await supabase.from('animais').update({ peso_atual: peso, data_pesagem_atual: dataPesagem, status_sincronizacao: false }).eq('id', animalId);
     if (error) throw error;
   },

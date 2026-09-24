@@ -1,4 +1,4 @@
-import { supabase } from '@/integrations/supabase/client';
+import { getCurrentUserId as readCurrentUserId } from '@/integrations/supabase/client';
 import { saveOfflineSnapshot } from '@/offline/database';
 import { animaisService, syncAnimais } from '@/services/animaisService';
 import { appSettingsService } from '@/services/appSettingsService';
@@ -22,10 +22,7 @@ const isBrowserOnline = (): boolean => (
   && useConnectivityStore.getState().status !== 'offline'
 );
 
-const getCurrentUserId = async (): Promise<string | undefined> => {
-  const { data } = await supabase.auth.getSession();
-  return data.session?.user.id;
-};
+const getCurrentUserId = (): Promise<string | undefined> => readCurrentUserId(isBrowserOnline());
 
 const canContinue = async (userId: string): Promise<boolean> => (
   isBrowserOnline() && (await getCurrentUserId()) === userId
@@ -93,9 +90,10 @@ const runPrefetch = async (userId: string): Promise<void> => {
       });
     });
   } finally {
-    if ((await getCurrentUserId()) === userId) {
-      if (isBrowserOnline()) useConnectivityStore.getState().setOnline();
-      else useConnectivityStore.getState().setOffline();
+    if (isBrowserOnline() && (await getCurrentUserId()) === userId) {
+      useConnectivityStore.getState().setOnline();
+    } else if (!isBrowserOnline()) {
+      useConnectivityStore.getState().setOffline();
     }
   }
 };

@@ -1,8 +1,8 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import type { Session } from '@supabase/supabase-js';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
+import { readCurrentSession, subscribeToAuthState, supabase } from '@/integrations/supabase/client';
 import { getAuthErrorMessage } from '@/utils/authError';
 
 export const ROLES = ['superadmin', 'assistant'] as const;
@@ -56,6 +56,7 @@ export function SessionContextProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [authError, setAuthError] = useState<string | null>(null);
+  const previousUserIdRef = useRef<string | undefined>();
   const userId = session?.user.id;
   const profileQuery = useQuery({
     queryKey: ['profile', userId],
@@ -65,27 +66,32 @@ export function SessionContextProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     let mounted = true;
-    const { data: authListener } = supabase.auth.onAuthStateChange((_event, nextSession) => {
-      if (!mounted) return;
+    const applySession = (nextSession: Session | null) => {
+      const nextUserId = nextSession?.user.id;
+      if (previousUserIdRef.current !== nextUserId || !nextSession) {
+        void queryClient.cancelQueries();
+        queryClient.clear();
+      }
+      previousUserIdRef.current = nextUserId;
       setSession(nextSession);
       setAuthError(null);
       setIsLoading(false);
+    };
+    const unsubscribe = subscribeToAuthState((nextSession) => {
+      if (!mounted) return;
+      applySession(nextSession);
     });
 
-    void supabase.auth.getSession().then(({ data, error }) => {
+    const isOnline = typeof navigator === 'undefined' || navigator.onLine;
+    void readCurrentSession(isOnline).then(({ session: nextSession, error }) => {
       if (!mounted) return;
-      if (error) {
-        setAuthError(getAuthErrorMessage(error));
-        setSession(null);
-      } else {
-        setSession(data.session);
-      }
-      setIsLoading(false);
+      applySession(nextSession);
+      if (error) setAuthError(getAuthErrorMessage(error));
     });
 
     return () => {
       mounted = false;
-      authListener.subscription.unsubscribe();
+      unsubscribe();
     };
   }, []);
 
