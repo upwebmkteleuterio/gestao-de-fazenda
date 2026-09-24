@@ -18,6 +18,7 @@ interface LoteModalsProps {
   pastagens?: Array<{ id: string; nome_pasto: string; tipo_capim?: string }>;
   onConfirmarCriacao: () => void;
   isCreatingLote: boolean;
+  isOffline?: boolean;
 
   // Visualizar Lote
   viewLoteModalOpen: boolean;
@@ -39,6 +40,7 @@ export const LoteModals: React.FC<LoteModalsProps> = ({
   pastagens = [],
   onConfirmarCriacao,
   isCreatingLote,
+  isOffline = false,
   viewLoteModalOpen,
   onCloseViewLoteModal,
   selectedLote,
@@ -128,6 +130,7 @@ export const LoteModals: React.FC<LoteModalsProps> = ({
                     ]}
                   />
                 )}
+                {isOffline && <p className="text-xs text-amber-700 dark:text-amber-300">Ações de Lote ficam disponíveis quando a conexão voltar.</p>}
               </div>
               <div className="bg-gray-50 dark:bg-gray-900/50 px-6 py-4 flex justify-end space-x-3 border-t border-gray-100 dark:border-gray-800">
                 <Button variant="secondary" onClick={onCloseLoteModal}>
@@ -136,7 +139,7 @@ export const LoteModals: React.FC<LoteModalsProps> = ({
                 <Button
                   onClick={onConfirmarCriacao}
                   loading={isCreatingLote}
-                  disabled={!nomeLote.trim()}
+                  disabled={isOffline || !nomeLote.trim()}
                 >
                   Salvar Lote
                 </Button>
@@ -179,6 +182,8 @@ export const LoteModals: React.FC<LoteModalsProps> = ({
                       variant="secondary"
                       size="sm"
                       icon={ArrowRightLeft}
+                      disabled={isOffline}
+                      title={isOffline ? 'Ações de Pasto ficam disponíveis quando a conexão voltar' : undefined}
                       onClick={() => {
                         setSelectedNovoPasto(selectedLote.pasto_id || pastagens[0]?.id || '');
                         setShowMudarPastoSelect(true);
@@ -213,6 +218,7 @@ export const LoteModals: React.FC<LoteModalsProps> = ({
                       noMargin
                       value={selectedNovoPasto}
                       onChange={(e) => setSelectedNovoPasto(e.target.value)}
+                      disabled={isOffline}
                       className="text-xs px-2.5 py-1.5 rounded-lg border border-emerald-300 dark:border-emerald-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white outline-none focus:ring-1 focus:ring-emerald-500"
                       options={pastagens.map((p) => ({
                         value: p.id,
@@ -222,6 +228,7 @@ export const LoteModals: React.FC<LoteModalsProps> = ({
                     <Button
                       size="sm"
                       variant="primary"
+                      disabled={isOffline}
                       onClick={() => {
                         if (onMudarPastoLote && selectedNovoPasto) {
                           onMudarPastoLote(selectedLote.id, selectedNovoPasto);

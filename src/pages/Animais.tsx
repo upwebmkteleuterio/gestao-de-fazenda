@@ -42,6 +42,9 @@ export const AnimaisPage: React.FC = () => {
     isLoading,
     isError,
     refetch,
+    isLocal,
+    lastSyncedAt,
+    isOffline,
     selectedAnimalIds,
     toggleSelectAnimal,
     selectAllAnimals,
@@ -102,7 +105,14 @@ export const AnimaisPage: React.FC = () => {
         onCriarLote={handleCriarLoteComSelecionados}
         onExportar={handleExportRelatorio}
         onCadastrar={() => handleOpenCreate()}
+        isOffline={isOffline}
       />
+
+      {isLocal && (
+        <div className="flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-200" role="status">
+          <span>Exibindo dados locais{lastSyncedAt ? ` · última sincronização ${new Date(lastSyncedAt).toLocaleString('pt-BR')}` : ''}.</span>
+        </div>
+      )}
 
       {/* Card da Listagem com Abas e Filtros Integrados */}
       <Card noPadding>
@@ -175,6 +185,7 @@ export const AnimaisPage: React.FC = () => {
         selectedCount={selectedAnimalIds.length}
         onCriarLote={handleCriarLoteComSelecionados}
         onLimparSelecao={clearSelectedAnimals}
+        isOffline={isOffline}
       />
 
       {/* SlidePanel de Criação / Edição / Ficha Técnica */}
@@ -224,6 +235,7 @@ export const AnimaisPage: React.FC = () => {
         onMudarPastoLote={handleMudarPastoLote}
         onConfirmarCriacao={confirmarCriacaoLote}
         isCreatingLote={isCreatingLote}
+        isOffline={isOffline}
         viewLoteModalOpen={viewLoteModalOpen}
         onCloseViewLoteModal={() => setViewLoteModalOpen(false)}
         selectedLote={selectedLote}

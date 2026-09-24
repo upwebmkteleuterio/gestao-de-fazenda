@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useAnimais } from '@/hooks/useAnimais';
 import { useLotes } from '@/hooks/useLotes';
+import { useConnectivityStore } from '@/store/useConnectivityStore';
 import { usePastagens } from '@/hooks/usePastagens';
 import { useUIStore } from '@/store/useUIStore';
 import { exportarAnimaisCSV } from '../utils/animalUtils';
@@ -16,6 +17,8 @@ export const useAnimaisTable = () => {
 
   const { lotes, createLote, moverPasto } = useLotes();
   const { pastagens } = usePastagens();
+  const { status: connectivityStatus } = useConnectivityStore();
+  const isOffline = connectivityStatus === 'offline' || (typeof navigator !== 'undefined' && navigator.onLine === false);
 
   // Filtros de busca e paginação
   const [search, setSearch] = useState('');
@@ -29,7 +32,7 @@ export const useAnimaisTable = () => {
   const [mainTab, setMainTab] = useState<'rebanho' | 'descartadas' | 'lotes'>('rebanho');
 
   // Consulta paginada e filtrada
-  const { animais, total, isLoading, isError, error, refetch } = useAnimais({
+  const { animais, total, source, lastSyncedAt, isLoading, isError, error, refetch } = useAnimais({
     search,
     sexo,
     status,
@@ -40,7 +43,7 @@ export const useAnimaisTable = () => {
   });
 
   // Consulta geral para descarte e exportação
-  const { animais: todosAnimais } = useAnimais();
+  const { animais: todosAnimais, source: allSource, lastSyncedAt: allLastSyncedAt } = useAnimais();
   const vacasDescartadas = todosAnimais.filter((a) => a.status === 'descarte');
 
   // Resetar para página 1 ao alterar qualquer filtro
@@ -59,13 +62,17 @@ export const useAnimaisTable = () => {
   const [selectedLote, setSelectedLote] = useState<any>(null);
 
   const handleCriarLoteComSelecionados = () => {
+    if (isOffline) {
+      showToast('Ações de Lote ficam disponíveis quando a conexão voltar.', 'info');
+      return;
+    }
     setNomeLote('');
     setPastoIdLote('');
     setLoteModalOpen(true);
   };
 
   const confirmarCriacaoLote = async () => {
-    if (!nomeLote.trim()) return;
+    if (isOffline || !nomeLote.trim()) return;
     setIsCreatingLote(true);
     try {
       const pastoEscolhido = pastagens.find((p) => p.id === pastoIdLote);
@@ -96,6 +103,10 @@ export const useAnimaisTable = () => {
   };
 
   const handleMudarPastoLote = async (loteId: string, novoPastoId: string) => {
+    if (isOffline) {
+      showToast('Ações de Pasto ficam disponíveis quando a conexão voltar.', 'info');
+      return;
+    }
     const pastoEscolhido = pastagens.find((p) => p.id === novoPastoId);
     if (!pastoEscolhido) return;
     try {
@@ -158,6 +169,9 @@ export const useAnimaisTable = () => {
     isError,
     error,
     refetch,
+    isLocal: source === 'local' || allSource === 'local',
+    lastSyncedAt: allLastSyncedAt || lastSyncedAt,
+    isOffline,
 
     // Seleção em lote
     selectedAnimalIds,

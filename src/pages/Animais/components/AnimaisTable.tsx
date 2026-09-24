@@ -1,5 +1,5 @@
 import React from 'react';
-import { Users } from 'lucide-react';
+import { AlertCircle, Clock3, Loader2, Users } from 'lucide-react';
 import { Table, Column } from '@/components/Table';
 import { Badge } from '@/components/Badge';
 import { Pagination } from '@/components/Pagination';
@@ -47,8 +47,17 @@ export const AnimaisTable: React.FC<AnimaisTableProps> = ({
       accessor: 'brinco',
       render: (row) => (
         <div>
-          <span className="font-bold text-emerald-700 dark:text-emerald-400 transition-colors">
+          <span className="font-bold text-emerald-700 dark:text-emerald-400 transition-colors inline-flex items-center gap-1.5">
             {row.brinco}
+            {row.syncStatus && row.syncStatus !== 'synced' && (
+              <span
+                className="inline-flex items-center gap-1 text-[10px] font-medium text-amber-600 dark:text-amber-300"
+                title={row.syncError || `Sincronização ${row.syncStatus}`}
+                aria-label={row.syncError || `Sincronização ${row.syncStatus}`}
+              >
+                {row.syncStatus === 'processing' ? <Loader2 className="h-3 w-3 animate-spin" /> : row.syncStatus === 'error' ? <AlertCircle className="h-3 w-3" /> : <Clock3 className="h-3 w-3" />}
+              </span>
+            )}
           </span>
           <div className="flex items-center gap-1.5 mt-0.5">
             <p className="text-[10px] text-gray-500 dark:text-gray-400 uppercase font-medium">{row.tipo_animal}</p>

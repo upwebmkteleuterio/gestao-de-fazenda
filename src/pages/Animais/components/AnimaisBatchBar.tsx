@@ -6,12 +6,14 @@ interface AnimaisBatchBarProps {
   selectedCount: number;
   onCriarLote: () => void;
   onLimparSelecao: () => void;
+  isOffline?: boolean;
 }
 
 export const AnimaisBatchBar: React.FC<AnimaisBatchBarProps> = ({
   selectedCount,
   onCriarLote,
   onLimparSelecao,
+  isOffline = false,
 }) => {
   if (selectedCount === 0) return null;
 
@@ -31,6 +33,8 @@ export const AnimaisBatchBar: React.FC<AnimaisBatchBarProps> = ({
           variant="primary"
           icon={Layers}
           onClick={onCriarLote}
+          disabled={isOffline}
+          title={isOffline ? 'Ações de Lote ficam disponíveis quando a conexão voltar' : undefined}
           className="bg-emerald-500 hover:bg-emerald-400 text-gray-950 font-bold px-3 py-1.5 text-xs"
         >
           Criar Lote ({selectedCount})

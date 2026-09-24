@@ -7,6 +7,7 @@ interface AnimaisHeaderProps {
   onCriarLote: () => void;
   onExportar: () => void;
   onCadastrar: () => void;
+  isOffline?: boolean;
 }
 
 export const AnimaisHeader: React.FC<AnimaisHeaderProps> = ({
@@ -14,6 +15,7 @@ export const AnimaisHeader: React.FC<AnimaisHeaderProps> = ({
   onCriarLote,
   onExportar,
   onCadastrar,
+  isOffline = false,
 }) => {
   return (
     <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -29,10 +31,13 @@ export const AnimaisHeader: React.FC<AnimaisHeaderProps> = ({
           variant={selectedCount > 0 ? 'primary' : 'secondary'}
           icon={Layers}
           onClick={onCriarLote}
+          disabled={isOffline}
           title={
-            selectedCount > 0
-              ? `Criar lote com os ${selectedCount} animais selecionados`
-              : 'Criar um novo lote (selecione animais na tabela para agrupá-los automaticamente)'
+            isOffline
+              ? 'Ações de Lote ficam disponíveis quando a conexão voltar'
+              : selectedCount > 0
+                ? `Criar lote com os ${selectedCount} animais selecionados`
+                : 'Criar um novo lote (selecione animais na tabela para agrupá-los automaticamente)'
           }
           className={selectedCount > 0 ? 'ring-2 ring-emerald-500/40 shadow-sm' : ''}
         >

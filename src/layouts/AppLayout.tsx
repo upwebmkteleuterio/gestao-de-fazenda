@@ -1,17 +1,34 @@
 import React, { useEffect, useState } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
 import { useUIStore } from '@/store/useUIStore';
+import { useAuth } from '@/contexts/AuthContext';
 import { Sidebar } from '@/components/Sidebar';
 import { Navbar } from '@/components/Navbar';
 import { Toast } from '@/components/Toast';
 import { AccountSettingsPanel } from '@/components/AccountSettingsPanel';
 import { useConnectivity } from '@/hooks/useConnectivity';
+import { useConnectivityStore } from '@/store/useConnectivityStore';
+import { syncAnimais } from '@/services/animaisService';
 
 export const AppLayout: React.FC = () => {
   const { theme, toast, hideToast, slidePanel, closeSlidePanel } = useUIStore();
+  const { session } = useAuth();
+  const queryClient = useQueryClient();
+  const { status: connectivityStatus } = useConnectivityStore();
   useConnectivity();
   const [isAccountSettingsOpen, setIsAccountSettingsOpen] = useState(false);
   const location = useLocation();
+
+  useEffect(() => {
+    if (!session || connectivityStatus === 'offline') return;
+    void syncAnimais().then(() => {
+      void queryClient.invalidateQueries({ queryKey: ['animais', session.user.id] });
+      void queryClient.invalidateQueries({ queryKey: ['lotes'] });
+      void queryClient.invalidateQueries({ queryKey: ['pastagens'] });
+      void queryClient.invalidateQueries({ queryKey: ['dashboard-summary'] });
+    });
+  }, [connectivityStatus, queryClient, session]);
 
   // Listener de Atalho de Teclado Global: 'Esc' para fechar formulários e modais abertos
   useEffect(() => {

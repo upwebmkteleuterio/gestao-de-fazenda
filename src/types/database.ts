@@ -6,6 +6,7 @@ export type StatusAnimal = 'ativo' | 'descarte' | 'morto' | 'vendido';
 export type CategoriaAnimal = 'PA' | 'PC' | 'PO' | 'CO';
 export type DGToqueResultado = 'cheia' | 'vazia' | 'pendente';
 export type TipoCobertura = 'Inseminação' | 'Monta Natural' | 'Monta' | 'Inseminacao' | 'IATF';
+export type AnimalSyncStatus = 'synced' | 'pending' | 'processing' | 'error';
 
 export interface RegistroToqueAno {
   id: string;
@@ -45,6 +46,9 @@ export interface Animal {
   data_pesagem_atual?: string;
   status_sincronizacao: boolean;
   createdAt: string;
+  syncStatus?: AnimalSyncStatus;
+  syncError?: string;
+  localDeleted?: boolean;
 }
 
 export interface Pesagem {
