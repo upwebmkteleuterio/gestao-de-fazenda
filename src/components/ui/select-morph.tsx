@@ -6,10 +6,12 @@ import {
   useReducedMotion,
   type Variants,
 } from 'motion/react';
+import { createPortal } from 'react-dom';
 import {
   createContext,
   type ButtonHTMLAttributes,
   type ReactNode,
+  type RefObject,
   useCallback,
   useContext,
   useEffect,
@@ -33,6 +35,13 @@ const ITEM: Variants = {
   show: { opacity: 1, y: 0, filter: 'blur(0px)' },
 };
 
+type PanelPosition = {
+  top: number;
+  left: number;
+  width: number;
+  maxHeight: number;
+};
+
 interface MorphContextValue {
   value: string | undefined;
   open: boolean;
@@ -46,7 +55,9 @@ interface MorphContextValue {
   reduce: boolean;
   triggerId: string;
   listId: string;
-  panelPosition: { top: number; left: number; width: number } | null;
+  panelPosition: PanelPosition | null;
+  anchorRef: RefObject<HTMLDivElement | null>;
+  panelRef: RefObject<HTMLDivElement | null>;
   disabled: boolean;
 }
 
@@ -80,11 +91,13 @@ export function MorphSelect({
   const reduce = useReducedMotion() ?? false;
   const baseId = useId();
   const rootRef = useRef<HTMLDivElement>(null);
+  const anchorRef = useRef<HTMLDivElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState(false);
   const [internal, setInternal] = useState(defaultValue);
   const [labels, setLabels] = useState<Map<string, { label: string; count: number }>>(new Map());
   const [placeholder, setPlaceholder] = useState('Select');
-  const [panelPosition, setPanelPosition] = useState<{ top: number; left: number; width: number } | null>(null);
+  const [panelPosition, setPanelPosition] = useState<PanelPosition | null>(null);
 
   const controlled = value !== undefined;
   const current = controlled ? value : internal;
@@ -126,7 +139,8 @@ export function MorphSelect({
       if (event.key === 'Escape') setOpen(false);
     };
     const onPointer = (event: PointerEvent) => {
-      if (rootRef.current && !rootRef.current.contains(event.target as Node)) setOpen(false);
+      const target = event.target as Node;
+      if (!rootRef.current?.contains(target) && !panelRef.current?.contains(target)) setOpen(false);
     };
     window.addEventListener('keydown', onKey);
     window.addEventListener('pointerdown', onPointer);
@@ -143,9 +157,38 @@ export function MorphSelect({
     }
 
     const updatePanelPosition = () => {
-      const rect = rootRef.current?.getBoundingClientRect();
+      const rect = anchorRef.current?.getBoundingClientRect();
       if (!rect) return;
-      setPanelPosition({ top: rect.top, left: rect.left, width: rect.width });
+
+      const margin = 8;
+      const viewportWidth = window.innerWidth;
+      const viewportHeight = window.innerHeight;
+      const width = Math.min(rect.width, Math.max(0, viewportWidth - margin * 2));
+      const maxLeft = Math.max(margin, viewportWidth - width - margin);
+      const left = Math.min(Math.max(rect.left, margin), maxLeft);
+      const spaceBelow = Math.max(0, viewportHeight - rect.top - margin);
+      const spaceAbove = Math.max(0, rect.bottom - margin);
+      const desiredHeight = panelRef.current?.scrollHeight ?? 0;
+      const placeAbove = desiredHeight > spaceBelow && spaceAbove > spaceBelow;
+      const maxHeight = Math.max(0, placeAbove ? spaceAbove : spaceBelow);
+      const height = Math.min(desiredHeight || maxHeight, maxHeight);
+      const top = placeAbove
+        ? Math.max(margin, rect.bottom - height)
+        : Math.min(Math.max(rect.top, margin), Math.max(margin, viewportHeight - margin));
+      const nextPosition = { top, left, width, maxHeight };
+
+      setPanelPosition((currentPosition) => {
+        if (
+          currentPosition &&
+          currentPosition.top === nextPosition.top &&
+          currentPosition.left === nextPosition.left &&
+          currentPosition.width === nextPosition.width &&
+          currentPosition.maxHeight === nextPosition.maxHeight
+        ) {
+          return currentPosition;
+        }
+        return nextPosition;
+      });
     };
 
     updatePanelPosition();
@@ -172,9 +215,11 @@ export function MorphSelect({
       triggerId: id ?? `${baseId}-trigger`,
       listId: `${baseId}-list`,
       panelPosition,
+      anchorRef,
+      panelRef,
       disabled,
     }),
-    [current, open, select, register, unregister, labels, placeholder, reduce, baseId, id, panelPosition, disabled],
+    [current, open, select, register, unregister, labels, placeholder, reduce, baseId, id, panelPosition, anchorRef, panelRef, disabled],
   );
 
   return (
@@ -208,7 +253,12 @@ export function MorphSelectTrigger({ className, children, ...buttonProps }: Morp
   const context = useMorphContext('MorphSelectTrigger');
   return (
     <>
-      <div aria-hidden inert className={cn(ROW, 'invisible rounded-xl border border-gray-300 dark:border-gray-700')}>
+      <div
+        ref={context.anchorRef}
+        aria-hidden
+        inert
+        className={cn(ROW, 'invisible rounded-xl border border-gray-300 dark:border-gray-700', className)}
+      >
         {children}
         <ChevronDown className="h-4 w-4" />
       </div>
@@ -259,9 +309,11 @@ export function MorphSelectContent({ className, children }: MorphSelectContentPr
   return (
     <>
       <div className="hidden">{children}</div>
-      <AnimatePresence initial={false} mode="popLayout">
-        {context.open ? (
+      {createPortal(
+        <AnimatePresence initial={false} mode="popLayout">
+          {context.open ? (
           <motion.div
+            ref={context.panelRef}
             key="panel"
             id={context.listId}
             role="listbox"
@@ -271,10 +323,11 @@ export function MorphSelectContent({ className, children }: MorphSelectContentPr
               borderRadius: 12,
               top: context.panelPosition?.top ?? 0,
               left: context.panelPosition?.left ?? 0,
-              width: context.panelPosition?.width ?? 0,
+              width: context.panelPosition?.width ?? 'max-content',
+              maxHeight: context.panelPosition?.maxHeight,
               visibility: context.panelPosition ? 'visible' : 'hidden',
             }}
-            className={cn('fixed z-[9999] overflow-hidden border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 shadow-lg', className)}
+            className={cn('fixed z-[9999] max-w-[calc(100vw-1rem)] overflow-y-auto border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 shadow-lg', className)}
           >
             <motion.button
               type="button"
@@ -303,8 +356,10 @@ export function MorphSelectContent({ className, children }: MorphSelectContentPr
               {children}
             </motion.ul>
           </motion.div>
-        ) : null}
-      </AnimatePresence>
+          ) : null}
+        </AnimatePresence>,
+        document.body,
+      )}
     </>
   );
 }

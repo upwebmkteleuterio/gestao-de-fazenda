@@ -75,11 +75,11 @@ export const Select: React.FC<SelectProps> = ({
         className="w-full"
       >
         <MorphSelectTrigger
-          className={`block w-full rounded-lg border ${
+          className={`block w-full rounded-xl border ${
             error
               ? 'border-red-500 focus:ring-red-500 focus:border-red-500'
               : 'border-gray-300 dark:border-gray-700 focus:ring-emerald-500 focus:border-emerald-500'
-          } bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 shadow-sm text-sm px-3.5 py-2 outline-none transition-colors disabled:bg-gray-100 dark:disabled:bg-gray-900 disabled:text-gray-500 ${className}`}
+          } bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 shadow-sm text-sm px-3.5 py-2.5 outline-none transition-colors hover:border-emerald-400 focus-visible:ring-2 focus-visible:ring-emerald-500/30 disabled:pointer-events-none disabled:bg-gray-100 dark:disabled:bg-gray-900 disabled:text-gray-500 disabled:opacity-50 ${className}`}
           aria-describedby={errorId ?? ariaDescribedBy}
           aria-errormessage={ariaErrorMessage}
           aria-invalid={ariaInvalid ?? Boolean(error)}

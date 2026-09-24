@@ -35,13 +35,13 @@ export const Input: React.FC<InputProps> = ({
       <input
         id={id}
         disabled={disabled}
-        className={`block w-full rounded-lg border ${
-          error 
-            ? 'border-red-500 focus:ring-red-500 focus:border-red-500' 
+        className={`block w-full rounded-xl border ${
+          error
+            ? 'border-red-500 focus:ring-red-500 focus:border-red-500'
             : 'border-gray-300 dark:border-gray-700 focus:ring-emerald-500 focus:border-emerald-500'
         } bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 shadow-sm text-sm ${
           Icon ? 'pl-9 pr-3.5' : 'px-3.5'
-        } py-2 outline-none transition-colors [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none disabled:bg-gray-100 dark:disabled:bg-gray-900 disabled:text-gray-500 ${className}`}
+        } py-2.5 outline-none transition-colors hover:border-emerald-400 focus-visible:ring-2 focus-visible:ring-emerald-500/30 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none disabled:pointer-events-none disabled:bg-gray-100 dark:disabled:bg-gray-900 disabled:text-gray-500 disabled:opacity-50 ${className}`}
         {...props}
       />
     </div>
