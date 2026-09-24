@@ -1,5 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { MoreVertical, Edit, Trash2, Eye } from 'lucide-react';
+import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
+import {
+  TABLE_ROW_EXIT_DURATION_MS,
+  useAnimatedTableRows,
+} from '@/hooks/useAnimatedTableRows';
 
 export interface Column<T> {
   header: string;
@@ -20,6 +25,8 @@ export interface TableProps<T> {
   emptyMessage?: React.ReactNode;
 }
 
+const defaultGetRowId = (row: Record<string, unknown>) => row.id as string;
+
 export function Table<T extends Record<string, any>>({
   columns,
   data,
@@ -28,10 +35,13 @@ export function Table<T extends Record<string, any>>({
   selectedIds = [],
   onToggleSelect,
   onSelectAll,
-  getRowId = (row) => row.id,
+  getRowId = defaultGetRowId,
   emptyMessage = 'Nenhum registro encontrado.',
 }: TableProps<T>) {
-  const [openDropdown, setOpenDropdown] = useState<number | null>(null);
+  const [openDropdown, setOpenDropdown] = useState<string | null>(null);
+  const [deleteIntentId, setDeleteIntentId] = useState<string | null>(null);
+  const reduceMotion = useReducedMotion() ?? false;
+  const { rows: animatedRows } = useAnimatedTableRows(data, getRowId, deleteIntentId, reduceMotion);
 
   useEffect(() => {
     const handleClickOutside = () => setOpenDropdown(null);
@@ -40,6 +50,7 @@ export function Table<T extends Record<string, any>>({
   }, []);
 
   const allSelected = data.length > 0 && selectedIds.length === data.length;
+  const rowTransition = { duration: reduceMotion ? 0 : TABLE_ROW_EXIT_DURATION_MS / 1000 };
 
   return (
     <div className="overflow-x-auto w-full min-h-[250px] pb-24">
@@ -67,26 +78,31 @@ export function Table<T extends Record<string, any>>({
           </tr>
         </thead>
         <tbody className="divide-y divide-gray-50 dark:divide-gray-700/50">
-          {data.length === 0 ? (
+          {animatedRows.length === 0 ? (
             <tr>
-              <td 
-                colSpan={columns.length + (onToggleSelect ? 1 : 0) + (onAction ? 1 : 0)} 
+              <td
+                colSpan={columns.length + (onToggleSelect ? 1 : 0) + (onAction ? 1 : 0)}
                 className="px-6 py-10 text-center text-gray-500 dark:text-gray-400 font-medium"
               >
                 {emptyMessage}
               </td>
             </tr>
           ) : (
-            data.map((row, rowIndex) => {
-              const rowId = getRowId(row);
-              const isSelected = selectedIds.includes(rowId);
-              const isOpen = openDropdown === rowIndex;
-              const openUpward = data.length > 1 && rowIndex >= Math.max(1, data.length - 2);
+            <AnimatePresence initial={false}>
+              {animatedRows.map(({ row, id: rowId }, rowIndex) => {
+                const isSelected = selectedIds.includes(rowId);
+                const isOpen = openDropdown === rowId;
+                const openUpward = animatedRows.length > 1 && rowIndex >= Math.max(1, animatedRows.length - 2);
 
-              return (
-                <tr
-                  key={rowIndex}
-                  style={{
+                return (
+                    <motion.tr
+                      key={rowId}
+                      layout={!reduceMotion}
+                      initial={false}
+                      animate={{ opacity: 1, x: 0 }}
+                      exit={reduceMotion ? { opacity: 0 } : { opacity: 0, x: -16 }}
+                      transition={rowTransition}
+                      style={{
                     position: 'relative',
                     zIndex: isOpen ? 50 : 'auto',
                   }}
@@ -112,15 +128,15 @@ export function Table<T extends Record<string, any>>({
                     </td>
                   )}
                   {columns.map((col, colIndex) => (
-                    <td 
-                      key={colIndex} 
+                    <td
+                      key={colIndex}
                       className="px-6 py-4 text-gray-700 dark:text-gray-200 whitespace-nowrap transition-colors"
                     >
                       {col.render ? col.render(row) : col.accessor ? row[col.accessor] : null}
                     </td>
                   ))}
                   {onAction && (
-                    <td 
+                    <td
                       className="px-6 py-4 text-right relative actions-menu"
                       style={{ zIndex: isOpen ? 60 : 'auto' }}
                     >
@@ -129,7 +145,7 @@ export function Table<T extends Record<string, any>>({
                         className="p-2 rounded-full text-gray-500 dark:text-gray-400 hover:text-emerald-600 dark:hover:text-emerald-400 hover:bg-emerald-100/60 dark:hover:bg-gray-700 transition-colors focus:outline-none"
                         onClick={(e) => {
                           e.stopPropagation();
-                          setOpenDropdown(isOpen ? null : rowIndex);
+                          setOpenDropdown(isOpen ? null : rowId);
                         }}
                       >
                         <MoreVertical className="w-4 h-4" />
@@ -137,7 +153,7 @@ export function Table<T extends Record<string, any>>({
 
                       {/* Dropdown Menu */}
                       {isOpen && (
-                        <div 
+                        <div
                           className={`absolute right-8 w-40 bg-white dark:bg-gray-800 rounded-lg shadow-2xl py-1.5 border border-gray-100 dark:border-gray-700 transform transition-all ${
                             openUpward ? 'bottom-10 origin-bottom-right' : 'top-10 origin-top-right'
                           }`}
@@ -172,6 +188,7 @@ export function Table<T extends Record<string, any>>({
                             className="flex w-full items-center justify-start px-4 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/50 transition-colors"
                             onClick={(e) => {
                               e.stopPropagation();
+                              setDeleteIntentId(rowId);
                               onAction('delete', row);
                               setOpenDropdown(null);
                             }}
@@ -183,9 +200,10 @@ export function Table<T extends Record<string, any>>({
                       )}
                     </td>
                   )}
-                </tr>
-              );
-            })
+                  </motion.tr>
+                );
+              })}
+            </AnimatePresence>
           )}
         </tbody>
       </table>
