@@ -1,5 +1,6 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
+import { motion, useReducedMotion } from 'motion/react';
 import {
   LayoutDashboard,
   Layers,
@@ -24,6 +25,9 @@ export const Sidebar: React.FC = () => {
   const { role } = useAuth();
   const { farmName, isLoading: isLoadingFarmName } = useAppSettings();
   const location = useLocation();
+  const [hoveredItem, setHoveredItem] = useState<PageRoute | null>(null);
+  const reduceMotion = useReducedMotion() ?? false;
+  const highlightTransition = reduceMotion ? { duration: 0 } : { type: 'spring' as const, stiffness: 380, damping: 30 };
 
   const menuItems: { name: PageRoute; path: string; icon: React.ComponentType<{ className?: string }> }[] = [
     { name: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
@@ -101,6 +105,8 @@ export const Sidebar: React.FC = () => {
                 <Link
                   key={item.name}
                   to={item.path}
+                  onMouseEnter={() => setHoveredItem(item.name)}
+                  onMouseLeave={() => setHoveredItem(null)}
                   onClick={() => {
                     setActivePage(item.name);
                     if (window.innerWidth < 768 && sidebarOpen) {
@@ -109,23 +115,39 @@ export const Sidebar: React.FC = () => {
                   }}
                   className={`relative flex items-center w-full px-3.5 py-3 rounded-xl transition-all duration-200 group text-left cursor-pointer overflow-hidden ${
                     isActive
-                      ? 'bg-emerald-800 dark:bg-emerald-900/80 text-white shadow-md shadow-emerald-950/20 font-semibold pl-4.5'
-                      : 'text-emerald-100/70 dark:text-gray-400 hover:bg-emerald-900/60 dark:hover:bg-gray-900 hover:text-white'
+                      ? 'text-white font-semibold pl-4.5'
+                      : 'text-emerald-100/70 dark:text-gray-400 hover:text-white'
                   }`}
                   title={!sidebarOpen ? item.name : undefined}
                 >
                   {isActive && (
+                    <motion.span
+                      layoutId="sidebar-active-highlight"
+                      transition={highlightTransition}
+                      className="absolute inset-0 bg-emerald-800 dark:bg-emerald-900/80 rounded-xl shadow-md shadow-emerald-950/20 pointer-events-none"
+                      aria-hidden="true"
+                    />
+                  )}
+                  {hoveredItem === item.name && !isActive && (
+                    <motion.span
+                      layoutId="sidebar-hover-highlight"
+                      transition={highlightTransition}
+                      className="absolute inset-0 bg-emerald-900/60 dark:bg-gray-900 rounded-xl pointer-events-none"
+                      aria-hidden="true"
+                    />
+                  )}
+                  {isActive && (
                     <span
-                      className="absolute left-0 top-1/2 -translate-y-1/2 w-1.5 h-7 bg-emerald-300 dark:bg-emerald-300 rounded-r-full shadow-[0_0_12px_rgba(52,211,153,0.9)]"
+                      className="absolute left-0 top-1/2 -translate-y-1/2 w-1.5 h-7 bg-emerald-300 dark:bg-emerald-300 rounded-r-full shadow-[0_0_12px_rgba(52,211,153,0.9)] z-10"
                       aria-hidden="true"
                     />
                   )}
                   <Icon
-                    className={`w-5 h-5 flex-shrink-0 transition-transform duration-200 ${
+                    className={`relative z-10 w-5 h-5 flex-shrink-0 transition-transform duration-200 ${
                       isActive ? 'scale-110 text-emerald-400' : 'group-hover:scale-110'
                     }`}
                   />
-                  {sidebarOpen && <span className="ml-3 text-sm truncate">{item.name}</span>}
+                  {sidebarOpen && <span className="relative z-10 ml-3 text-sm truncate">{item.name}</span>}
                 </Link>
               );
             })}

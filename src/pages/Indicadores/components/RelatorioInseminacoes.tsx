@@ -4,6 +4,7 @@ import { Card } from '@/components/Card';
 import { StatCard } from '@/components/StatCard';
 import { Badge } from '@/components/Badge';
 import { Button } from '@/components/Button';
+import { Select } from '@/components/Select';
 import { Table } from '@/components/Table';
 import { Pagination } from '@/components/Pagination';
 import { ErrorState } from '@/components/ErrorState';
@@ -112,9 +113,43 @@ export const RelatorioInseminacoes: React.FC = () => {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {modoData === 'especifica' && <label className="text-xs font-semibold">Data da Inseminação<input type="date" value={dataEspecifica} onChange={(e) => { setDataEspecifica(e.target.value); setPage(1); }} className="mt-1 w-full px-3 py-2 text-sm border rounded-xl bg-gray-50 dark:bg-gray-900" /></label>}
           {modoData === 'periodo' && <><label className="text-xs font-semibold">Data Inicial<input type="date" value={dataInicio} onChange={(e) => { setDataInicio(e.target.value); setPage(1); }} className="mt-1 w-full px-3 py-2 text-sm border rounded-xl bg-gray-50 dark:bg-gray-900" /></label><label className="text-xs font-semibold">Data Final<input type="date" value={dataFim} onChange={(e) => { setDataFim(e.target.value); setPage(1); }} className="mt-1 w-full px-3 py-2 text-sm border rounded-xl bg-gray-50 dark:bg-gray-900" /></label></>}
-          <label className="text-xs font-semibold">Touro / Sêmen<select value={touro} onChange={(e) => { setTouro(e.target.value); setPage(1); }} className="mt-1 w-full px-3 py-2 text-sm border rounded-xl bg-gray-50 dark:bg-gray-900"><option value="all">Todos os Touros</option>{(summary?.touros ?? []).map((value) => <option key={value} value={value}>{value}</option>)}</select></label>
-          <label className="text-xs font-semibold">Tipo de Protocolo<select value={protocolo} onChange={(e) => { setProtocolo(e.target.value); setPage(1); }} className="mt-1 w-full px-3 py-2 text-sm border rounded-xl bg-gray-50 dark:bg-gray-900"><option value="all">Todos os Protocolos</option><option value="iatf">IATF</option><option value="monta_natural">Monta Natural</option><option value="tetf">TETF</option></select></label>
-          <label className="text-xs font-semibold">Status DG<select value={resultadoDg} onChange={(e) => { setResultadoDg(e.target.value); setPage(1); }} className="mt-1 w-full px-3 py-2 text-sm border rounded-xl bg-gray-50 dark:bg-gray-900"><option value="all">Todos os Resultados</option><option value="cheia">Confirmadas Prenhas</option><option value="vazia">Vazias</option><option value="pendente">Aguardando Diagnóstico</option></select></label>
+          <Select
+            noMargin
+            label="Touro / Sêmen"
+            value={touro}
+            onChange={(e) => { setTouro(e.target.value); setPage(1); }}
+            className="mt-1 w-full px-3 py-2 text-sm rounded-xl bg-gray-50 dark:bg-gray-900"
+            options={[
+              { value: 'all', label: 'Todos os Touros' },
+              ...(summary?.touros ?? []).map((value) => ({ value, label: value })),
+            ]}
+          />
+          <Select
+            noMargin
+            label="Tipo de Protocolo"
+            value={protocolo}
+            onChange={(e) => { setProtocolo(e.target.value); setPage(1); }}
+            className="mt-1 w-full px-3 py-2 text-sm rounded-xl bg-gray-50 dark:bg-gray-900"
+            options={[
+              { value: 'all', label: 'Todos os Protocolos' },
+              { value: 'iatf', label: 'IATF' },
+              { value: 'monta_natural', label: 'Monta Natural' },
+              { value: 'tetf', label: 'TETF' },
+            ]}
+          />
+          <Select
+            noMargin
+            label="Status DG"
+            value={resultadoDg}
+            onChange={(e) => { setResultadoDg(e.target.value); setPage(1); }}
+            className="mt-1 w-full px-3 py-2 text-sm rounded-xl bg-gray-50 dark:bg-gray-900"
+            options={[
+              { value: 'all', label: 'Todos os Resultados' },
+              { value: 'cheia', label: 'Confirmadas Prenhas' },
+              { value: 'vazia', label: 'Vazias' },
+              { value: 'pendente', label: 'Aguardando Diagnóstico' },
+            ]}
+          />
           <label className="text-xs font-semibold lg:col-span-2">Buscar por Brinco ou Touro<div className="relative mt-1"><Search className="absolute left-3 top-2.5 w-4 h-4 text-gray-400" /><input value={search} onChange={(e) => { setSearch(e.target.value); setPage(1); }} placeholder="Ex.: BR-0012" className="w-full pl-9 pr-3 py-2 text-sm border rounded-xl bg-gray-50 dark:bg-gray-900" /></div></label>
         </div>
         <div className="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-gray-100 dark:border-gray-700"><span className="text-xs text-gray-500">Filtrando por: <strong>{descricaoFiltro}</strong></span><div className="flex flex-wrap gap-2"><Button variant="ghost" size="sm" icon={RotateCcw} onClick={resetFilters}>Redefinir</Button><Button variant="secondary" size="sm" icon={Printer} disabled={!totalEventos || loadingComplete} onClick={() => openComplete('print')}>Imprimir</Button><Button variant="secondary" size="sm" icon={FileText} disabled={!totalEventos || loadingComplete} onClick={() => openComplete('pdf')}>Baixar PDF</Button><Button variant="secondary" size="sm" icon={Download} disabled={!totalEventos || loadingComplete} onClick={exportComplete}>{loadingComplete ? 'Preparando...' : 'Exportar Excel'}</Button><Button variant="secondary" size="sm" icon={Eye} disabled={!totalEventos || loadingComplete} onClick={() => openComplete('view')}>Visualizar Relatório</Button></div></div>

@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Layers, X, MapPin, ArrowRightLeft } from 'lucide-react';
 import { Button } from '@/components/Button';
+import { Select } from '@/components/Select';
 import { Table, Column } from '@/components/Table';
 import { Animal } from '@/types/database';
 
@@ -113,23 +114,19 @@ export const LoteModals: React.FC<LoteModalsProps> = ({
                 </div>
 
                 {onPastoIdLoteChange && pastagens.length > 0 && (
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                      Pasto / Piquete Inicial (Opcional)
-                    </label>
-                    <select
-                      value={pastoIdLote}
-                      onChange={(e) => onPastoIdLoteChange(e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg shadow-sm focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 dark:bg-gray-700 dark:text-white sm:text-sm"
-                    >
-                      <option value="">Nenhum pasto vinculado agora</option>
-                      {pastagens.map((p) => (
-                        <option key={p.id} value={p.id}>
-                          {p.nome_pasto} ({p.tipo_capim || 'Pasto'})
-                        </option>
-                      ))}
-                    </select>
-                  </div>
+                  <Select
+                    noMargin
+                    label="Pasto / Piquete Inicial (Opcional)"
+                    value={pastoIdLote}
+                    onChange={(e) => onPastoIdLoteChange(e.target.value)}
+                    options={[
+                      { value: '', label: 'Nenhum pasto vinculado agora' },
+                      ...pastagens.map((p) => ({
+                        value: p.id,
+                        label: `${p.nome_pasto} (${p.tipo_capim || 'Pasto'})`,
+                      })),
+                    ]}
+                  />
                 )}
               </div>
               <div className="bg-gray-50 dark:bg-gray-900/50 px-6 py-4 flex justify-end space-x-3 border-t border-gray-100 dark:border-gray-800">
@@ -212,17 +209,16 @@ export const LoteModals: React.FC<LoteModalsProps> = ({
                     <span>Transferir lote para:</span>
                   </div>
                   <div className="flex items-center gap-2">
-                    <select
+                    <Select
+                      noMargin
                       value={selectedNovoPasto}
                       onChange={(e) => setSelectedNovoPasto(e.target.value)}
                       className="text-xs px-2.5 py-1.5 rounded-lg border border-emerald-300 dark:border-emerald-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white outline-none focus:ring-1 focus:ring-emerald-500"
-                    >
-                      {pastagens.map((p) => (
-                        <option key={p.id} value={p.id}>
-                          {p.nome_pasto} ({p.tipo_capim || 'Pasto'})
-                        </option>
-                      ))}
-                    </select>
+                      options={pastagens.map((p) => ({
+                        value: p.id,
+                        label: `${p.nome_pasto} (${p.tipo_capim || 'Pasto'})`,
+                      }))}
+                    />
                     <Button
                       size="sm"
                       variant="primary"
