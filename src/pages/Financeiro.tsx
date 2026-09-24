@@ -7,6 +7,7 @@ import { Table, Column } from '../components/Table';
 import { Badge } from '../components/Badge';
 import { Input } from '../components/Input';
 import { Select } from '../components/Select';
+import { Modal } from '../components/Modal';
 import { FinanceiroSlidePanel } from './Financeiro/components/FinanceiroSlidePanel';
 import { FinanceiroModals } from './Financeiro/components/FinanceiroModals';
 import { EmptyState } from '../components/EmptyState';
@@ -45,6 +46,9 @@ export const FinanceiroPage: React.FC = () => {
   const [periodoSelecionado, setPeriodoSelecionado] = useState(getCurrentMonth);
   const [dataInicioPersonalizada, setDataInicioPersonalizada] = useState('');
   const [dataFimPersonalizada, setDataFimPersonalizada] = useState('');
+  const [dataInicioRascunho, setDataInicioRascunho] = useState('');
+  const [dataFimRascunho, setDataFimRascunho] = useState('');
+  const [periodoPersonalizadoModalOpen, setPeriodoPersonalizadoModalOpen] = useState(false);
   const [page, setPage] = useState(1);
   const limit = 10;
   const periodoPersonalizado = periodoSelecionado === 'personalizado';
@@ -63,6 +67,34 @@ export const FinanceiroPage: React.FC = () => {
     ...getMonthOptions(year),
     { value: 'personalizado', label: 'Personalizar período' },
   ];
+
+  const handlePeriodoChange = (nextPeriodo: string) => {
+    if (nextPeriodo === 'personalizado') {
+      setDataInicioRascunho(dataInicioPersonalizada);
+      setDataFimRascunho(dataFimPersonalizada);
+      setPeriodoPersonalizadoModalOpen(true);
+      return;
+    }
+
+    setPeriodoSelecionado(nextPeriodo);
+  };
+
+  const handleConfirmarPeriodoPersonalizado = () => {
+    if (!dataInicioRascunho || !dataFimRascunho) {
+      showToast('Informe a data inicial e a data final.', 'error');
+      return;
+    }
+
+    if (dataInicioRascunho > dataFimRascunho) {
+      showToast('A data inicial deve ser anterior à data final.', 'error');
+      return;
+    }
+
+    setDataInicioPersonalizada(dataInicioRascunho);
+    setDataFimPersonalizada(dataFimRascunho);
+    setPeriodoSelecionado('personalizado');
+    setPeriodoPersonalizadoModalOpen(false);
+  };
 
   useEffect(() => {
     setPage(1);
@@ -259,88 +291,74 @@ export const FinanceiroPage: React.FC = () => {
 
       {/* Tabela de Lançamentos */}
       <Card noPadding>
-        <div className="p-4 border-b border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-800 grid grid-cols-1 md:grid-cols-6 gap-3">
-          <div className="md:col-span-2">
+        <div className="p-4 border-b border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-800 grid grid-cols-1 md:grid-cols-5 gap-3 items-start">
+          <div>
             <Select
               id="filter-periodo-fin"
               noMargin
               label="Período dos lançamentos"
               value={periodoSelecionado}
-              onChange={(e) => setPeriodoSelecionado(e.target.value)}
+              onChange={(e) => handlePeriodoChange(e.target.value)}
               options={periodoOptions}
             />
-            {periodoPersonalizado && (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-2">
-                <Input
-                  id="filter-data-inicio-fin"
-                  noMargin
-                  type="date"
-                  label="Data inicial"
-                  value={dataInicioPersonalizada}
-                  max={dataFimPersonalizada || undefined}
-                  onChange={(e) => setDataInicioPersonalizada(e.target.value)}
-                />
-                <Input
-                  id="filter-data-fim-fin"
-                  noMargin
-                  type="date"
-                  label="Data final"
-                  value={dataFimPersonalizada}
-                  min={dataInicioPersonalizada || undefined}
-                  onChange={(e) => setDataFimPersonalizada(e.target.value)}
-                />
-              </div>
-            )}
           </div>
-          <Input
-            id="filter-search-fin"
-            noMargin
-            placeholder="Buscar por descrição ou categoria..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            icon={Search}
-          />
+          <div className="md:pt-5">
+            <Input
+              id="filter-search-fin"
+              noMargin
+              placeholder="Buscar por descrição ou categoria..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              icon={Search}
+            />
+          </div>
 
-          <Select
-            id="filter-tipo"
-            noMargin
-            value={tipo}
-            onChange={(e) => { setTipo(e.target.value); setPage(1); }}
-            options={[
-              { label: 'Todos os Tipos', value: 'all' },
-              { label: 'Receitas', value: 'receita' },
-              { label: 'Despesas', value: 'despesa' },
-            ]}
-          />
+          <div className="md:pt-5">
+            <Select
+              id="filter-tipo"
+              noMargin
+              value={tipo}
+              onChange={(e) => { setTipo(e.target.value); setPage(1); }}
+              options={[
+                { label: 'Todos os Tipos', value: 'all' },
+                { label: 'Receitas', value: 'receita' },
+                { label: 'Despesas', value: 'despesa' },
+              ]}
+            />
+          </div>
 
-          <Select
-            id="filter-categoria"
-            noMargin
-            value={categoria}
-            onChange={(e) => { setCategoria(e.target.value); setPage(1); }}
-            options={[
-              { label: 'Todas as Categorias', value: 'all' },
-              { label: 'Venda de Gado', value: 'venda_gado' },
-              { label: 'Venda de Leite', value: 'venda_leite' },
-              { label: 'Compra de Insumos', value: 'compra_insumo' },
-              { label: 'Manutenção', value: 'manutencao' },
-              { label: 'Veterinário', value: 'veterinario' },
-              { label: 'Salários', value: 'salarios' },
-              { label: 'Outros', value: 'outros' },
-            ]}
-          />
+          <div className="md:pt-5">
+            <Select
+              id="filter-categoria"
+              noMargin
+              value={categoria}
+              onChange={(e) => { setCategoria(e.target.value); setPage(1); }}
+              options={[
+                { label: 'Todas as Categorias', value: 'all' },
+                { label: 'Venda de Gado', value: 'venda_gado' },
+                { label: 'Venda de Leite', value: 'venda_leite' },
+                { label: 'Compra de Insumos', value: 'compra_insumo' },
+                { label: 'Manutenção', value: 'manutencao' },
+                { label: 'Veterinário', value: 'veterinario' },
+                { label: 'Salários', value: 'salarios' },
+                { label: 'Outros', value: 'outros' },
+              ]}
+            />
+          </div>
 
-          <Select
-            id="filter-status"
-            noMargin
-            value={status}
-            onChange={(e) => { setStatus(e.target.value); setPage(1); }}
-            options={[
-              { label: 'Todos os Status', value: 'all' },
-              { label: 'Pago / Recebido', value: 'pago' },
-              { label: 'Pendente', value: 'pendente' },
-            ]}
-          />
+          <div className="md:pt-5">
+            <Select
+              id="filter-status"
+              noMargin
+              value={status}
+              onChange={(e) => { setStatus(e.target.value); setPage(1); }}
+              options={[
+                { label: 'Todos os Status', value: 'all' },
+                { label: 'Pago / Recebido', value: 'pago' },
+                { label: 'Pendente', value: 'pendente' },
+              ]}
+            />
+          </div>
         </div>
 
         {isLoadingTransacoes ? (
@@ -430,6 +448,46 @@ export const FinanceiroPage: React.FC = () => {
           </div>
         </div>
       )}
+
+      <Modal
+        isOpen={periodoPersonalizadoModalOpen}
+        onClose={() => setPeriodoPersonalizadoModalOpen(false)}
+        title="Personalizar período"
+        actions={
+          <>
+            <Button variant="secondary" onClick={() => setPeriodoPersonalizadoModalOpen(false)}>
+              Cancelar
+            </Button>
+            <Button onClick={handleConfirmarPeriodoPersonalizado}>
+              Aplicar período
+            </Button>
+          </>
+        }
+      >
+        <p className="mb-4 text-sm text-gray-500 dark:text-gray-400">
+          Escolha o intervalo que deseja visualizar. O período atual continua aplicado até a confirmação.
+        </p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <Input
+            id="filter-data-inicio-fin"
+            noMargin
+            type="date"
+            label="Data inicial"
+            value={dataInicioRascunho}
+            max={dataFimRascunho || undefined}
+            onChange={(e) => setDataInicioRascunho(e.target.value)}
+          />
+          <Input
+            id="filter-data-fim-fin"
+            noMargin
+            type="date"
+            label="Data final"
+            value={dataFimRascunho}
+            min={dataInicioRascunho || undefined}
+            onChange={(e) => setDataFimRascunho(e.target.value)}
+          />
+        </div>
+      </Modal>
 
       {/* SLIDE PANEL */}
       <FinanceiroSlidePanel

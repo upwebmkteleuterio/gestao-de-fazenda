@@ -44,7 +44,6 @@ interface MorphContextValue {
   placeholder: string;
   setPlaceholder: (placeholder: string) => void;
   reduce: boolean;
-  layoutId: string;
   triggerId: string;
   listId: string;
   panelPosition: { top: number; left: number; width: number } | null;
@@ -170,7 +169,6 @@ export function MorphSelect({
       placeholder,
       setPlaceholder,
       reduce,
-      layoutId: `${baseId}-surface`,
       triggerId: id ?? `${baseId}-trigger`,
       listId: `${baseId}-list`,
       panelPosition,
@@ -219,7 +217,6 @@ export function MorphSelectTrigger({ className, children, ...buttonProps }: Morp
         {!context.open ? (
           <motion.button
             key="trigger"
-            layoutId={context.layoutId}
             type="button"
             id={context.triggerId}
             disabled={context.disabled}
@@ -238,12 +235,12 @@ export function MorphSelectTrigger({ className, children, ...buttonProps }: Morp
             )}
             {...buttonProps}
           >
-            <motion.span layout="position" className="min-w-0 truncate">
+            <span className="min-w-0 truncate">
               {children}
-            </motion.span>
-            <motion.span layout="position" className="text-gray-500 dark:text-gray-400">
+            </span>
+            <span className="text-gray-500 dark:text-gray-400">
               <ChevronDown className="h-4 w-4" />
-            </motion.span>
+            </span>
           </motion.button>
         ) : null}
       </AnimatePresence>
@@ -266,7 +263,6 @@ export function MorphSelectContent({ className, children }: MorphSelectContentPr
         {context.open ? (
           <motion.div
             key="panel"
-            layoutId={context.layoutId}
             id={context.listId}
             role="listbox"
             aria-labelledby={context.triggerId}
@@ -282,7 +278,6 @@ export function MorphSelectContent({ className, children }: MorphSelectContentPr
           >
             <motion.button
               type="button"
-              layout="position"
               aria-expanded
               onClick={() => context.setOpen(false)}
               className={cn(ROW, 'outline-none')}
