@@ -5,9 +5,11 @@ import { Sidebar } from '@/components/Sidebar';
 import { Navbar } from '@/components/Navbar';
 import { Toast } from '@/components/Toast';
 import { AccountSettingsPanel } from '@/components/AccountSettingsPanel';
+import { useConnectivity } from '@/hooks/useConnectivity';
 
 export const AppLayout: React.FC = () => {
   const { theme, toast, hideToast, slidePanel, closeSlidePanel } = useUIStore();
+  useConnectivity();
   const [isAccountSettingsOpen, setIsAccountSettingsOpen] = useState(false);
   const location = useLocation();
 

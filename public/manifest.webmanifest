@@ -1,0 +1,19 @@
+{
+  "name": "FarmNexus - Gestão de Fazendas",
+  "short_name": "FarmNexus",
+  "description": "Sistema de gestão pecuária e de fazendas.",
+  "lang": "pt-BR",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#f9fafb",
+  "theme_color": "#064e3b",
+  "icons": [
+    {
+      "src": "/pwa-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

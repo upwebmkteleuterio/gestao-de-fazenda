@@ -19,6 +19,7 @@ import { BovinoSidebarIcon } from './BovinoSidebarIcon';
 import { useUIStore, PageRoute } from '../store/useUIStore';
 import { useAuth } from '@/contexts/AuthContext';
 import { useAppSettings } from '@/hooks/useAppSettings';
+import { ConnectionStatus } from '@/components/ConnectionStatus';
 
 export const Sidebar: React.FC = () => {
   const { setActivePage, sidebarOpen, toggleSidebar } = useUIStore();
@@ -163,7 +164,7 @@ export const Sidebar: React.FC = () => {
           ) : (
             <p className="text-xs font-semibold text-emerald-300 dark:text-emerald-400 truncate" title={farmName}>{farmName}</p>
           )}
-          <p className="text-[10px] text-emerald-200/60 dark:text-gray-400 mt-0.5">Status: Sincronizado</p>
+          <ConnectionStatus />
         </div>
       )}
     </aside>
