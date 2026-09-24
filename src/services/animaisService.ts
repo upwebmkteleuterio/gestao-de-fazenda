@@ -513,13 +513,43 @@ const setLocalSyncStatus = async (userId: string, animalId: string, status: Anim
 const errorMessage = (error: unknown) => error instanceof Error ? error.message : 'Falha ao sincronizar animal';
 const isCurrentUser = async (userId: string): Promise<boolean> => (await getCurrentUserId()) === userId;
 type ActiveAnimalSync = { userId: string; promise: Promise<void> };
+type ScheduledAnimalRetry = { userId: string; timeoutId: ReturnType<typeof setTimeout> };
 let activeAnimalSync: ActiveAnimalSync | null = null;
+let scheduledAnimalRetry: ScheduledAnimalRetry | null = null;
+
+const cancelScheduledAnimalRetry = (userId?: string) => {
+  if (!scheduledAnimalRetry || (userId && scheduledAnimalRetry.userId !== userId)) return;
+  clearTimeout(scheduledAnimalRetry.timeoutId);
+  scheduledAnimalRetry = null;
+};
+
+const scheduleAnimalRetry = (userId: string, nextRetryAt: string) => {
+  cancelScheduledAnimalRetry();
+  const delay = Math.max(0, new Date(nextRetryAt).getTime() - Date.now());
+  const timeoutId = setTimeout(() => {
+    scheduledAnimalRetry = null;
+    if (!isBrowserOnline()) return;
+    void getCurrentUserId().then((currentUserId) => {
+      if (currentUserId !== userId || !isBrowserOnline()) return;
+      return syncAnimais();
+    }).catch(() => undefined);
+  }, delay);
+  scheduledAnimalRetry = { userId, timeoutId };
+};
+
+useConnectivityStore.subscribe((state) => {
+  if (state.status === 'offline') cancelScheduledAnimalRetry();
+});
 
 const runAnimalSync = async (userId: string): Promise<void> => {
   const operations = await listOutboxOperations<AnimalOutboxPayload>({ userId, entity: ENTITY });
-  if (operations.length === 0) return;
+  if (operations.length === 0) {
+    cancelScheduledAnimalRetry(userId);
+    return;
+  }
   useConnectivityStore.getState().setSyncing();
   let encounteredFailure = false;
+  let failedOperationRetryAt: string | null = null;
   const completedOperationIds = new Set<string>();
 
   for (let operationIndex = 0; operationIndex < operations.length; operationIndex += 1) {
@@ -572,7 +602,8 @@ const runAnimalSync = async (userId: string): Promise<void> => {
       if (!(await isCurrentUser(userId))) return;
       const message = errorMessage(error);
       encounteredFailure = true;
-      await markOutboxOperationFailed(operation.id, message, new Date(Date.now() + 5000).toISOString());
+      const failedOperation = await markOutboxOperationFailed(operation.id, message, new Date(Date.now() + 5000).toISOString());
+      failedOperationRetryAt = failedOperation?.nextRetryAt ?? null;
       await setLocalSyncStatus(userId, operation.payload.id, 'error', message, false);
       useConnectivityStore.getState().setError(message);
       break;
@@ -580,7 +611,12 @@ const runAnimalSync = async (userId: string): Promise<void> => {
   }
 
   const remaining = await listOutboxOperations({ userId, entity: ENTITY });
-  if (remaining.length === 0 || !encounteredFailure) useConnectivityStore.getState().setOnline();
+  if (remaining.length === 0 || !encounteredFailure) {
+    cancelScheduledAnimalRetry(userId);
+    useConnectivityStore.getState().setOnline();
+  } else if (failedOperationRetryAt && (await isCurrentUser(userId)) && isBrowserOnline()) {
+    scheduleAnimalRetry(userId, failedOperationRetryAt);
+  }
 };
 
 export const syncAnimais = async (): Promise<void> => {
