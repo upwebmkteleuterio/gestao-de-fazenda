@@ -4,14 +4,17 @@ import {
   deleteOfflineRecords,
   deleteOutboxOperation,
   getOfflineRecord,
+  getOfflineSnapshot,
   listOfflineRecords,
   listOutboxOperations,
   markOutboxOperationFailed,
-  markOutboxOperationPending,
   markOutboxOperationProcessing,
+  offlineDb,
   saveOfflineRecord,
   saveOfflineRecordAndEnqueue,
   saveOfflineRecords,
+  saveOfflineSnapshot,
+  type OutboxOperation,
 } from '@/offline/database';
 import { useConnectivityStore } from '@/store/useConnectivityStore';
 import { animaisService } from '@/services/animaisService';
@@ -42,7 +45,7 @@ type PastagemDbRow = {
 };
 
 type PastagemDbWrite = Omit<PastagemDbRow, 'created_at'> & { created_at?: string };
-type PastagemLocal = Pastagem & { syncStatus?: 'synced' | 'pending' | 'processing' | 'error'; syncError?: string; localDeleted?: boolean };
+type PastagemLocal = Pastagem;
 type PastagemCreatePayload = { id: string; item: Omit<Pastagem, 'id' | 'createdAt'> };
 type PastagemUpdatePayload = { id: string; updates: Partial<Pastagem> };
 type PastagemDeletePayload = { id: string };
@@ -76,6 +79,7 @@ type ServicoDbRow = {
 
 const ENTITY = 'pastagem';
 const localRecordKey = (userId: string, pastagemId: string) => `${ENTITY}:${userId}:${pastagemId}`;
+const snapshotKey = (userId: string) => `${ENTITY}:${userId}`;
 const isBrowserOnline = () => (
   (typeof navigator === 'undefined' || navigator.onLine)
   && useConnectivityStore.getState().status !== 'offline'
@@ -118,20 +122,42 @@ const toServico = (row: ServicoDbRow): ServicoPastagem => ({
   createdAt: row.created_at,
 });
 
+const normalizeOptionalString = (value: unknown): string | null => (
+  typeof value === 'string' && value.trim() === '' ? null : (value as string | null | undefined) ?? null
+);
+
+const normalizeOptionalNumber = (value: unknown): number | null => {
+  if (value === undefined || value === null) return null;
+  if (typeof value === 'string' && value.trim() === '') return null;
+  const number = typeof value === 'number' ? value : Number(value);
+  return Number.isFinite(number) ? number : null;
+};
+
+const requiredString = (value: unknown, field: string): string => {
+  if (typeof value !== 'string' || value.trim() === '') throw new Error(`Informe ${field}.`);
+  return value;
+};
+
+const requiredNumber = (value: unknown, field: string): number => {
+  const number = normalizeOptionalNumber(value);
+  if (number === null) throw new Error(`Informe ${field}.`);
+  return number;
+};
+
 const buildPastagemInsert = (item: Omit<Pastagem, 'id' | 'createdAt'>, id: string): PastagemDbWrite => ({
   id,
-  nome_pasto: item.nome_pasto,
-  tipo_capim: item.tipo_capim,
-  area_ha: item.area_ha,
-  lotacao_maxima: item.lotacao_maxima,
-  data_entrada: item.data_entrada,
-  data_saida_prevista: item.data_saida_prevista ?? null,
-  qtd_manual: item.qtd_manual ?? null,
+  nome_pasto: requiredString(item.nome_pasto, 'o nome da pastagem'),
+  tipo_capim: requiredString(item.tipo_capim, 'o tipo de capim'),
+  area_ha: requiredNumber(item.area_ha, 'a área em hectares'),
+  lotacao_maxima: requiredNumber(item.lotacao_maxima, 'a lotação máxima'),
+  data_entrada: requiredString(item.data_entrada, 'a data de entrada'),
+  data_saida_prevista: normalizeOptionalString(item.data_saida_prevista),
+  qtd_manual: normalizeOptionalNumber(item.qtd_manual),
   usar_qtd_manual: item.usar_qtd_manual ?? false,
-  vacas_count_manual: item.vacas_count_manual ?? null,
-  bezerros_count_manual: item.bezerros_count_manual ?? null,
-  matrizes_count_manual: item.matrizes_count_manual ?? null,
-  touros_count_manual: item.touros_count_manual ?? null,
+  vacas_count_manual: normalizeOptionalNumber(item.vacas_count_manual),
+  bezerros_count_manual: normalizeOptionalNumber(item.bezerros_count_manual),
+  matrizes_count_manual: normalizeOptionalNumber(item.matrizes_count_manual),
+  touros_count_manual: normalizeOptionalNumber(item.touros_count_manual),
   qtd_animais: 0,
   vacas_count: 0,
   bezerros_count: 0,
@@ -141,34 +167,23 @@ const buildPastagemInsert = (item: Omit<Pastagem, 'id' | 'createdAt'>, id: strin
 
 const buildPastagemPatch = (updates: Partial<Pastagem>): Partial<PastagemDbWrite> => {
   const patch: Partial<PastagemDbWrite> = {};
-  if (updates.nome_pasto !== undefined) patch.nome_pasto = updates.nome_pasto;
-  if (updates.tipo_capim !== undefined) patch.tipo_capim = updates.tipo_capim;
-  if (updates.area_ha !== undefined) patch.area_ha = updates.area_ha;
-  if (updates.lotacao_maxima !== undefined) patch.lotacao_maxima = updates.lotacao_maxima;
-  if (updates.data_entrada !== undefined) patch.data_entrada = updates.data_entrada;
-  if ('data_saida_prevista' in updates) patch.data_saida_prevista = updates.data_saida_prevista ?? null;
-  if ('qtd_manual' in updates) patch.qtd_manual = updates.qtd_manual ?? null;
+  if (updates.nome_pasto !== undefined) patch.nome_pasto = requiredString(updates.nome_pasto, 'o nome da pastagem');
+  if (updates.tipo_capim !== undefined) patch.tipo_capim = requiredString(updates.tipo_capim, 'o tipo de capim');
+  if (updates.area_ha !== undefined) patch.area_ha = requiredNumber(updates.area_ha, 'a área em hectares');
+  if (updates.lotacao_maxima !== undefined) patch.lotacao_maxima = requiredNumber(updates.lotacao_maxima, 'a lotação máxima');
+  if (updates.data_entrada !== undefined) patch.data_entrada = requiredString(updates.data_entrada, 'a data de entrada');
+  if ('data_saida_prevista' in updates) patch.data_saida_prevista = normalizeOptionalString(updates.data_saida_prevista);
+  if ('qtd_manual' in updates) patch.qtd_manual = normalizeOptionalNumber(updates.qtd_manual);
   if (updates.usar_qtd_manual !== undefined) patch.usar_qtd_manual = updates.usar_qtd_manual;
-  if ('vacas_count_manual' in updates) patch.vacas_count_manual = updates.vacas_count_manual ?? null;
-  if ('bezerros_count_manual' in updates) patch.bezerros_count_manual = updates.bezerros_count_manual ?? null;
-  if ('matrizes_count_manual' in updates) patch.matrizes_count_manual = updates.matrizes_count_manual ?? null;
-  if ('touros_count_manual' in updates) patch.touros_count_manual = updates.touros_count_manual ?? null;
+  if ('vacas_count_manual' in updates) patch.vacas_count_manual = normalizeOptionalNumber(updates.vacas_count_manual);
+  if ('bezerros_count_manual' in updates) patch.bezerros_count_manual = normalizeOptionalNumber(updates.bezerros_count_manual);
+  if ('matrizes_count_manual' in updates) patch.matrizes_count_manual = normalizeOptionalNumber(updates.matrizes_count_manual);
+  if ('touros_count_manual' in updates) patch.touros_count_manual = normalizeOptionalNumber(updates.touros_count_manual);
   return patch;
 };
 
-const cleanLocalPastagem = (item: PastagemLocal): Pastagem => {
-  const {
-    syncStatus: _syncStatus,
-    syncError: _syncError,
-    localDeleted: _localDeleted,
-    ...clean
-  } = item;
-  return clean;
-};
-
 const toCreatePayload = (item: PastagemLocal): Omit<Pastagem, 'id' | 'createdAt'> => {
-  const clean = cleanLocalPastagem(item);
-  const { id: _id, createdAt: _createdAt, ...payload } = clean;
+  const { id: _id, createdAt: _createdAt, syncStatus: _syncStatus, syncError: _syncError, localDeleted: _localDeleted, ...payload } = item;
   return payload;
 };
 
@@ -176,6 +191,9 @@ const toUpdatePayload = (updates: Partial<Pastagem>): Partial<Pastagem> => {
   const {
     id: _id,
     createdAt: _createdAt,
+    syncStatus: _syncStatus,
+    syncError: _syncError,
+    localDeleted: _localDeleted,
     ...payload
   } = updates;
   return payload;
@@ -214,11 +232,15 @@ const filterLocalPastagens = (items: Pastagem[], filters?: { search?: string; st
   return { data: filtered.slice(start, start + filters.limit), total };
 };
 
-const readLocalPastagens = async (userId: string) => {
-  const records = await listOfflineRecords<PastagemLocal>({ userId, entity: ENTITY });
-  return records
-    .filter((record) => !record.data.localDeleted)
-    .map((record) => record.data);
+const readLocalPastagens = async (userId: string): Promise<{ data: Pastagem[]; capturedAt?: string }> => {
+  const [records, snapshot] = await Promise.all([
+    listOfflineRecords<PastagemLocal>({ userId, entity: ENTITY }),
+    getOfflineSnapshot<Pastagem[]>(snapshotKey(userId)),
+  ]);
+  return {
+    data: records.filter((record) => !record.data.localDeleted).map((record) => record.data),
+    capturedAt: snapshot?.capturedAt,
+  };
 };
 
 const hasPendingWork = (item: PastagemLocal) => (
@@ -241,13 +263,21 @@ const cacheOnlinePastagens = async (userId: string, items: Pastagem[], replaceCo
     return localRecord(userId, data);
   });
   await saveOfflineRecords(records);
+  let capturedAt: string | undefined;
   if (replaceCompleteCache) {
     const staleKeys = existing
       .filter((record) => !remoteIds.has(record.entityId) && !hasPendingWork(record.data))
       .map((record) => record.key);
     await deleteOfflineRecords(staleKeys);
+    capturedAt = new Date().toISOString();
+    await saveOfflineSnapshot({
+      key: snapshotKey(userId),
+      scope: userId,
+      data: items,
+      capturedAt,
+    });
   }
-  return pending;
+  return { pending, capturedAt };
 };
 
 const mergePendingPastagens = (
@@ -304,7 +334,7 @@ const queueLocalCreate = async (userId: string, item: Omit<Pastagem, 'id' | 'cre
       payload: { id, item: toCreatePayload(local) },
     },
   );
-  return cleanLocalPastagem(local);
+  return local;
 };
 
 const queueLocalUpdate = async (userId: string, id: string, updates: Partial<Pastagem>): Promise<Pastagem> => {
@@ -329,7 +359,7 @@ const queueLocalUpdate = async (userId: string, id: string, updates: Partial<Pas
       payload: { id, updates: toUpdatePayload(updates) },
     },
   );
-  return cleanLocalPastagem(local);
+  return local;
 };
 
 const queueLocalDelete = async (userId: string, id: string): Promise<boolean> => {
@@ -357,8 +387,15 @@ const queueLocalDelete = async (userId: string, id: string): Promise<boolean> =>
 
 const remoteCreatePastagem = async (item: Omit<Pastagem, 'id' | 'createdAt'>, id: string): Promise<Pastagem> => {
   const { data, error } = await supabase.from('pastagens').insert(buildPastagemInsert(item, id)).select('*').single();
-  if (error) throw error;
-  return toPastagem(data as unknown as PastagemDbRow);
+  if (!error) return toPastagem(data as unknown as PastagemDbRow);
+
+  const { data: existing, error: lookupError } = await supabase
+    .from('pastagens')
+    .select('*')
+    .eq('id', id)
+    .maybeSingle();
+  if (!lookupError && existing) return toPastagem(existing as unknown as PastagemDbRow);
+  throw error;
 };
 
 const remoteUpdatePastagem = async (id: string, updates: Partial<Pastagem>): Promise<Pastagem> => {
@@ -378,11 +415,11 @@ const remoteDeletePastagem = async (id: string): Promise<void> => {
 };
 
 export const pastagensService = {
-  getAll: async (userId: string, filters?: { search?: string; status?: string; page?: number; limit?: number }): Promise<{ data: Pastagem[]; total: number; source: 'remote' | 'local' }> => {
+  getAll: async (userId: string, filters?: { search?: string; status?: string; page?: number; limit?: number }): Promise<{ data: Pastagem[]; total: number; source: 'remote' | 'local'; capturedAt?: string }> => {
     if (!userId) return { data: [], total: 0, source: 'local' };
     if (!isBrowserOnline()) {
-      const local = filterLocalPastagens(await readLocalPastagens(userId), filters);
-      return { ...local, source: 'local' };
+      const local = await readLocalPastagens(userId);
+      return { ...filterLocalPastagens(local.data, filters), source: 'local', capturedAt: local.capturedAt };
     }
 
     try {
@@ -426,18 +463,21 @@ export const pastagensService = {
       }
 
       let pending: PastagemLocal[] = [];
+      let capturedAt: string | undefined;
       try {
         const replaceComplete = !hasListFilters;
-        pending = await cacheOnlinePastagens(userId, items, replaceComplete);
+        const cached = await cacheOnlinePastagens(userId, items, replaceComplete);
+        pending = cached.pending;
+        capturedAt = cached.capturedAt;
       } catch {
         pending = [];
       }
-      return { ...mergePendingPastagens(items, total, pending, filters), source: 'remote' };
+      return { ...mergePendingPastagens(items, total, pending, filters), source: 'remote', capturedAt };
     } catch (error) {
       const message = error instanceof Error ? error.message.toLowerCase() : '';
       if (!isBrowserOnline() || /network|fetch|offline|load failed/.test(message)) {
-        const local = filterLocalPastagens(await readLocalPastagens(userId), filters);
-        return { ...local, source: 'local' };
+        const local = await readLocalPastagens(userId);
+        return { ...filterLocalPastagens(local.data, filters), source: 'local', capturedAt: local.capturedAt };
       }
       throw error;
     }
@@ -451,11 +491,15 @@ export const pastagensService = {
 
   create: async (userId: string, item: Omit<Pastagem, 'id' | 'createdAt'>): Promise<Pastagem> => {
     if (!userId) throw new Error('Sua sessão expirou. Entre novamente.');
-    return queueLocalCreate(userId, item, crypto.randomUUID());
+    const id = crypto.randomUUID();
+    buildPastagemInsert(item, id);
+    return queueLocalCreate(userId, item, id);
   },
 
   update: async (userId: string, id: string, updates: Partial<Pastagem>): Promise<Pastagem> => {
     if (!userId) throw new Error('Sua sessão expirou. Entre novamente.');
+    const patch = buildPastagemPatch(updates);
+    if (Object.keys(patch).length === 0) throw new Error('Nenhuma alteração válida foi informada.');
     return queueLocalUpdate(userId, id, updates);
   },
 
@@ -526,7 +570,29 @@ useConnectivityStore.subscribe((state) => {
   if (state.status === 'offline') cancelScheduledRetry();
 });
 
+const getPastagemOperationId = (operation: OutboxOperation<PastagemOutboxPayload>): string => operation.payload.id;
+
+const compactUnsyncedCreateDelete = async (userId: string): Promise<void> => {
+  await offlineDb.transaction('rw', offlineDb.localRecords, offlineDb.outbox, async () => {
+    const operations = await offlineDb.outbox.toArray() as Array<OutboxOperation<PastagemOutboxPayload>>;
+    const userOperations = operations.filter((operation) => operation.userId === userId && operation.entity === ENTITY);
+    const ids = new Set(userOperations.map(getPastagemOperationId));
+
+    for (const pastagemId of ids) {
+      const related = userOperations.filter((operation) => getPastagemOperationId(operation) === pastagemId);
+      const create = related.find((operation) => operation.operation === 'create');
+      const deletion = related.find((operation) => operation.operation === 'delete');
+      if (!create || !deletion || create.status !== 'pending' || deletion.status !== 'pending') continue;
+      if (related.some((operation) => operation.status !== 'pending')) continue;
+
+      await offlineDb.outbox.bulkDelete(related.map((operation) => operation.id));
+      await offlineDb.localRecords.delete(localRecordKey(userId, pastagemId));
+    }
+  });
+};
+
 const runPastagemSync = async (userId: string): Promise<void> => {
+  await compactUnsyncedCreateDelete(userId);
   const operations = await listOutboxOperations<PastagemOutboxPayload>({ userId, entity: ENTITY });
   if (operations.length === 0) return;
   useConnectivityStore.getState().setSyncing();
@@ -534,7 +600,6 @@ const runPastagemSync = async (userId: string): Promise<void> => {
 
   for (const operation of operations) {
     if (!(await isCurrentUser(userId))) return;
-    if (operation.status === 'processing') await markOutboxOperationPending(operation.id);
     if (operation.nextRetryAt && operation.nextRetryAt > new Date().toISOString()) {
       retryAt = operation.nextRetryAt;
       break;
@@ -562,6 +627,7 @@ const runPastagemSync = async (userId: string): Promise<void> => {
       }
       await deleteOutboxOperation(operation.id);
     } catch (error) {
+      console.error('[SYNC PASTAGENS ERROR]', error);
       if (!(await isCurrentUser(userId))) return;
       const message = error instanceof Error ? error.message : 'Falha ao sincronizar pastagem';
       const failed = await markOutboxOperationFailed(operation.id, message, new Date(Date.now() + 5000).toISOString());

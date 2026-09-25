@@ -6,7 +6,7 @@ import { pastagensService, syncPastagens } from '../services/pastagensService';
 import { Pastagem, ServicoPastagem } from '../types/database';
 
 type PastagemFilters = { search?: string; status?: string; page?: number; limit?: number };
-type PastagemQueryData = { data: Pastagem[]; total: number; source: 'remote' | 'local' };
+type PastagemQueryData = { data: Pastagem[]; total: number; source: 'remote' | 'local'; capturedAt?: string };
 
 export const usePastagens = (filters?: PastagemFilters, pastoIdSelected?: string) => {
   const queryClient = useQueryClient();
@@ -114,6 +114,8 @@ export const usePastagens = (filters?: PastagemFilters, pastoIdSelected?: string
   return {
     pastagens: pastosQuery.data?.data || [],
     total: pastosQuery.data?.total || 0,
+    source: pastosQuery.data?.source ?? null,
+    capturedAt: pastosQuery.data?.capturedAt,
     isLoadingPastagens: pastosQuery.isLoading,
     isErrorPastagens: pastosQuery.isError,
     errorPastagens: pastosQuery.error,

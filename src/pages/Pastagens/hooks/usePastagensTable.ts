@@ -16,6 +16,8 @@ export const usePastagensTable = (selectedPastoId?: string) => {
   const {
     pastagens,
     total,
+    source,
+    capturedAt,
     servicos,
     isLoadingPastagens,
     isErrorPastagens,
@@ -60,6 +62,8 @@ export const usePastagensTable = (selectedPastoId?: string) => {
     handleSelectAllPastos,
     pastagens: pastagensFiltradas,
     total,
+    source,
+    capturedAt,
     servicos,
     isLoadingPastagens,
     isErrorPastagens,

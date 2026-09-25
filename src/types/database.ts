@@ -69,6 +69,8 @@ export interface Pesagem {
   createdAt: string;
 }
 
+export type PastagemSyncStatus = 'synced' | 'pending' | 'processing' | 'error';
+
 export interface Pastagem {
   id: string;
   nome_pasto: string;
@@ -91,6 +93,9 @@ export interface Pastagem {
   matrizes_count?: number;
   touros_count?: number;
   createdAt: string;
+  syncStatus?: PastagemSyncStatus;
+  syncError?: string;
+  localDeleted?: boolean;
 }
 
 export interface ServicoPastagem {

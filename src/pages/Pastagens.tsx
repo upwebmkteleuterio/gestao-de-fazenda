@@ -32,6 +32,8 @@ export const PastagensPage: React.FC = () => {
     handleToggleSelectPasto,
     handleSelectAllPastos,
     pastagens,
+    source,
+    capturedAt,
     servicos,
     isLoadingPastagens,
     isErrorPastagens,
@@ -87,6 +89,12 @@ export const PastagensPage: React.FC = () => {
     <div className="space-y-6 animate-fade-in pb-12">
       {/* Header com ações principais */}
       <PastagensHeader onNovoPiquete={handleOpenCreate} />
+
+      {source === 'local' && (
+        <div className="flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-200" role="status">
+          <span>Exibindo dados locais{capturedAt ? ` · última captura ${new Date(capturedAt).toLocaleString('pt-BR')}` : ''}.</span>
+        </div>
+      )}
 
       {/* Busca e Filtros de Status de Ocupação */}
       <PastagensFilters

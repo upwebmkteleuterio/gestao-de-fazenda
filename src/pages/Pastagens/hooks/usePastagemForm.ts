@@ -84,8 +84,25 @@ export const usePastagemForm = ({
   // Salvar Pastagem (Criar ou Atualizar)
   const handleSavePasto = async (e?: FormEvent) => {
     if (e) e.preventDefault();
-    if (isSaving || !pastoForm.nome_pasto?.trim()) {
-      if (!pastoForm.nome_pasto?.trim()) showToast('Informe o nome da área/pasto.', 'error');
+    if (isSaving) return;
+    if (!pastoForm.nome_pasto?.trim()) {
+      showToast('Informe o nome da área/pasto.', 'error');
+      return;
+    }
+    if (!pastoForm.tipo_capim?.trim()) {
+      showToast('Informe o tipo de capim.', 'error');
+      return;
+    }
+    if (!pastoForm.data_entrada?.trim()) {
+      showToast('Informe a data de entrada.', 'error');
+      return;
+    }
+    if (typeof pastoForm.area_ha !== 'number' || !Number.isFinite(pastoForm.area_ha)) {
+      showToast('Informe uma área em hectares válida.', 'error');
+      return;
+    }
+    if (typeof pastoForm.lotacao_maxima !== 'number' || !Number.isFinite(pastoForm.lotacao_maxima)) {
+      showToast('Informe uma lotação máxima válida.', 'error');
       return;
     }
 
@@ -101,8 +118,8 @@ export const usePastagemForm = ({
       }
       setSlideOpen(false);
       syncLocalMutation();
-    } catch {
-      showToast('Erro ao salvar pastagem.', 'error');
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : 'Erro ao salvar pastagem.', 'error');
     } finally {
       setIsSaving(false);
     }
