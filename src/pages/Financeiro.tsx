@@ -285,11 +285,10 @@ export const FinanceiroPage: React.FC = () => {
         </div>
       </div>
 
-      {(isOffline || source === 'local' || resumoSource === 'local' || capturedAt) && (
+      {isOffline && (
         <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-200" role="status">
-          <strong>{isOffline ? 'Modo offline:' : source === 'local' || resumoSource === 'local' ? 'Dados locais:' : 'Cache offline disponível:'}</strong>{' '}
-          {source === 'local' || resumoSource === 'local' || isOffline ? 'Exibindo dados locais do mês atual. ' : 'O mês atual está pré-carregado para uso offline. '}
-          Períodos históricos, busca, filtros e paginação ficam disponíveis somente online.
+          <strong>Modo offline:</strong>{' '}
+          Exibindo dados locais do mês atual. Períodos históricos, busca, filtros e paginação ficam disponíveis somente online.
           {capturedAt && <span className="ml-1 text-xs opacity-80">Atualizado em {new Date(capturedAt).toLocaleString('pt-BR')}</span>}
         </div>
       )}

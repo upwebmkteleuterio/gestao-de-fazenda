@@ -4,7 +4,7 @@ import { useLotes } from '@/hooks/useLotes';
 import { useConnectivityStore } from '@/store/useConnectivityStore';
 import { usePastagens } from '@/hooks/usePastagens';
 import { useUIStore } from '@/store/useUIStore';
-import { exportarAnimaisCSV } from '../utils/animalUtils';
+import { exportarAnimaisXLSX } from '../utils/animalUtils';
 
 export const useAnimaisTable = () => {
   const {
@@ -134,11 +134,11 @@ export const useAnimaisTable = () => {
   };
 
   const handleExportRelatorio = () => {
-    const success = exportarAnimaisCSV(todosAnimais);
+    const success = exportarAnimaisXLSX(todosAnimais);
     if (!success) {
       showToast('Nenhum animal para exportar.', 'error');
     } else {
-      showToast('Relatório Excel (CSV) baixado com sucesso!', 'success');
+      showToast('Relatório Excel baixado com sucesso!', 'success');
     }
   };
 

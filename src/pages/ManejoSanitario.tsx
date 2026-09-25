@@ -408,11 +408,11 @@ export const ManejoSanitarioPage: React.FC = () => {
         </div>
       </div>
 
-      {(isOffline || source === 'local' || capturedAt) && (
+      {isOffline && (
         <div className="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-amber-900 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-200">
           <WifiOff className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
           <div className="text-sm">
-            <p className="font-semibold">{isOffline ? 'Modo offline: exibindo as duas primeiras páginas locais.' : source === 'local' ? 'Dados locais: exibindo o histórico sanitário em cache.' : 'Cache offline disponível para o histórico sanitário.'}</p>
+            <p className="font-semibold">Modo offline: exibindo as duas primeiras páginas locais.</p>
             <p className="mt-0.5 text-xs">Busca, filtro, paginação e ações ficam disponíveis novamente quando a conexão for restaurada. As duas abas continuam disponíveis offline.</p>
             {capturedAt && <p className="mt-1 text-[11px] opacity-80">Cache atualizado em {new Date(capturedAt).toLocaleString('pt-BR')}</p>}
           </div>
