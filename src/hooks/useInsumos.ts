@@ -1,77 +1,83 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { insumosService } from '../services/insumosService';
-import { Insumo, MovimentacaoInsumo } from '../types/database';
+import { insumosService, syncInsumos } from '@/services/insumosService';
+import { useAuth } from '@/contexts/AuthContext';
+import { useConnectivityStore } from '@/store/useConnectivityStore';
+import type { Insumo, MovimentacaoInsumo } from '@/types/database';
 
 export const useInsumos = (
   categoria?: string,
   filters?: { search?: string; estoqueBaixo?: boolean; page?: number; limit?: number },
-  selectedInsumoId?: string
+  selectedInsumoId?: string,
 ) => {
   const queryClient = useQueryClient();
+  const { session } = useAuth();
+  const userId = session?.user.id;
+  const connectivityStatus = useConnectivityStore((state) => state.status);
+  const isOffline = connectivityStatus === 'offline' || (typeof navigator !== 'undefined' && !navigator.onLine);
 
   const insumosQuery = useQuery({
-    queryKey: ['insumos', categoria, filters],
+    queryKey: ['insumos', userId, categoria, filters],
     queryFn: () => insumosService.getAll(categoria, filters),
+    enabled: Boolean(userId),
   });
-
   const lowStockCountQuery = useQuery({
-    queryKey: ['insumos', 'estoque-baixo-total'],
+    queryKey: ['insumos', 'estoque-baixo-total', userId],
     queryFn: () => insumosService.getAll(undefined, { estoqueBaixo: true, page: 1, limit: 1 }),
+    enabled: Boolean(userId),
+  });
+  const movsQuery = useQuery({
+    queryKey: ['movimentacoes_insumos', userId, selectedInsumoId],
+    queryFn: () => insumosService.getMovimentacoes(selectedInsumoId),
+    enabled: Boolean(userId),
   });
 
-  const movsQuery = useQuery({
-    queryKey: ['movimentacoes_insumos', selectedInsumoId],
-    queryFn: () => insumosService.getMovimentacoes(selectedInsumoId),
-  });
+  const invalidate = () => {
+    void queryClient.invalidateQueries({ queryKey: ['insumos'] });
+    void queryClient.invalidateQueries({ queryKey: ['movimentacoes_insumos'] });
+    void queryClient.invalidateQueries({ queryKey: ['dashboard-summary'] });
+  };
+  const refreshAfterMutation = () => {
+    if (!userId) return;
+    void syncInsumos(userId).catch(() => undefined).finally(invalidate);
+  };
 
   const createMutation = useMutation({
+    networkMode: 'always',
     mutationFn: (item: Omit<Insumo, 'id' | 'createdAt'>) => insumosService.create(item),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['insumos'] });
-      queryClient.invalidateQueries({ queryKey: ['movimentacoes_insumos'] });
-      queryClient.invalidateQueries({ queryKey: ['dashboard-summary'] });
-    },
+    onSuccess: refreshAfterMutation,
   });
-
   const updateMutation = useMutation({
+    networkMode: 'always',
     mutationFn: ({ id, updates }: { id: string; updates: Partial<Insumo> }) => insumosService.update(id, updates),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['insumos'] });
-      queryClient.invalidateQueries({ queryKey: ['movimentacoes_insumos'] });
-      queryClient.invalidateQueries({ queryKey: ['dashboard-summary'] });
-    },
+    onSuccess: refreshAfterMutation,
   });
-
   const deleteMutation = useMutation({
+    networkMode: 'always',
     mutationFn: (id: string) => insumosService.delete(id),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['insumos'] });
-      queryClient.invalidateQueries({ queryKey: ['movimentacoes_insumos'] });
-      queryClient.invalidateQueries({ queryKey: ['dashboard-summary'] });
-    },
+    onSuccess: refreshAfterMutation,
   });
-
   const registrarMovMutation = useMutation({
+    networkMode: 'always',
     mutationFn: (mov: Omit<MovimentacaoInsumo, 'id' | 'createdAt'>) => insumosService.registrarMovimentacao(mov),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['insumos'] });
-      queryClient.invalidateQueries({ queryKey: ['movimentacoes_insumos'] });
-      queryClient.invalidateQueries({ queryKey: ['dashboard-summary'] });
-    },
+    onSuccess: invalidate,
   });
 
   return {
-    insumos: insumosQuery.data?.data || [],
-    totalInsumos: insumosQuery.data?.total || 0,
-    totalEstoqueBaixoCount: lowStockCountQuery.data?.total || 0,
+    insumos: insumosQuery.data?.data ?? [],
+    totalInsumos: insumosQuery.data?.total ?? 0,
+    totalEstoqueBaixoCount: lowStockCountQuery.data?.total ?? 0,
     isLoadingInsumos: insumosQuery.isLoading,
     isErrorInsumos: insumosQuery.isError,
     errorInsumos: insumosQuery.error,
     refetchInsumos: insumosQuery.refetch,
-    movimentacoes: movsQuery.data || [],
+    source: insumosQuery.data?.source ?? null,
+    capturedAt: insumosQuery.data?.capturedAt,
+    movimentacoes: movsQuery.data ?? [],
     isLoadingMovimentacoes: movsQuery.isLoading,
     isErrorMovimentacoes: movsQuery.isError,
     refetchMovimentacoes: movsQuery.refetch,
+    isOffline,
+    isMovimentacaoDisabledOffline: isOffline || insumosQuery.data?.source === 'local',
     createInsumo: createMutation.mutateAsync,
     updateInsumo: updateMutation.mutateAsync,
     deleteInsumo: deleteMutation.mutateAsync,

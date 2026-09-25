@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { LockKeyhole, Save, UserRound } from 'lucide-react';
+import { Eye, EyeOff, LockKeyhole, Save, UserRound } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { useAppSettings } from '@/hooks/useAppSettings';
@@ -30,6 +30,8 @@ export const AccountSettingsPanel: React.FC<AccountSettingsPanelProps> = ({ isOp
   const [farmNameDraft, setFarmNameDraft] = useState(farmName);
   const [password, setPassword] = useState('');
   const [passwordConfirmation, setPasswordConfirmation] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [showPasswordConfirmation, setShowPasswordConfirmation] = useState(false);
   const [isSavingProfile, setIsSavingProfile] = useState(false);
   const [isSavingPassword, setIsSavingPassword] = useState(false);
   const [profileError, setProfileError] = useState<string | null>(null);
@@ -41,6 +43,8 @@ export const AccountSettingsPanel: React.FC<AccountSettingsPanelProps> = ({ isOp
     setFarmNameDraft(farmName);
     setPassword('');
     setPasswordConfirmation('');
+    setShowPassword(false);
+    setShowPasswordConfirmation(false);
     setProfileError(null);
     setPasswordError(null);
   }, [displayName, farmName, isOpen]);
@@ -184,19 +188,41 @@ export const AccountSettingsPanel: React.FC<AccountSettingsPanelProps> = ({ isOp
           <Input
             id="account-password"
             label="Nova senha"
-            type="password"
+            type={showPassword ? 'text' : 'password'}
             value={password}
             onChange={(event) => setPassword(event.target.value)}
             autoComplete="new-password"
             error={passwordError ?? undefined}
+            trailingAction={(
+              <button
+                type="button"
+                onClick={() => setShowPassword((visible) => !visible)}
+                className="rounded-md p-1 text-gray-500 hover:text-emerald-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 dark:text-gray-400 dark:hover:text-emerald-400"
+                aria-label={showPassword ? 'Ocultar nova senha' : 'Mostrar nova senha'}
+                aria-pressed={showPassword}
+              >
+                {showPassword ? <EyeOff className="h-4 w-4" aria-hidden="true" /> : <Eye className="h-4 w-4" aria-hidden="true" />}
+              </button>
+            )}
           />
           <Input
             id="account-password-confirmation"
             label="Confirmar nova senha"
-            type="password"
+            type={showPasswordConfirmation ? 'text' : 'password'}
             value={passwordConfirmation}
             onChange={(event) => setPasswordConfirmation(event.target.value)}
             autoComplete="new-password"
+            trailingAction={(
+              <button
+                type="button"
+                onClick={() => setShowPasswordConfirmation((visible) => !visible)}
+                className="rounded-md p-1 text-gray-500 hover:text-emerald-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 dark:text-gray-400 dark:hover:text-emerald-400"
+                aria-label={showPasswordConfirmation ? 'Ocultar confirmação da nova senha' : 'Mostrar confirmação da nova senha'}
+                aria-pressed={showPasswordConfirmation}
+              >
+                {showPasswordConfirmation ? <EyeOff className="h-4 w-4" aria-hidden="true" /> : <Eye className="h-4 w-4" aria-hidden="true" />}
+              </button>
+            )}
           />
           <Button
             type="submit"

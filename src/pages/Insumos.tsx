@@ -56,10 +56,14 @@ export const InsumosPage: React.FC = () => {
     isLoadingInsumos,
     isErrorInsumos,
     refetchInsumos,
-    createInsumo, 
-    updateInsumo, 
-    deleteInsumo, 
-    registrarMovimentacao 
+    source,
+    capturedAt,
+    isOffline,
+    isMovimentacaoDisabledOffline,
+    createInsumo,
+    updateInsumo,
+    deleteInsumo,
+    registrarMovimentacao
   } = useInsumos(categoriaFilter, { search, estoqueBaixo: apenasEstoqueBaixo, page, limit });
 
   const insumosFiltrados = insumos;
@@ -187,6 +191,10 @@ export const InsumosPage: React.FC = () => {
   const handleSaveBaixa = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
 
+    if (isMovimentacaoDisabledOffline) {
+      showToast('Offline: registrar movimentação está indisponível para preservar o saldo e o histórico.', 'error');
+      return;
+    }
     if (!formBaixa.insumo_id || formBaixa.quantidade_utilizada <= 0) {
       showToast('Selecione o produto e informe uma quantidade válida.', 'error');
       return;
@@ -340,6 +348,8 @@ export const InsumosPage: React.FC = () => {
             variant="secondary"
             icon={TrendingDown}
             onClick={() => handleOpenBaixa()}
+            disabled={isMovimentacaoDisabledOffline}
+            title={isMovimentacaoDisabledOffline ? 'Offline: movimentações indisponíveis' : undefined}
             className="border-amber-300 dark:border-amber-800 text-amber-800 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/40 hover:bg-amber-100"
           >
             Registrar Uso (Dar Baixa)
@@ -430,6 +440,16 @@ export const InsumosPage: React.FC = () => {
           </div>
         </div>
       </Card>
+
+      {(isOffline || source === 'local' || capturedAt) && (
+        <div role="status" className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-200">
+          <strong>{isOffline || source === 'local' ? 'Dados locais:' : 'Cache offline disponível:'}</strong>{' '}
+          {isOffline || source === 'local'
+            ? 'Exibindo o cadastro completo de insumos disponível localmente. O histórico usa somente os 10 registros mais recentes.'
+            : 'O cadastro completo de insumos e a primeira janela do histórico foram preparados para uso offline.'}
+          {capturedAt && <span className="ml-1 text-xs opacity-80">Atualizado em {new Date(capturedAt).toLocaleString('pt-BR')}</span>}
+        </div>
+      )}
 
       {/* TELA 6 - LISTAGEM (PRIORIDADE VISUAL) */}
       <Card title="Produtos e Insumos Cadastrados">
@@ -529,6 +549,8 @@ export const InsumosPage: React.FC = () => {
                               e.stopPropagation();
                               handleOpenBaixa(item);
                             }}
+                            disabled={isMovimentacaoDisabledOffline}
+                            title={isMovimentacaoDisabledOffline ? 'Offline: movimentações indisponíveis' : undefined}
                             className="text-xs text-amber-700 hover:text-amber-800 dark:text-amber-400 font-bold"
                           >
                             Dar Baixa
@@ -563,6 +585,11 @@ export const InsumosPage: React.FC = () => {
       </Card>
 
       {/* HISTÓRICO DE MOVIMENTAÇÕES E BAIXAS DE ESTOQUE */}
+      {(isOffline || source === 'local') && (
+        <div role="status" className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-200">
+          Dados locais: o cadastro de insumos está disponível completo no cache. O histórico mostra apenas os 10 registros mais recentes; busca, filtros e paginação do histórico dependem da conexão.
+        </div>
+      )}
       <Card title="Histórico Recente de Entradas e Baixas de Estoque">
         <div className="overflow-x-auto">
           <table className="w-full text-sm text-left">
@@ -622,6 +649,7 @@ export const InsumosPage: React.FC = () => {
         setItemToDelete={setItemToDelete}
         setModalOpen={setModalOpen}
         insumos={insumos}
+        isMovimentacaoDisabledOffline={isMovimentacaoDisabledOffline}
       />
       <InsumosModals
         modalOpen={modalOpen}

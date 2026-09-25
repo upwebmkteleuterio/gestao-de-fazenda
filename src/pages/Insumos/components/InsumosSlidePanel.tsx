@@ -10,7 +10,7 @@ export const InsumosSlidePanel = ({
   slideOpen, setSlideOpen, slideMode, setSlideMode, selectedInsumo,
   formCadastro, setFormCadastro, handleSaveCadastro,
   formBaixa, setFormBaixa, handleSaveBaixa,
-  setItemToDelete, setModalOpen, insumos
+  setItemToDelete, setModalOpen, insumos, isMovimentacaoDisabledOffline
 }: any) => (
   <>
     <SlidePanel
@@ -46,6 +46,8 @@ export const InsumosSlidePanel = ({
               <Button
                 variant="primary"
                 onClick={slideMode === 'cadastro' ? handleSaveCadastro : handleSaveBaixa}
+                disabled={slideMode === 'baixa' && isMovimentacaoDisabledOffline}
+                title={slideMode === 'baixa' && isMovimentacaoDisabledOffline ? 'Offline: movimentações indisponíveis' : undefined}
               >
                 {slideMode === 'cadastro' ? 'Salvar Insumo' : 'Confirmar Baixa'}
               </Button>

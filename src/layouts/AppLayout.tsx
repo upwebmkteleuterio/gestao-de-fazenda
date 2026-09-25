@@ -39,6 +39,8 @@ export const AppLayout: React.FC = () => {
         void queryClient.invalidateQueries({ queryKey: ['animais', userId] });
         void queryClient.invalidateQueries({ queryKey: ['lotes'] });
         void queryClient.invalidateQueries({ queryKey: ['pastagens'] });
+        void queryClient.invalidateQueries({ queryKey: ['insumos'] });
+        void queryClient.invalidateQueries({ queryKey: ['movimentacoes_insumos'] });
         void queryClient.invalidateQueries({ queryKey: ['dashboard-summary'] });
       })
       .catch(() => undefined);

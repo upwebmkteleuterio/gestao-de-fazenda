@@ -7,7 +7,9 @@ import { dashboardService } from '@/services/dashboardService';
 import { financeiroService, syncFinanceiro } from '@/services/financeiroService';
 import { pesagensService, syncPesagens } from '@/services/pesagensService';
 import { lotesService, syncLotes } from '@/services/lotesService';
+import { insumosService, syncInsumos } from '@/services/insumosService';
 import { useConnectivityStore } from '@/store/useConnectivityStore';
+import { usePrefetchProgressStore, type PrefetchStage } from '@/store/usePrefetchProgressStore';
 
 const DASHBOARD_SNAPSHOT_KEY = 'dashboard-summary';
 const PESAGENS_RECENTES_SNAPSHOT_KEY = 'pesagens-recentes';
@@ -31,100 +33,53 @@ const canContinue = async (userId: string): Promise<boolean> => (
   isBrowserOnline() && (await getCurrentUserId()) === userId
 );
 
-const runSource = async (userId: string, source: () => Promise<void>): Promise<boolean> => {
+const runSource = async (userId: string, stage: PrefetchStage, source: () => Promise<void>): Promise<boolean> => {
+  const progress = usePrefetchProgressStore.getState();
+  progress.beginStage(stage);
   if (!(await canContinue(userId))) return false;
   try {
     await source();
-  } catch {
-    if (!(await canContinue(userId))) return false;
+    progress.completeStage(stage);
+    return await canContinue(userId);
+  } catch (error) {
+    if (await canContinue(userId)) {
+      progress.failStage(stage, error instanceof Error ? error.message : 'Não foi possível baixar esta etapa.');
+    }
+    return false;
   }
-  return canContinue(userId);
 };
 
 const runPrefetch = async (userId: string): Promise<void> => {
+  usePrefetchProgressStore.getState().start(userId);
   useConnectivityStore.getState().setSyncing();
 
   try {
-    await runSource(userId, async () => {
-      await syncPesagens(userId);
-      if (!(await canContinue(userId))) return;
-      await pesagensService.prefetchFirstPage(userId);
-    });
+    const stages: Array<{ name: PrefetchStage; source: () => Promise<void> }> = [
+      { name: 'Animais (cadastro completo)', source: async () => { await syncAnimais(userId); await animaisService.getAll({ includeHistorico: true }); } },
+      { name: 'Lotes (primeira página)', source: async () => { await syncLotes(userId); await lotesService.getAll(userId, { page: 1, limit: 10 }); } },
+      { name: 'Pesagens (histórico recente)', source: async () => { await syncPesagens(userId); await pesagensService.prefetchFirstPage(userId); } },
+      { name: 'Pastagens (cadastro)', source: async () => { await syncPastagens(userId); await pastagensService.getAll(userId); } },
+      { name: 'Financeiro (mês atual)', source: async () => { await syncFinanceiro(userId); await financeiroService.prefetchCurrentMonth(userId); } },
+      { name: 'Insumos (cadastro + histórico recente)', source: async () => { await syncInsumos(userId); await insumosService.prefetch(userId); } },
+      {
+        name: 'Dashboard e configurações',
+        source: async () => {
+          const summary = await dashboardService.getSummary();
+          await saveOfflineSnapshot({ key: `${DASHBOARD_SNAPSHOT_KEY}:${userId}`, scope: 'dashboard', data: summary, capturedAt: new Date().toISOString() });
+          const pesagens = await pesagensService.getRecent();
+          await saveOfflineSnapshot({ key: `${PESAGENS_RECENTES_SNAPSHOT_KEY}:${userId}`, scope: 'pesagens-recentes', data: pesagens, capturedAt: new Date().toISOString() });
+          const settings = await appSettingsService.getGlobal();
+          await saveOfflineSnapshot({ key: `${APP_SETTINGS_SNAPSHOT_KEY}:${userId}`, scope: 'app-settings', data: settings, capturedAt: new Date().toISOString() });
+        },
+      },
+    ];
 
-    if (!(await canContinue(userId))) return;
-    useConnectivityStore.getState().setSyncing();
-    await runSource(userId, async () => {
-      await syncAnimais(userId);
+    for (const stage of stages) {
       if (!(await canContinue(userId))) return;
-      await animaisService.getAll({ includeHistorico: true });
-    });
-
-    if (!(await canContinue(userId))) return;
-    useConnectivityStore.getState().setSyncing();
-    await runSource(userId, async () => {
-      await syncLotes(userId);
-      if (!(await canContinue(userId))) return;
-      await lotesService.getAll(userId, { page: 1, limit: 10 });
-    });
-
-    if (!(await canContinue(userId))) return;
-    useConnectivityStore.getState().setSyncing();
-    await runSource(userId, async () => {
-      await syncPastagens(userId);
-      if (!(await canContinue(userId))) return;
-      await pastagensService.getAll(userId);
-    });
-
-    if (!(await canContinue(userId))) return;
-    useConnectivityStore.getState().setSyncing();
-    await runSource(userId, async () => {
-      const summary = await dashboardService.getSummary();
-      if (!(await canContinue(userId))) return;
-      const capturedAt = new Date().toISOString();
-      await saveOfflineSnapshot({
-        key: `${DASHBOARD_SNAPSHOT_KEY}:${userId}`,
-        scope: 'dashboard',
-        data: summary,
-        capturedAt,
-      });
-    });
-
-    if (!(await canContinue(userId))) return;
-    useConnectivityStore.getState().setSyncing();
-    await runSource(userId, async () => {
-      const pesagens = await pesagensService.getRecent();
-      if (!(await canContinue(userId))) return;
-      const capturedAt = new Date().toISOString();
-      await saveOfflineSnapshot({
-        key: `${PESAGENS_RECENTES_SNAPSHOT_KEY}:${userId}`,
-        scope: 'pesagens-recentes',
-        data: pesagens,
-        capturedAt,
-      });
-    });
-
-    if (!(await canContinue(userId))) return;
-    useConnectivityStore.getState().setSyncing();
-    await runSource(userId, async () => {
-      const settings = await appSettingsService.getGlobal();
-      if (!(await canContinue(userId))) return;
-      const capturedAt = new Date().toISOString();
-      await saveOfflineSnapshot({
-        key: `${APP_SETTINGS_SNAPSHOT_KEY}:${userId}`,
-        scope: 'app-settings',
-        data: settings,
-        capturedAt,
-      });
-    });
-
-    if (!(await canContinue(userId))) return;
-    useConnectivityStore.getState().setSyncing();
-    await runSource(userId, async () => {
-      await syncFinanceiro(userId);
-      if (!(await canContinue(userId))) return;
-      await financeiroService.prefetchCurrentMonth(userId);
-    });
+      await runSource(userId, stage.name, stage.source);
+    }
   } finally {
+    usePrefetchProgressStore.getState().finish(userId);
     if (isBrowserOnline() && (await getCurrentUserId()) === userId) {
       useConnectivityStore.getState().setOnline();
     } else if (!isBrowserOnline()) {

@@ -6,6 +6,7 @@ export interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> 
   error?: string;
   hint?: string;
   icon?: LucideIcon | React.ComponentType<{ className?: string }>;
+  trailingAction?: React.ReactNode;
   noMargin?: boolean;
 }
 
@@ -15,6 +16,7 @@ export const Input: React.FC<InputProps> = ({
   error,
   hint,
   icon: Icon,
+  trailingAction,
   className = '',
   disabled,
   noMargin = false,
@@ -40,10 +42,11 @@ export const Input: React.FC<InputProps> = ({
             ? 'border-red-500 focus:ring-red-500 focus:border-red-500'
             : 'border-gray-300 dark:border-gray-700 focus:ring-emerald-500 focus:border-emerald-500'
         } bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 shadow-sm text-sm ${
-          Icon ? 'pl-9 pr-3.5' : 'px-3.5'
-        } py-2.5 outline-none transition-colors hover:border-emerald-400 focus-visible:ring-2 focus-visible:ring-emerald-500/30 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none disabled:pointer-events-none disabled:bg-gray-100 dark:disabled:bg-gray-900 disabled:text-gray-500 disabled:opacity-50 ${className}`}
+          Icon ? 'pl-9' : 'px-3.5'
+        } ${trailingAction ? 'pr-10' : 'pr-3.5'} py-2.5 outline-none transition-colors hover:border-emerald-400 focus-visible:ring-2 focus-visible:ring-emerald-500/30 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none disabled:pointer-events-none disabled:bg-gray-100 dark:disabled:bg-gray-900 disabled:text-gray-500 disabled:opacity-50 ${className}`}
         {...props}
       />
+      {trailingAction && <div className="absolute inset-y-0 right-0 flex items-center pr-2">{trailingAction}</div>}
     </div>
     {hint && !error && <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">{hint}</p>}
     {error && <p className="mt-1 text-xs font-medium text-red-600 dark:text-red-400">{error}</p>}

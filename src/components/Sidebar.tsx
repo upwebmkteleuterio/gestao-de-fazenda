@@ -20,6 +20,7 @@ import { useUIStore, PageRoute } from '../store/useUIStore';
 import { useAuth } from '@/contexts/AuthContext';
 import { useAppSettings } from '@/hooks/useAppSettings';
 import { ConnectionStatus } from '@/components/ConnectionStatus';
+import { PrefetchProgress } from '@/components/PrefetchProgress';
 
 export const Sidebar: React.FC = () => {
   const { setActivePage, sidebarOpen, toggleSidebar } = useUIStore();
@@ -154,6 +155,10 @@ export const Sidebar: React.FC = () => {
             })}
           </nav>
         </div>
+      </div>
+
+      <div className={sidebarOpen ? 'px-3' : 'px-2'}>
+        <PrefetchProgress />
       </div>
 
       {/* Sidebar Footer info */}
