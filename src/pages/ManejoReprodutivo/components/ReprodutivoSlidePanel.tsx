@@ -120,8 +120,8 @@ export const ReprodutivoSlidePanel = ({
                   <Button variant="ghost" onClick={() => setSlideOpen(false)}>
                     Cancelar
                   </Button>
-                  <Button variant="primary" onClick={handleSave} disabled={mutationsDisabled}>
-                    Salvar Lançamento
+                  <Button variant="primary" onClick={handleSave} disabled={mutationsDisabled || isSaving} loading={isSaving}>
+                    {isSaving ? 'Salvando lançamento...' : 'Salvar Lançamento'}
                   </Button>
                 </>
               )}
@@ -195,7 +195,7 @@ export const ReprodutivoSlidePanel = ({
 
               {/* Brinco Matriz (Seleção da Lista ou Inserção Manual) */}
               <div>
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 mb-2">
+                <div className="flex flex-col justify-between gap-1.5 mb-2">
                   <label htmlFor="iatf_matriz" className="block text-sm font-semibold text-gray-900 dark:text-gray-100">
                     Brinco da Matriz (Vaca/Fêmea) *
                   </label>
@@ -249,7 +249,7 @@ export const ReprodutivoSlidePanel = ({
                               label: `Brinco #${m.brinco} (${m.raca || 'Nelore'} - ${m.status_reprodutivo || 'Solteira'})`,
                               value: m.id,
                             })),
-                            { label: '✏️ Digitar outro brinco manualmente...', value: '__manual__' },
+                            { label: '✏️ Digitar brinco cadastrado...', value: '__manual__' },
                           ]}
                           noMargin
                         />
@@ -284,7 +284,7 @@ export const ReprodutivoSlidePanel = ({
                           id="iatf_matriz"
                           type="text"
                           list="lista-sugestoes-iatf"
-                          placeholder="Digite o brinco da matriz (Ex: 1042, MAT-08, Nelore 450...)"
+                          placeholder="Digite o brinco da matriz cadastrada (Ex: 1042)"
                           value={formData.brinco_matriz || ''}
                           onChange={(e) => {
                             const val = e.target.value;
@@ -292,7 +292,7 @@ export const ReprodutivoSlidePanel = ({
                             setFormData({
                               ...formData,
                               brinco_matriz: val,
-                              animal_id: found ? found.id : (val.trim() ? `manual-${val.trim()}` : ''),
+                              animal_id: found?.id || '',
                             });
                           }}
                           required
@@ -324,7 +324,7 @@ export const ReprodutivoSlidePanel = ({
                           </span>
                         ) : formData.brinco_matriz ? (
                           <span className="text-amber-600 dark:text-amber-400 font-medium">
-                            ✏️ Lançamento manual (matriz externa ou lote temporário)
+                            ✏️ Brinco ainda não identificado no cadastro; cadastre o animal antes de salvar
                           </span>
                         ) : (
                           'Digite o número do brinco ou escolha das sugestões do rebanho'
@@ -344,7 +344,7 @@ export const ReprodutivoSlidePanel = ({
               </div>
 
               {/* Cronograma D0, D8, D10 */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 min-[420px]:grid-cols-2 gap-3">
                 <Input
                   label="D0 Implante *"
                   id="iatf_d0"
@@ -357,7 +357,9 @@ export const ReprodutivoSlidePanel = ({
                       ...formData,
                       d0: newD0,
                       data_principal: newD0,
-                      previsao_parto: calcularPrevisaoParto(baseDate, formData.dias_previsao_parto),
+                      previsao_parto: typeof formData.dias_previsao_parto === 'number'
+                        ? calcularPrevisaoParto(baseDate, formData.dias_previsao_parto)
+                        : '',
                     });
                   }}
                   required
@@ -380,7 +382,9 @@ export const ReprodutivoSlidePanel = ({
                     setFormData({
                       ...formData,
                       d10: newD10,
-                      previsao_parto: calcularPrevisaoParto(baseDate, formData.dias_previsao_parto),
+                      previsao_parto: typeof formData.dias_previsao_parto === 'number'
+                        ? calcularPrevisaoParto(baseDate, formData.dias_previsao_parto)
+                        : '',
                     });
                   }}
                 />
@@ -400,19 +404,22 @@ export const ReprodutivoSlidePanel = ({
                   </span>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 min-[420px]:grid-cols-2 gap-3">
                   <Input
                     label="Dias Futuros (Ex: 290 dias)"
                     id="iatf_dias_previsao"
                     type="number"
                     value={formData.dias_previsao_parto}
                     onChange={(e) => {
-                      const dias = Number(e.target.value) || 290;
+                      const dias = e.target.value === '' ? '' : Number(e.target.value);
                       const baseDate = formData.d10 || formData.d0 || formData.data_principal;
+                      const previsaoParto = typeof dias === 'number' && Number.isFinite(dias)
+                        ? calcularPrevisaoParto(baseDate, dias)
+                        : '';
                       setFormData({
                         ...formData,
                         dias_previsao_parto: dias,
-                        previsao_parto: calcularPrevisaoParto(baseDate, dias),
+                        previsao_parto: previsaoParto,
                       });
                     }}
                     placeholder="290"
@@ -423,14 +430,15 @@ export const ReprodutivoSlidePanel = ({
                     type="date"
                     value={formData.previsao_parto}
                     onChange={(e) => setFormData({ ...formData, previsao_parto: e.target.value })}
+                    readOnly
                   />
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 min-[420px]:grid-cols-2 gap-4">
                 {/* Touro Reprodutor / Sêmen (Seleção ou Inserção Manual) */}
                 <div>
-                  <div className="flex items-center justify-between mb-1.5">
+                  <div className="flex flex-col items-start gap-1.5 mb-1.5">
                     <label htmlFor="iatf_touro" className="block text-sm font-semibold text-gray-900 dark:text-gray-100">
                       Touro Usado / Sêmen *
                     </label>
@@ -528,9 +536,9 @@ export const ReprodutivoSlidePanel = ({
 
                 {/* Tipo de Sêmen (Seleção ou Inserção Manual) */}
                 <div>
-                  <div className="flex items-center justify-between mb-1.5">
+                  <div className="flex flex-col items-start gap-1.5 mb-1.5">
                     <label htmlFor="iatf_tipo_semen" className="block text-sm font-semibold text-gray-900 dark:text-gray-100">
-                      Tipo de Sêmen
+                      Tipo de Sêmen *
                     </label>
                     <div className="flex items-center space-x-1 text-xs bg-gray-100 dark:bg-gray-800 p-0.5 rounded-lg border border-gray-200 dark:border-gray-700">
                       <button
@@ -629,10 +637,10 @@ export const ReprodutivoSlidePanel = ({
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 min-[420px]:grid-cols-2 gap-4">
                 {/* Condição Corporal (ECC) (Seleção da Escala ou Inserção Manual) */}
                 <div>
-                  <div className="flex items-center justify-between mb-1.5">
+                  <div className="flex flex-col items-start gap-1.5 mb-1.5">
                     <label htmlFor="iatf_ecc" className="block text-sm font-semibold text-gray-900 dark:text-gray-100">
                       Condição Corporal (ECC) *
                     </label>
@@ -752,7 +760,7 @@ export const ReprodutivoSlidePanel = ({
                 <label className="block text-sm font-semibold text-gray-900 dark:text-gray-100 mb-2">
                   Diagnóstico DG (Resultado)
                 </label>
-                <div className="grid grid-cols-3 gap-3">
+                <div className="grid grid-cols-1 min-[420px]:grid-cols-2 gap-3">
                   <label className={`cursor-pointer p-3 rounded-lg border text-center text-xs font-bold flex items-center justify-center space-x-2 transition-all ${
                     formData.dg_radio === 'cheia'
                       ? 'bg-emerald-600 text-white border-emerald-600 shadow'
@@ -851,7 +859,7 @@ export const ReprodutivoSlidePanel = ({
                 </p>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 min-[420px]:grid-cols-2 gap-4">
                 <Input
                   label="Data do Evento de Monta *"
                   id="monta_data"
@@ -952,13 +960,19 @@ export const ReprodutivoSlidePanel = ({
                 required
               />
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <Input
+              <div className="grid grid-cols-1 min-[420px]:grid-cols-2 gap-4">
+                <Select
                   label="Doadora (Matriz Doadora) *"
                   id="tetf_doadora"
-                  value={formData.doadora}
+                  value={formData.doadora || ''}
                   onChange={(e) => setFormData({ ...formData, doadora: e.target.value })}
-                  placeholder="Ex: Matriz Nelore PO #889"
+                  options={[
+                    { label: 'Selecione a doadora ativa cadastrada...', value: '' },
+                    ...matrizes.map((m: any) => ({
+                      label: `Brinco #${m.brinco} (${m.raca || 'Matriz'})`,
+                      value: m.brinco,
+                    })),
+                  ]}
                   required
                 />
                 <Input
@@ -971,12 +985,12 @@ export const ReprodutivoSlidePanel = ({
                 />
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 min-[420px]:grid-cols-2 gap-4">
                 {/* Tipo de Embrião (Seleção ou Inserção Manual) */}
                 <div>
-                  <div className="flex items-center justify-between mb-1.5">
+                  <div className="flex flex-col items-start gap-1.5 mb-1.5">
                     <label htmlFor="tetf_tipo_embriao" className="block text-sm font-semibold text-gray-900 dark:text-gray-100">
-                      Tipo de Embrião
+                      Tipo de Embrião *
                     </label>
                     <div className="flex items-center space-x-1 text-xs bg-gray-100 dark:bg-gray-800 p-0.5 rounded-lg border border-gray-200 dark:border-gray-700">
                       <button
@@ -1076,7 +1090,7 @@ export const ReprodutivoSlidePanel = ({
 
                 {/* Vaca Receptora (Seleção da Lista ou Inserção Manual) */}
                 <div>
-                  <div className="flex items-center justify-between mb-1.5">
+                  <div className="flex flex-col items-start gap-1.5 mb-1.5">
                     <label htmlFor="tetf_receptora" className="block text-sm font-semibold text-gray-900 dark:text-gray-100">
                       Vaca Receptora (Brinco) *
                     </label>
@@ -1102,7 +1116,7 @@ export const ReprodutivoSlidePanel = ({
                             ? 'bg-white dark:bg-gray-700 text-purple-700 dark:text-purple-300 shadow-xs'
                             : 'text-gray-500 hover:text-gray-900 dark:hover:text-gray-200'
                         }`}
-                        title="Digitar receptora comum manualmente"
+                        title="Digitar o brinco da receptora cadastrada"
                       >
                         <PenLine className="w-3 h-3" />
                         <span className="text-[11px]">Manual</span>
@@ -1135,7 +1149,7 @@ export const ReprodutivoSlidePanel = ({
                             label: `Brinco #${m.brinco} (${m.raca || 'Receptora'} - ${m.status_reprodutivo || 'Disponível'})`,
                             value: m.id,
                           })),
-                          { label: '✏️ Inserir receptora manualmente (vaca comum / sem cadastro)...', value: '__manual__' },
+                          { label: '✏️ Digitar brinco da receptora cadastrada...', value: '__manual__' },
                         ]}
                         noMargin
                       />
@@ -1162,10 +1176,10 @@ export const ReprodutivoSlidePanel = ({
                             ...formData,
                             receptora: val,
                             brinco_matriz: val,
-                            animal_id: found ? found.id : (val.trim() ? `manual-${val.trim()}` : ''),
+                            animal_id: found?.id || '',
                           });
                         }}
-                        placeholder="Digite o brinco da receptora (Ex: Rec 04, Vaca 2045, Malhada...)"
+                        placeholder="Digite o brinco da receptora ativa cadastrada (Ex: 2045)"
                         required
                         noMargin
                       />
@@ -1176,7 +1190,7 @@ export const ReprodutivoSlidePanel = ({
                               ✓ Receptora cadastrada no rebanho
                             </span>
                           ) : (
-                            'Inserção manual de receptora'
+                            'Brinco não identificado; cadastre a receptora ativa antes de salvar'
                           )}
                         </span>
                         <button
@@ -1229,9 +1243,9 @@ export const ReprodutivoSlidePanel = ({
                 required
               />
 
-              {/* Vaca / Matriz para Diagnóstico (Seleção da Lista ou Inserção Manual de Vaca Comum) */}
+              {/* Vaca / Matriz para Diagnóstico (Seleção da Lista ou Digitação do Brinco) */}
               <div>
-                <div className="flex items-center justify-between mb-1.5">
+                <div className="flex flex-col items-start gap-1.5 mb-1.5">
                   <label htmlFor="dg_vaca_select" className="block text-sm font-semibold text-gray-900 dark:text-gray-100">
                     Vaca / Matriz (Brinco ou Identificação) *
                   </label>
@@ -1285,7 +1299,7 @@ export const ReprodutivoSlidePanel = ({
                               label: `Brinco #${m.brinco} (${m.raca || 'Nelore'} - ${m.status_reprodutivo || 'Sem DG'})`,
                               value: m.id,
                             })),
-                            { label: '✏️ Digitar vaca manualmente (vaca comum / sem cadastro)...', value: '__manual__' },
+                            { label: '✏️ Digitar brinco da vaca cadastrada...', value: '__manual__' },
                           ]}
                           noMargin
                         />
@@ -1308,7 +1322,7 @@ export const ReprodutivoSlidePanel = ({
                         className="text-blue-600 dark:text-blue-400 hover:underline font-medium inline-flex items-center gap-1"
                       >
                         <PenLine className="w-3 h-3" />
-                        Digitar vaca comum manualmente
+                        Digitar o brinco da vaca cadastrada
                       </button>
                     </div>
                   </div>
@@ -1320,7 +1334,7 @@ export const ReprodutivoSlidePanel = ({
                           id="dg_vaca_select"
                           type="text"
                           list="lista-sugestoes-dg"
-                          placeholder="Digite a identificação da vaca (Ex: Vaca Roxa, 2045, Malhada, Comum 04...)"
+                          placeholder="Digite o brinco da vaca cadastrada (Ex: 2045)"
                           value={formData.brinco_matriz || ''}
                           onChange={(e) => {
                             const val = e.target.value;
@@ -1328,7 +1342,7 @@ export const ReprodutivoSlidePanel = ({
                             setFormData({
                               ...formData,
                               brinco_matriz: val,
-                              animal_id: found ? found.id : (val.trim() ? `manual-${val.trim()}` : ''),
+                              animal_id: found?.id || '',
                             });
                           }}
                           required
@@ -1360,7 +1374,7 @@ export const ReprodutivoSlidePanel = ({
                           </span>
                         ) : (
                           <span className="text-amber-600 dark:text-amber-400 font-medium">
-                            ★ Vaca comum / não cadastrada (toque registrado diretamente)
+                            ★ Brinco não identificado; cadastre a vaca antes de salvar
                           </span>
                         )}
                       </span>
@@ -1382,7 +1396,7 @@ export const ReprodutivoSlidePanel = ({
                 <label className="block text-sm font-semibold text-gray-900 dark:text-gray-100 mb-2">
                   Diagnóstico Constatado *
                 </label>
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 min-[420px]:grid-cols-2 gap-4">
                   <label className={`cursor-pointer p-4 rounded-xl border text-center text-sm font-bold flex flex-col items-center justify-center space-y-1 transition-all ${
                     formData.dg_resultado === 'cheia'
                       ? 'bg-emerald-600 text-white border-emerald-600 shadow-md ring-2 ring-emerald-400'

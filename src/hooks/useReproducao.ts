@@ -8,11 +8,13 @@ import { EventoReproducao } from '../types/database';
 type UseReproducaoOptions = {
   includeSummary?: boolean;
   useOfflineCache?: boolean;
+  enabled?: boolean;
 };
 
 export const useReproducao = (filters?: ReproducaoReportFilters, options?: UseReproducaoOptions) => {
   const includeSummary = options?.includeSummary ?? false;
   const useOfflineCache = options?.useOfflineCache ?? false;
+  const enabled = options?.enabled ?? true;
   const queryClient = useQueryClient();
   const { session } = useAuth();
   const userId = session?.user.id;
@@ -23,12 +25,12 @@ export const useReproducao = (filters?: ReproducaoReportFilters, options?: UseRe
   const query = useQuery<ReproducaoQuery>({
     queryKey: ['reproducao', userId, useOfflineCache, filters],
     queryFn: () => reproducaoService.getAll(filters),
-    enabled: Boolean(userId) && (useOfflineCache || !offline),
+    enabled: enabled && Boolean(userId) && (useOfflineCache || !offline),
   });
   const summaryQuery = useQuery({
     queryKey: ['reproducao-report-summary', userId, filters],
     queryFn: () => reproducaoService.getReportSummary(filters),
-    enabled: includeSummary && Boolean(userId) && !offline,
+    enabled: enabled && includeSummary && Boolean(userId) && !offline,
   });
 
   useEffect(() => {
@@ -54,6 +56,15 @@ export const useReproducao = (filters?: ReproducaoReportFilters, options?: UseRe
 
   const createMutation = useMutation({
     mutationFn: (item: Omit<EventoReproducao, 'id' | 'createdAt' | 'status_sincronizacao'>) => reproducaoService.create(item),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['reproducao', userId] });
+      void queryClient.invalidateQueries({ queryKey: ['reproducao-report-summary', userId] });
+      void queryClient.invalidateQueries({ queryKey: ['animais'] });
+      void queryClient.invalidateQueries({ queryKey: ['dashboard-summary'] });
+    },
+  });
+  const createBatchMutation = useMutation({
+    mutationFn: (items: Omit<EventoReproducao, 'id' | 'createdAt' | 'status_sincronizacao'>[]) => reproducaoService.createBatch(items),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['reproducao', userId] });
       void queryClient.invalidateQueries({ queryKey: ['reproducao-report-summary', userId] });
@@ -97,7 +108,9 @@ export const useReproducao = (filters?: ReproducaoReportFilters, options?: UseRe
     refetch: query.refetch,
     fetchAllEventos,
     createEvento: createMutation.mutateAsync,
+    createEventosBatch: createBatchMutation.mutateAsync,
     updateEvento: updateMutation.mutateAsync,
     deleteEvento: deleteMutation.mutateAsync,
+    isSaving: createMutation.isPending || createBatchMutation.isPending || updateMutation.isPending,
   };
 };

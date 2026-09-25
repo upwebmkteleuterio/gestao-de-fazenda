@@ -32,6 +32,8 @@ export const ReprodutivoFilters: React.FC<ReprodutivoFiltersProps> = ({
   hasActiveFilters,
   disabled = false,
 }) => {
+  const dateRangeInvalid = Boolean(dataInicio && dataFim && dataInicio > dataFim);
+
   return (
     <Card>
       <div className="space-y-3">
@@ -92,9 +94,15 @@ export const ReprodutivoFilters: React.FC<ReprodutivoFiltersProps> = ({
               value={dataFim}
               onChange={(e) => onDataFimChange(e.target.value)}
               disabled={disabled}
+              error={dateRangeInvalid ? 'A data final deve ser igual ou posterior à data inicial.' : undefined}
             />
           </div>
         </div>
+        {dateRangeInvalid && (
+          <p className="text-xs font-medium text-red-600 dark:text-red-400" role="alert">
+            Ajuste o período para realizar a busca.
+          </p>
+        )}
 
         {/* Barra de ação auxiliar se houver filtros ativos */}
         {hasActiveFilters && (

@@ -47,8 +47,10 @@ export const ManejoReprodutivoPage: React.FC = () => {
     handleClearFilters,
     hasActiveFilters,
     createEvento,
+    createEventosBatch,
     updateEvento,
     deleteEvento,
+    isSaving: mutationIsSaving,
   } = useReproducaoTable();
   const offline = isOffline || connectivityStatus === 'offline' || (typeof navigator !== 'undefined' && !navigator.onLine);
 
@@ -77,10 +79,13 @@ export const ManejoReprodutivoPage: React.FC = () => {
     handleOpenView,
     handleSave,
     handleDelete,
+    isSaving,
   } = useReproducaoForm({
     createEvento,
+    createEventosBatch,
     updateEvento,
     deleteEvento,
+    isSaving: mutationIsSaving,
   });
 
   useEffect(() => {
@@ -178,7 +183,7 @@ export const ManejoReprodutivoPage: React.FC = () => {
         selectedEvento={selectedEvento}
         formData={formData}
         setFormData={setFormData}
-        isSaving={false}
+        isSaving={isSaving}
         handleSave={handleSave}
         activeTab={activeTab}
         setActiveTab={setActiveTab}

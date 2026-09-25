@@ -2,6 +2,7 @@ import { getCurrentUserId as readCurrentUserId, supabase } from '@/integrations/
 import { getOfflineSnapshot, listOfflineRecords, saveOfflineRecords, saveOfflineSnapshot, deleteOfflineRecords } from '@/offline/database';
 import { useConnectivityStore } from '@/store/useConnectivityStore';
 import { Animal, EventoReproducao } from '@/types/database';
+import { DomainValidationError, validateDateRange, validateReproducaoFields } from './domainValidation';
 import { animaisService } from './animaisService';
 
 export type ReproducaoQuery = {
@@ -114,11 +115,11 @@ const fetchEventos = async (): Promise<EventoReproducao[]> => {
   return ((data ?? []) as unknown as ReproducaoDbRow[]).map(toEvento);
 };
 
-const calcularPrevisaoParto = (dataRef?: string): string => {
-  if (!dataRef) return '';
-  const date = new Date(dataRef);
+const calcularPrevisaoParto = (dataRef?: string, dias = 285): string => {
+  if (!dataRef || !Number.isInteger(dias)) return '';
+  const date = new Date(`${dataRef}T00:00:00`);
   if (isNaN(date.getTime())) return '';
-  date.setDate(date.getDate() + 285);
+  date.setDate(date.getDate() + dias);
   return date.toISOString().split('T')[0];
 };
 
@@ -206,6 +207,118 @@ const buildEventoPatch = (
   return patch;
 };
 
+type ReproducaoInput = Omit<EventoReproducao, 'id' | 'createdAt' | 'status_sincronizacao'>;
+
+const resolveAnimalReference = async (
+  item: Pick<EventoReproducao, 'animal_id' | 'brinco_matriz'>,
+  allowInactive = false,
+): Promise<{ id: string; brinco: string }> => {
+  const brinco = item.brinco_matriz.trim();
+  const animalId = typeof item.animal_id === 'string' ? item.animal_id.trim() : '';
+  if (animalId) {
+    const { data, error } = await supabase
+      .from('animais')
+      .select('id, brinco, status, sexo')
+      .eq('id', animalId)
+      .maybeSingle();
+    if (error) throw error;
+    if (!data) throw new DomainValidationError('O animal selecionado não está cadastrado. Cadastre o animal antes de lançar o evento.');
+    if (data.sexo !== 'F') throw new DomainValidationError('O evento reprodutivo deve estar vinculado a uma matriz/vaca cadastrada.');
+    if (data.status !== 'ativo' && !allowInactive) throw new DomainValidationError('A matriz selecionada não está ativa. Selecione um animal ativo cadastrado.');
+    if (brinco && data.brinco.trim().toLocaleLowerCase() !== brinco.toLocaleLowerCase()) {
+      throw new DomainValidationError('O brinco informado não corresponde ao animal selecionado. Selecione o animal cadastrado correto.');
+    }
+    return { id: data.id, brinco: data.brinco };
+  }
+
+  if (!brinco) throw new DomainValidationError('Informe o brinco de um animal cadastrado antes de salvar.');
+  const { data, error } = await supabase
+    .from('animais')
+    .select('id, brinco, status, sexo')
+    .eq('brinco', brinco)
+    .eq('status', 'ativo')
+    .limit(2);
+  if (error) throw error;
+  if (!data?.length) throw new DomainValidationError(`O animal com brinco "${brinco}" não está cadastrado como ativo. Cadastre o animal primeiro.`);
+  if (data.length > 1) throw new DomainValidationError(`Há mais de um animal ativo com o brinco "${brinco}". Corrija o cadastro antes de salvar.`);
+  if (data[0].sexo !== 'F') throw new DomainValidationError('O brinco informado não pertence a uma matriz/vaca cadastrada.');
+  return { id: data[0].id, brinco: data[0].brinco };
+};
+
+const resolveActiveAnimalByBrinco = async (brinco: string, label: string): Promise<{ id: string; brinco: string }> => {
+  const normalizedBrinco = brinco.trim();
+  const { data, error } = await supabase
+    .from('animais')
+    .select('id, brinco, status, sexo')
+    .eq('brinco', normalizedBrinco)
+    .eq('status', 'ativo')
+    .limit(2);
+  if (error) throw error;
+  if (!data?.length) throw new DomainValidationError(`A ${label} informada não está cadastrada como ativa. Cadastre o animal antes de salvar.`);
+  if (data.length > 1) throw new DomainValidationError(`Há mais de um animal ativo com o brinco da ${label}. Corrija o cadastro antes de salvar.`);
+  if (data[0].sexo !== 'F') throw new DomainValidationError(`A ${label} deve ser uma matriz cadastrada e ativa.`);
+  return { id: data[0].id, brinco: data[0].brinco };
+};
+
+const normalizeEventInput = async (item: ReproducaoInput, allowInactive = false): Promise<ReproducaoInput> => {
+  const dados = item.dados_protocolo ?? {};
+  const dias = dados.dias_gestacao_previsao;
+  const baseDate = dados.d10 || dados.d0 || item.data_principal;
+  const itemWithPrediction = item.tipo_protocolo === 'iatf' && !item.previsao_parto
+    ? { ...item, previsao_parto: calcularPrevisaoParto(baseDate, dias) }
+    : item;
+  validateReproducaoFields(itemWithPrediction);
+  const animal = await resolveAnimalReference(itemWithPrediction, allowInactive);
+  const normalizedDados = {
+    ...dados,
+    touro: dados.touro?.trim(),
+    tipo_semen: dados.tipo_semen?.trim(),
+    condicao_corporal: dados.condicao_corporal?.trim(),
+    doadora: dados.doadora?.trim(),
+    tipo_embriao: dados.tipo_embriao?.trim(),
+    receptora: dados.receptora?.trim(),
+    observacoes: dados.observacoes?.trim(),
+  };
+  if (itemWithPrediction.tipo_protocolo === 'tetf') {
+    const receptora = await resolveAnimalReference(
+      { animal_id: animal.id, brinco_matriz: normalizedDados.receptora ?? '' },
+      allowInactive,
+    );
+    if (receptora.id !== animal.id) throw new DomainValidationError('A receptora informada não corresponde ao animal selecionado.');
+    normalizedDados.receptora = receptora.brinco;
+    const doadora = await resolveActiveAnimalByBrinco(normalizedDados.doadora ?? '', 'doadora');
+    normalizedDados.doadora = doadora.brinco;
+  }
+  return {
+    ...itemWithPrediction,
+    animal_id: animal.id,
+    brinco_matriz: animal.brinco,
+    dados_protocolo: normalizedDados,
+  };
+};
+
+const ensureNoLogicalDuplicate = async (items: ReproducaoInput[], currentId?: string): Promise<void> => {
+  const keys = new Set<string>();
+  for (const item of items) {
+    const key = `${item.animal_id}|${item.tipo_protocolo}|${item.data_principal}`;
+    if (keys.has(key)) throw new DomainValidationError('A lista contém o mesmo animal mais de uma vez para o mesmo protocolo e data.');
+    keys.add(key);
+  }
+  if (!items.length) return;
+  const { data, error } = await supabase
+    .from('eventos_reproducao')
+    .select('id, animal_id, tipo_protocolo, data_principal')
+    .in('animal_id', items.map((item) => item.animal_id))
+    .in('tipo_protocolo', [...new Set(items.map((item) => item.tipo_protocolo))])
+    .in('data_principal', [...new Set(items.map((item) => item.data_principal))]);
+  if (error) throw error;
+  const conflict = (data ?? []).find((row) => {
+    if (row.id === currentId) return false;
+    return items.some((item) => row.animal_id === item.animal_id && row.tipo_protocolo === item.tipo_protocolo && row.data_principal === item.data_principal);
+  });
+  if (conflict) throw new DomainValidationError('Já existe um lançamento para este animal, protocolo e data. A duplicidade não foi criada.');
+};
+
 export type ReproducaoReportFilters = {
   dataEspecifica?: string;
   dataInicio?: string;
@@ -243,6 +356,7 @@ const toReportParams = (filters?: ReproducaoReportFilters) => ({
 
 export const reproducaoService = {
   getReportSummary: async (filters?: ReproducaoReportFilters): Promise<ReproducaoReportSummary> => {
+    validateDateRange(filters?.dataInicio, filters?.dataFim);
     if (!isBrowserOnline()) throw new Error('Relatório indisponível offline.');
     const { data, error } = await supabase.rpc('get_reproducao_report_summary', toReportParams(filters));
     if (error) throw error;
@@ -260,6 +374,7 @@ export const reproducaoService = {
   },
 
   getAll: async (filters?: ReproducaoReportFilters): Promise<ReproducaoQuery> => {
+    validateDateRange(filters?.dataInicio, filters?.dataFim);
     const userId = await getCurrentUserId();
     if (!userId) return { data: [], total: 0, source: 'local' };
 
@@ -345,20 +460,34 @@ export const reproducaoService = {
     return list.find((evento) => evento.id === id) ?? null;
   },
 
-  create: async (
-    item: Omit<EventoReproducao, 'id' | 'createdAt' | 'status_sincronizacao'>,
-  ): Promise<EventoReproducao> => {
+  create: async (item: ReproducaoInput): Promise<EventoReproducao> => {
     if (!isBrowserOnline()) throw new Error('Ação indisponível offline.');
-    const previsaoParto =
-      item.resultado_dg === 'cheia' && !item.previsao_parto
-        ? calcularPrevisaoParto(item.data_principal || item.data_dg)
-        : item.previsao_parto ?? '';
-    const payload = buildEventoPayload(item, `rep-${crypto.randomUUID()}`, previsaoParto);
+    const normalized = await normalizeEventInput(item);
+    await ensureNoLogicalDuplicate([normalized]);
+    let previsaoParto = normalized.previsao_parto ?? '';
+    if (normalized.resultado_dg === 'cheia' && !previsaoParto) {
+      previsaoParto = calcularPrevisaoParto(normalized.data_principal || normalized.data_dg);
+    }
+    const payload = buildEventoPayload(normalized, `rep-${crypto.randomUUID()}`, previsaoParto);
     const { data, error } = await supabase.from('eventos_reproducao').insert(payload).select('*').single();
     if (error) throw error;
 
     const created = toEvento(data as unknown as ReproducaoDbRow);
     await syncAffectedMatrizes([created.animal_id], await fetchEventos());
+    return created;
+  },
+
+  createBatch: async (items: ReproducaoInput[]): Promise<EventoReproducao[]> => {
+    if (!isBrowserOnline()) throw new Error('Ação indisponível offline.');
+    if (!items.length) throw new DomainValidationError('Selecione ao menos uma matriz para registrar a Monta Natural.');
+    const normalized = await Promise.all(items.map((item) => normalizeEventInput(item)));
+    await ensureNoLogicalDuplicate(normalized);
+    const payload = normalized.map((item) => buildEventoPayload(item, `rep-${crypto.randomUUID()}`, item.previsao_parto ?? ''));
+    const { data, error } = await supabase.from('eventos_reproducao').insert(payload).select('*');
+    if (error) throw error;
+    const created = ((data ?? []) as unknown as ReproducaoDbRow[]).map(toEvento);
+    if (created.length !== payload.length) throw new Error('O banco não confirmou todos os lançamentos da Monta Natural.');
+    await syncAffectedMatrizes(created.map((evento) => evento.animal_id), await fetchEventos());
     return created;
   },
 
@@ -368,13 +497,30 @@ export const reproducaoService = {
     const current = list.find((evento) => evento.id === id);
     if (!current) throw new Error('Evento não encontrado');
 
-    const merged = { ...current, ...updates };
-    let previsaoParto = updates.previsao_parto || current.previsao_parto;
-    if (merged.resultado_dg === 'cheia' && !previsaoParto) {
-      previsaoParto = calcularPrevisaoParto(merged.data_principal || merged.data_dg);
+    const merged = {
+      ...current,
+      ...updates,
+      dados_protocolo: { ...current.dados_protocolo, ...(updates.dados_protocolo ?? {}) },
+    } as ReproducaoInput;
+    const identityChanged = (
+      updates.animal_id !== undefined && updates.animal_id !== current.animal_id
+    ) || (
+      updates.brinco_matriz !== undefined
+      && updates.brinco_matriz.trim().toLocaleLowerCase() !== current.brinco_matriz.trim().toLocaleLowerCase()
+    );
+    const normalized = await normalizeEventInput(merged, !identityChanged);
+    await ensureNoLogicalDuplicate([normalized], id);
+    let previsaoParto = normalized.previsao_parto || current.previsao_parto || '';
+    if (normalized.resultado_dg === 'cheia' && !previsaoParto) {
+      previsaoParto = calcularPrevisaoParto(normalized.data_principal || normalized.data_dg);
     }
-
-    const patch = buildEventoPatch(updates, previsaoParto ?? '');
+    const normalizedUpdates = {
+      ...updates,
+      animal_id: normalized.animal_id,
+      brinco_matriz: normalized.brinco_matriz,
+      dados_protocolo: normalized.dados_protocolo,
+    };
+    const patch = buildEventoPatch(normalizedUpdates, previsaoParto);
     const { data, error } = await supabase.from('eventos_reproducao').update(patch).eq('id', id).select('*').single();
     if (error) throw error;
 

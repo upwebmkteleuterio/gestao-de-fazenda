@@ -1,4 +1,4 @@
-import { useState, useMemo, FormEvent } from 'react';
+import { useState, useMemo, FormEvent, useRef } from 'react';
 import { EventoReproducao, DGToqueResultado } from '@/types/database';
 import { useAnimais } from '@/hooks/useAnimais';
 import { useUIStore } from '@/store/useUIStore';
@@ -6,17 +6,23 @@ import { calcularPrevisaoParto } from '../utils/reproducaoUtils';
 
 interface UseReproducaoFormParams {
   createEvento: (data: any) => Promise<any>;
+  createEventosBatch: (data: any[]) => Promise<any>;
   updateEvento: (params: { id: string; updates: any }) => Promise<any>;
   deleteEvento: (id: string) => Promise<any>;
+  isSaving: boolean;
 }
 
 export const useReproducaoForm = ({
   createEvento,
   updateEvento,
   deleteEvento,
+  createEventosBatch,
+  isSaving: mutationIsSaving,
 }: UseReproducaoFormParams) => {
   const { showToast } = useUIStore();
   const { animais } = useAnimais();
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const submittingRef = useRef(false);
 
   // Estado SlidePanel
   const [slideOpen, setSlideOpen] = useState(false);
@@ -53,7 +59,7 @@ export const useReproducaoForm = ({
     receptora: string;
     data_dg_exame: string;
     dg_resultado: DGToqueResultado;
-    dias_previsao_parto: number;
+    dias_previsao_parto: number | '';
     previsao_parto: string;
     observacoes: string;
   }>({
@@ -71,10 +77,10 @@ export const useReproducaoForm = ({
     reimplantou: false,
     nome_touro_monta: '',
     doadora: '',
-    tipo_embriao: '',
+    tipo_embriao: 'Vitrificado FIV',
     receptora: '',
     data_dg_exame: new Date().toISOString().split('T')[0],
-    dg_resultado: 'cheia',
+    dg_resultado: 'pendente',
     dias_previsao_parto: 290,
     previsao_parto: calcularPrevisaoParto(new Date().toISOString().split('T')[0], 290),
     observacoes: '',
@@ -113,10 +119,10 @@ export const useReproducaoForm = ({
       reimplantou: false,
       nome_touro_monta: '',
       doadora: '',
-      tipo_embriao: '',
+      tipo_embriao: 'Vitrificado FIV',
       receptora: firstMatriz?.brinco || '',
       data_dg_exame: today,
-      dg_resultado: 'cheia',
+      dg_resultado: 'pendente',
       dias_previsao_parto: 290,
       previsao_parto: calcularPrevisaoParto(today, 290),
       observacoes: '',
@@ -132,7 +138,10 @@ export const useReproducaoForm = ({
     setActiveTab(ev.tipo_protocolo);
 
     const baseDate = ev.dados_protocolo?.d10 || ev.dados_protocolo?.d0 || ev.data_principal;
-    const dias = ev.dados_protocolo?.dias_gestacao_previsao || 290;
+    const dias = Number.isInteger(ev.dados_protocolo?.dias_gestacao_previsao)
+      ? ev.dados_protocolo.dias_gestacao_previsao
+      : '';
+    const previsaoParto = ev.previsao_parto || (typeof dias === 'number' ? calcularPrevisaoParto(baseDate, dias) : '');
 
     setFormData({
       animal_id: ev.animal_id,
@@ -152,9 +161,9 @@ export const useReproducaoForm = ({
       tipo_embriao: ev.dados_protocolo?.tipo_embriao || '',
       receptora: ev.dados_protocolo?.receptora || ev.brinco_matriz,
       data_dg_exame: ev.data_dg || ev.data_principal,
-      dg_resultado: ev.resultado_dg || 'cheia',
+      dg_resultado: ev.resultado_dg || 'pendente',
       dias_previsao_parto: dias,
-      previsao_parto: ev.previsao_parto || calcularPrevisaoParto(baseDate, dias),
+      previsao_parto: previsaoParto,
       observacoes: ev.dados_protocolo?.observacoes || '',
     });
     setSelectedCowIds([ev.animal_id]);
@@ -168,7 +177,10 @@ export const useReproducaoForm = ({
     setActiveTab(ev.tipo_protocolo);
 
     const baseDate = ev.dados_protocolo?.d10 || ev.dados_protocolo?.d0 || ev.data_principal;
-    const dias = ev.dados_protocolo?.dias_gestacao_previsao || 290;
+    const dias = Number.isInteger(ev.dados_protocolo?.dias_gestacao_previsao)
+      ? ev.dados_protocolo.dias_gestacao_previsao
+      : '';
+    const previsaoParto = ev.previsao_parto || (typeof dias === 'number' ? calcularPrevisaoParto(baseDate, dias) : '');
 
     setFormData({
       animal_id: ev.animal_id,
@@ -188,9 +200,9 @@ export const useReproducaoForm = ({
       tipo_embriao: ev.dados_protocolo?.tipo_embriao || '',
       receptora: ev.dados_protocolo?.receptora || ev.brinco_matriz,
       data_dg_exame: ev.data_dg || ev.data_principal,
-      dg_resultado: ev.resultado_dg || 'cheia',
+      dg_resultado: ev.resultado_dg || 'pendente',
       dias_previsao_parto: dias,
-      previsao_parto: ev.previsao_parto || calcularPrevisaoParto(baseDate, dias),
+      previsao_parto: previsaoParto,
       observacoes: ev.dados_protocolo?.observacoes || '',
     });
     setSelectedCowIds([ev.animal_id]);
@@ -215,6 +227,9 @@ export const useReproducaoForm = ({
   // Salvar formulário
   const handleSave = async (e?: FormEvent) => {
     if (e) e.preventDefault();
+    if (submittingRef.current || mutationIsSaving) return;
+    submittingRef.current = true;
+    setIsSubmitting(true);
 
     try {
       if (activeTab === 'monta_natural') {
@@ -236,20 +251,22 @@ export const useReproducaoForm = ({
             return;
           }
 
-          for (const cowId of selectedCowIds) {
-            const cow = matrizes.find((m) => m.id === cowId);
-            await createEvento({
-              animal_id: cowId,
-              brinco_matriz: cow?.brinco || 'N/A',
-              tipo_protocolo: 'monta_natural',
-              data_principal: formData.data_principal,
-              dados_protocolo: {
-                touro: formData.nome_touro_monta,
-                observacoes: formData.observacoes,
-              },
-              resultado_dg: 'pendente',
-            });
+          const cows = selectedCowIds.map((cowId) => matrizes.find((m) => m.id === cowId));
+          if (cows.some((cow) => !cow)) {
+            showToast('Uma das matrizes selecionadas não está mais cadastrada como ativa. Atualize a lista e tente novamente.', 'error');
+            return;
           }
+          await createEventosBatch(cows.map((cow) => ({
+            animal_id: cow!.id,
+            brinco_matriz: cow!.brinco,
+            tipo_protocolo: 'monta_natural' as const,
+            data_principal: formData.data_principal,
+            dados_protocolo: {
+              touro: formData.nome_touro_monta,
+              observacoes: formData.observacoes,
+            },
+            resultado_dg: 'pendente' as const,
+          })));
           showToast(`${selectedCowIds.length} registro(s) de Monta Natural lançado(s) com sucesso!`);
         }
       } else if (activeTab === 'iatf') {
@@ -259,13 +276,15 @@ export const useReproducaoForm = ({
         }
 
         const baseInseminacaoDate = formData.d10 || formData.d0 || formData.data_principal;
-        const calculatedParto =
-          formData.previsao_parto ||
-          calcularPrevisaoParto(baseInseminacaoDate, Number(formData.dias_previsao_parto) || 290);
+        const calculatedParto = formData.previsao_parto || (
+          typeof formData.dias_previsao_parto === 'number' && Number.isFinite(formData.dias_previsao_parto)
+            ? calcularPrevisaoParto(baseInseminacaoDate, formData.dias_previsao_parto)
+            : ''
+        );
 
         const payload = {
-          animal_id: formData.animal_id || `manual-${formData.brinco_matriz || 'matriz'}`,
-          brinco_matriz: formData.brinco_matriz || 'Matriz',
+          animal_id: formData.animal_id,
+          brinco_matriz: formData.brinco_matriz.trim(),
           tipo_protocolo: 'iatf' as const,
           data_principal: formData.data_principal,
           dados_protocolo: {
@@ -277,7 +296,7 @@ export const useReproducaoForm = ({
             condicao_corporal: formData.condicao_corporal,
             data_ultrassom: formData.data_ultrassom,
             reimplantou: formData.reimplantou,
-            dias_gestacao_previsao: Number(formData.dias_previsao_parto) || 290,
+            dias_gestacao_previsao: formData.dias_previsao_parto,
             observacoes: formData.observacoes,
           },
           resultado_dg: formData.dg_radio,
@@ -299,8 +318,8 @@ export const useReproducaoForm = ({
         }
 
         const payload = {
-          animal_id: formData.animal_id || `manual-${formData.brinco_matriz || formData.receptora || 'receptora'}`,
-          brinco_matriz: formData.brinco_matriz || formData.receptora,
+          animal_id: formData.animal_id,
+          brinco_matriz: (formData.brinco_matriz || formData.receptora).trim(),
           tipo_protocolo: 'tetf' as const,
           data_principal: formData.data_principal,
           dados_protocolo: {
@@ -327,8 +346,8 @@ export const useReproducaoForm = ({
         }
 
         const payload = {
-          animal_id: formData.animal_id || `manual-${formData.brinco_matriz || 'vaca'}`,
-          brinco_matriz: formData.brinco_matriz || 'Vaca Comum',
+          animal_id: formData.animal_id,
+          brinco_matriz: formData.brinco_matriz.trim(),
           tipo_protocolo: 'dg' as const,
           data_principal: formData.data_dg_exame,
           dados_protocolo: {
@@ -352,8 +371,11 @@ export const useReproducaoForm = ({
       }
 
       setSlideOpen(false);
-    } catch {
-      showToast('Erro ao salvar lançamento reprodutivo.', 'error');
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : 'Erro ao salvar lançamento reprodutivo.', 'error');
+    } finally {
+      submittingRef.current = false;
+      setIsSubmitting(false);
     }
   };
 
@@ -393,5 +415,6 @@ export const useReproducaoForm = ({
     handleOpenView,
     handleSave,
     handleDelete,
+    isSaving: mutationIsSaving || isSubmitting,
   };
 };

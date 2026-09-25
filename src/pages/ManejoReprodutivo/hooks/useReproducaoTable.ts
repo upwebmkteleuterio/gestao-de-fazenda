@@ -9,6 +9,7 @@ export const useReproducaoTable = () => {
   const [dataFim, setDataFim] = useState('');
   const [page, setPage] = useState(1);
   const limit = 10;
+  const dateRangeInvalid = Boolean(dataInicio && dataFim && dataInicio > dataFim);
 
   // Reseta para a página 1 ao alterar filtros
   useEffect(() => {
@@ -26,8 +27,10 @@ export const useReproducaoTable = () => {
     error,
     refetch,
     createEvento,
+    createEventosBatch,
     updateEvento,
     deleteEvento,
+    isSaving,
   } = useReproducao({
     search,
     protocolo,
@@ -37,6 +40,7 @@ export const useReproducaoTable = () => {
     limit,
   }, {
     useOfflineCache: true,
+    enabled: !dateRangeInvalid,
   });
 
   // Seleção em lote de eventos
@@ -96,7 +100,9 @@ export const useReproducaoTable = () => {
     handleClearFilters,
     hasActiveFilters,
     createEvento,
+    createEventosBatch,
     updateEvento,
     deleteEvento,
+    isSaving,
   };
 };
