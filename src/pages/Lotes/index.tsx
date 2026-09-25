@@ -15,8 +15,15 @@ import { usePastagens } from '../../hooks/usePastagens';
 import { useAnimais } from '../../hooks/useAnimais';
 import { useUIStore } from '../../store/useUIStore';
 import { Pagination } from '../../components/Pagination';
+import { SyncStatusIndicator, type SyncStatus } from '../../components/SyncStatusIndicator';
 import { Lote } from '../../services/lotesService';
 import { MAX_DOMAIN_TEXT_LENGTH } from '../../services/domainValidation';
+
+type LoteRow = Lote & {
+  syncStatus?: SyncStatus;
+  syncError?: string;
+  localDeleted?: boolean;
+};
 
 export const Lotes: React.FC = () => {
   const navigate = useNavigate();
@@ -263,20 +270,23 @@ export const Lotes: React.FC = () => {
           ) : (
             <Table
               columns={[
-                { 
-                  header: 'Nome do Lote', 
-                  render: (r: Lote) => (
+                {
+                  header: 'Nome do Lote',
+                  render: (r: LoteRow) => (
                     <div>
-                      <span className="font-bold text-gray-900 dark:text-gray-100">{r.nome}</span>
+                      <span className="font-bold text-gray-900 dark:text-gray-100 inline-flex items-center gap-1.5">
+                        {r.nome}
+                        <SyncStatusIndicator status={r.syncStatus} error={r.syncError} />
+                      </span>
                       <p className="text-xs text-gray-500 dark:text-gray-400">
                         Criado em {new Date(r.data_criacao).toLocaleDateString('pt-BR')}
                       </p>
                     </div>
-                  ) 
+                  )
                 },
                 {
                   header: 'Pasto Atual',
-                  render: (r: Lote) => (
+                  render: (r: LoteRow) => (
                     r.pasto_nome ? (
                       <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300 border border-emerald-200/60 dark:border-emerald-800/60">
                         <MapPin className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
@@ -289,18 +299,18 @@ export const Lotes: React.FC = () => {
                     )
                   )
                 },
-                { 
-                  header: 'Animais', 
-                  render: (r: Lote) => (
+                {
+                  header: 'Animais',
+                  render: (r: LoteRow) => (
                     <span className="inline-flex items-center rounded-md bg-emerald-50 dark:bg-emerald-400/10 px-2 py-1 text-xs font-medium text-emerald-700 dark:text-emerald-400 ring-1 ring-inset ring-emerald-600/20">
                       {r.animais_ids.length} cabeças
                     </span>
                   ) 
                 },
-                { 
-                  header: 'Ações', 
+                {
+                  header: 'Ações',
                   accessor: 'id',
-                  render: (r: Lote) => (
+                  render: (r: LoteRow) => (
                     <div className="flex items-center justify-end gap-2">
                       <button
                         id={`btn-mudar-pasto-${r.id}`}

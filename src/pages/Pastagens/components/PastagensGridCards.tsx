@@ -1,6 +1,7 @@
 import React from 'react';
-import { AlertCircle, AlertTriangle, ChevronRight, CloudUpload, RefreshCw } from 'lucide-react';
+import { AlertTriangle, ChevronRight } from 'lucide-react';
 import { Badge } from '@/components/Badge';
+import { SyncStatusIndicator } from '@/components/SyncStatusIndicator';
 import { Pastagem } from '@/types/database';
 import { checkSaidaVencida, calcularStatusLotacao } from '../utils/pastagemUtils';
 
@@ -60,21 +61,7 @@ export const PastagensGridCards: React.FC<PastagensGridCardsProps> = ({
                 <div>
                   <h3 className="font-bold text-gray-900 dark:text-white text-base group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors flex items-center gap-1.5">
                     {pasto.nome_pasto}
-                    {pasto.syncStatus === 'pending' && (
-                      <Badge variant="warning" className="px-1.5 py-0" title="Alteração pendente de sincronização">
-                        <CloudUpload className="w-3 h-3" />
-                      </Badge>
-                    )}
-                    {pasto.syncStatus === 'processing' && (
-                      <Badge variant="info" className="px-1.5 py-0" title="Sincronização em andamento">
-                        <RefreshCw className="w-3 h-3" />
-                      </Badge>
-                    )}
-                    {pasto.syncStatus === 'error' && (
-                      <Badge variant="danger" className="px-1.5 py-0" title={pasto.syncError || 'Erro de sincronização'}>
-                        <AlertCircle className="w-3 h-3" />
-                      </Badge>
-                    )}
+                    <SyncStatusIndicator status={pasto.syncStatus} error={pasto.syncError} />
                   </h3>
                   <p className="text-xs text-gray-500 dark:text-gray-400">
                     {pasto.tipo_capim} &middot; {pasto.area_ha} ha

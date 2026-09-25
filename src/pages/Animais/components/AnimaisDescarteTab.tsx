@@ -1,8 +1,9 @@
 import React from 'react';
-import { AlertCircle, Clock3, Loader2, Plus } from 'lucide-react';
+import { Plus } from 'lucide-react';
 import { Button } from '@/components/Button';
 import { Table, Column } from '@/components/Table';
 import { Badge } from '@/components/Badge';
+import { SyncStatusIndicator } from '@/components/SyncStatusIndicator';
 import { Animal } from '@/types/database';
 
 interface AnimaisDescarteTabProps {
@@ -24,11 +25,7 @@ export const AnimaisDescarteTab: React.FC<AnimaisDescarteTabProps> = ({
       render: (row) => (
         <div className="flex items-center space-x-2">
           <span className="font-bold text-gray-900 dark:text-gray-100">#{row.brinco}</span>
-          {row.syncStatus && row.syncStatus !== 'synced' && (
-            <span className="text-amber-600 dark:text-amber-300" title={row.syncError || `Sincronização ${row.syncStatus}`}>
-              {row.syncStatus === 'processing' ? <Loader2 className="h-3 w-3 animate-spin" /> : row.syncStatus === 'error' ? <AlertCircle className="h-3 w-3" /> : <Clock3 className="h-3 w-3" />}
-            </span>
-          )}
+          <SyncStatusIndicator status={row.syncStatus} error={row.syncError} />
           <Badge variant="danger">DESCARTE</Badge>
         </div>
       ),

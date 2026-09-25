@@ -14,6 +14,7 @@ import { EmptyState } from '../components/EmptyState';
 import { ErrorState } from '../components/ErrorState';
 import { useFinanceiro } from '../hooks/useFinanceiro';
 import { Pagination } from '../components/Pagination';
+import { SyncStatusIndicator, type SyncStatus } from '../components/SyncStatusIndicator';
 import { useUIStore } from '../store/useUIStore';
 import { useConnectivityStore } from '../store/useConnectivityStore';
 import { TransacaoFinanceira } from '../types/database';
@@ -42,6 +43,12 @@ const addOneDay = (date: string) => {
 const firstDayOfNextMonth = (periodo: string) => {
   const [year, month] = periodo.split('-').map(Number);
   return new Date(Date.UTC(year, month, 1)).toISOString().split('T')[0];
+};
+
+type FinanceiroRow = TransacaoFinanceira & {
+  syncStatus?: SyncStatus;
+  syncError?: string;
+  localDeleted?: boolean;
 };
 
 export const FinanceiroPage: React.FC = () => {
@@ -223,12 +230,15 @@ export const FinanceiroPage: React.FC = () => {
     }
   };
 
-  const columns: Column<TransacaoFinanceira>[] = [
+  const columns: Column<FinanceiroRow>[] = [
     {
       header: 'Descrição do Lançamento',
       accessor: 'descricao',
       render: (row) => (
-        <span className="font-bold text-gray-900 dark:text-white">{row.descricao}</span>
+        <span className="font-bold text-gray-900 dark:text-white inline-flex items-center gap-1.5">
+          {row.descricao}
+          <SyncStatusIndicator status={row.syncStatus} error={row.syncError} />
+        </span>
       ),
     },
     {

@@ -1,8 +1,9 @@
 import React from 'react';
-import { AlertCircle, Map, AlertTriangle, CloudUpload, Clock, ChevronRight, RefreshCw } from 'lucide-react';
+import { Map, AlertTriangle, Clock, ChevronRight } from 'lucide-react';
 import { Card } from '@/components/Card';
 import { Table, Column } from '@/components/Table';
 import { Badge } from '@/components/Badge';
+import { SyncStatusIndicator } from '@/components/SyncStatusIndicator';
 import { Button } from '@/components/Button';
 import { Pagination } from '@/components/Pagination';
 import { EmptyState } from '@/components/EmptyState';
@@ -53,21 +54,7 @@ export const PastagensTable: React.FC<PastagensTableProps> = ({
           <div>
             <span className="font-bold text-gray-900 dark:text-white hover:text-emerald-600 dark:hover:text-emerald-400 transition-colors inline-flex items-center gap-1.5">
               {row.nome_pasto}
-              {row.syncStatus === 'pending' && (
-                <Badge variant="warning" className="px-1.5 py-0" title="Alteração pendente de sincronização">
-                  <CloudUpload className="w-3 h-3" />
-                </Badge>
-              )}
-              {row.syncStatus === 'processing' && (
-                <Badge variant="info" className="px-1.5 py-0" title="Sincronização em andamento">
-                  <RefreshCw className="w-3 h-3" />
-                </Badge>
-              )}
-              {row.syncStatus === 'error' && (
-                <Badge variant="danger" className="px-1.5 py-0" title={row.syncError || 'Erro de sincronização'}>
-                  <AlertCircle className="w-3 h-3" />
-                </Badge>
-              )}
+              <SyncStatusIndicator status={row.syncStatus} error={row.syncError} />
             </span>
             <p className="text-xs text-gray-500 dark:text-gray-400">
               {row.tipo_capim} &middot; {row.area_ha} ha

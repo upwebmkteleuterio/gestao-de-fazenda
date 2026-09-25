@@ -28,11 +28,18 @@ import { EmptyState } from '../components/EmptyState';
 import { ErrorState } from '../components/ErrorState';
 import { useInsumos } from '../hooks/useInsumos';
 import { Pagination } from '../components/Pagination';
+import { SyncStatusIndicator, type SyncStatus } from '../components/SyncStatusIndicator';
 import { useUIStore } from '../store/useUIStore';
 import { InsumosSlidePanel } from './Insumos/components/InsumosSlidePanel';
 import { InsumosModals } from './Insumos/components/InsumosModals';
 import { Insumo, MovimentacaoInsumo } from '../types/database';
 import { validateInsumoFields, validateMovimentacaoFields } from '../services/domainValidation';
+
+type InsumoRow = Insumo & {
+  syncStatus?: SyncStatus;
+  syncError?: string;
+  localDeleted?: boolean;
+};
 
 export const InsumosPage: React.FC = () => {
   const { showToast } = useUIStore();
@@ -74,7 +81,7 @@ export const InsumosPage: React.FC = () => {
   const [isSaving, setIsSaving] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
 
-  const insumosFiltrados = insumos;
+  const insumosFiltrados: InsumoRow[] = insumos;
 
   // Estados dos Painéis / Modais
   const [slideOpen, setSlideOpen] = useState(false);
@@ -531,8 +538,9 @@ export const InsumosPage: React.FC = () => {
                       <td className="px-4 py-3.5">
                         <div className="flex items-center space-x-2">
                           {isCritico && <AlertTriangle className="w-4 h-4 text-red-600 dark:text-red-400 animate-pulse flex-shrink-0" />}
-                          <span className={`font-bold ${isCritico ? 'text-red-900 dark:text-red-200' : 'text-gray-900 dark:text-white'}`}>
+                          <span className={`font-bold inline-flex items-center gap-1.5 ${isCritico ? 'text-red-900 dark:text-red-200' : 'text-gray-900 dark:text-white'}`}>
                             {item.nome_produto}
+                            <SyncStatusIndicator status={item.syncStatus} error={item.syncError} />
                           </span>
                         </div>
                       </td>

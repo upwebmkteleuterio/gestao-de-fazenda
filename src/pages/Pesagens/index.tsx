@@ -17,10 +17,17 @@ import { useLotes } from '../../hooks/useLotes';
 import { useAnimais } from '../../hooks/useAnimais';
 import { useUIStore } from '../../store/useUIStore';
 import { useConnectivityStore } from '../../store/useConnectivityStore';
+import { SyncStatusIndicator, type SyncStatus } from '../../components/SyncStatusIndicator';
 import { Pesagem } from '../../types/database';
 import { isPlausiblePesagem, validatePesagemFields } from '@/services/domainValidation';
 import { PesagemSlidePanel } from './components/PesagemSlidePanel';
 import { PesagemModals } from './components/PesagemModals';
+
+type PesagemRow = Pesagem & {
+  syncStatus?: SyncStatus;
+  syncError?: string;
+  localDeleted?: boolean;
+};
 
 export const PesagensPage: React.FC = () => {
   const { slidePanel, closeSlidePanel, showToast } = useUIStore();
@@ -225,14 +232,15 @@ export const PesagensPage: React.FC = () => {
     }
   };
 
-  const columns: Column<Pesagem>[] = [
+  const columns: Column<PesagemRow>[] = [
     {
       header: 'ID / Brinco',
       accessor: 'brinco_animal',
       render: (row) => (
         <div>
-          <span className="font-bold text-emerald-700 dark:text-emerald-400 transition-colors">
+          <span className="font-bold text-emerald-700 dark:text-emerald-400 transition-colors inline-flex items-center gap-1.5">
             {row.brinco_animal}
+            <SyncStatusIndicator status={row.syncStatus} error={row.syncError} />
           </span>
           <span className="text-xs text-gray-500 dark:text-gray-400 capitalize block">
             {row.tipo_animal || 'Vaca'}
