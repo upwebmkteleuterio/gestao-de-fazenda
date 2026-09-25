@@ -2,7 +2,11 @@ import { QueryClient } from '@tanstack/react-query';
 
 export const queryClient = new QueryClient({
   defaultOptions: {
+    mutations: {
+      networkMode: 'always',
+    },
     queries: {
+      networkMode: 'always',
       refetchOnWindowFocus: false,
       staleTime: 1000 * 60 * 5,
     },

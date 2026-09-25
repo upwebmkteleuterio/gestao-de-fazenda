@@ -114,6 +114,7 @@ export const useAnimais = (filters?: AnimalFilters) => {
   };
 
   const createMutation = useMutation({
+    networkMode: 'always',
     mutationFn: (newAnimal: AnimalCreateInput) => {
       if (!userId) throw new Error('Sua sessão expirou. Entre novamente.');
       return animaisService.create(userId, newAnimal);
@@ -124,6 +125,7 @@ export const useAnimais = (filters?: AnimalFilters) => {
   });
 
   const updateMutation = useMutation({
+    networkMode: 'always',
     mutationFn: ({ id, updates }: { id: string; updates: Partial<Animal> }) => {
       if (!userId) throw new Error('Sua sessão expirou. Entre novamente.');
       return animaisService.update(userId, id, updates);
@@ -134,6 +136,7 @@ export const useAnimais = (filters?: AnimalFilters) => {
   });
 
   const deleteMutation = useMutation({
+    networkMode: 'always',
     mutationFn: (id: string) => {
       if (!userId) throw new Error('Sua sessão expirou. Entre novamente.');
       return animaisService.delete(userId, id);
