@@ -16,6 +16,7 @@ import { usePesagens } from '../../hooks/usePesagens';
 import { useLotes } from '../../hooks/useLotes';
 import { useAnimais } from '../../hooks/useAnimais';
 import { useUIStore } from '../../store/useUIStore';
+import { useConnectivityStore } from '../../store/useConnectivityStore';
 import { Pesagem } from '../../types/database';
 import { PesagemSlidePanel } from './components/PesagemSlidePanel';
 import { PesagemModals } from './components/PesagemModals';
@@ -23,6 +24,7 @@ import { PesagemModals } from './components/PesagemModals';
 export const PesagensPage: React.FC = () => {
   const { slidePanel, closeSlidePanel, showToast } = useUIStore();
   const { animais } = useAnimais();
+  const isOffline = useConnectivityStore((state) => state.status === 'offline');
 
   const [search, setSearch] = useState('');
   const [tipoAnimal, setTipoAnimal] = useState('all');
@@ -31,7 +33,7 @@ export const PesagensPage: React.FC = () => {
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(10);
 
-  const { pesagens, total, isLoading, isError, error, refetch, createPesagem, createPesagemGrupo, updatePesagem, deletePesagem } = usePesagens({
+  const { pesagens, total, source, capturedAt, isLoading, isError, error, refetch, createPesagem, createPesagemGrupo, updatePesagem, deletePesagem } = usePesagens({
     search,
     tipoAnimal,
     startDate,
@@ -73,6 +75,15 @@ export const PesagensPage: React.FC = () => {
     { animal_id: '', brinco_animal: '', peso_kg: 0 },
     { animal_id: '', brinco_animal: '', peso_kg: 0 },
   ]);
+
+  React.useEffect(() => {
+    if (!isOffline) return;
+    setSearch('');
+    setTipoAnimal('all');
+    setStartDate('');
+    setEndDate('');
+    setPage(1);
+  }, [isOffline]);
 
   const handleOpenCreate = () => {
     const firstAnimal = animais[0];
@@ -131,15 +142,15 @@ export const PesagensPage: React.FC = () => {
           showToast(`Pesagem do animal ${formData.brinco_animal} salva com sucesso!`);
         } else {
           // Salva Pesagem em Grupo
-          const validGrupo = grupoRows.filter(r => r.brinco_animal && r.peso_kg > 0);
-          if (validGrupo.length === 0) {
-            showToast('Informe ao menos 1 animal válido na pesagem em grupo.', 'error');
+          const validGrupo = grupoRows.filter(r => r.animal_id && r.brinco_animal && r.peso_kg > 0);
+          if (validGrupo.length === 0 || validGrupo.length !== grupoRows.filter(r => r.brinco_animal || r.peso_kg > 0).length) {
+            showToast('Selecione um animal real e informe um peso válido em cada linha preenchida.', 'error');
             return;
           }
           const pesagensToCreate = validGrupo.map(r => ({
-            animal_id: r.animal_id || `ani-temp-${r.brinco_animal}`,
+            animal_id: r.animal_id,
             brinco_animal: r.brinco_animal,
-            tipo_animal: 'vaca' as const,
+            tipo_animal: (animais.find((animal) => animal.id === r.animal_id)?.tipo_animal || 'vaca') as Pesagem['tipo_animal'],
             peso_kg: r.peso_kg,
             data_pesagem: formData.data_pesagem || new Date().toISOString().split('T')[0],
             observacoes: 'Pesagem registrada em grupo',
@@ -325,6 +336,15 @@ export const PesagensPage: React.FC = () => {
         </div>
       </div>
 
+      {(isOffline || source === 'local' || capturedAt) && (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-200" role="status">
+          <strong>{isOffline ? 'Modo offline:' : source === 'local' ? 'Dados locais:' : 'Cache offline disponível:'}</strong>{' '}
+          {source === 'local' || isOffline ? 'Exibindo as 10 pesagens mais recentes disponíveis localmente. ' : 'As 10 pesagens mais recentes estão pré-carregadas para uso offline. '}
+          Busca, filtros, datas e paginação ficam disponíveis somente online.
+          {capturedAt && <span className="ml-1 text-xs opacity-80">Atualizado em {new Date(capturedAt).toLocaleString('pt-BR')}</span>}
+        </div>
+      )}
+
       {/* Card da Tabela com Filtros */}
       <Card noPadding>
         <div className="p-4 border-b border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-800 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
@@ -335,6 +355,7 @@ export const PesagensPage: React.FC = () => {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Buscar por Brinco..." noMargin
+            disabled={isOffline}
           />
 
           <Select
@@ -342,6 +363,7 @@ export const PesagensPage: React.FC = () => {
             value={tipoAnimal}
             onChange={(e) => setTipoAnimal(e.target.value)}
             noMargin
+            disabled={isOffline}
             options={[
               { label: 'Todos os Tipos', value: 'all' },
               { label: 'Vaca', value: 'vaca' },
@@ -358,7 +380,7 @@ export const PesagensPage: React.FC = () => {
             value={startDate}
             onChange={(e) => setStartDate(e.target.value)}
             noMargin
-
+            disabled={isOffline}
             className="mb-0"
           />
 
@@ -368,7 +390,7 @@ export const PesagensPage: React.FC = () => {
             value={endDate}
             onChange={(e) => setEndDate(e.target.value)}
             noMargin
-
+            disabled={isOffline}
             className="mb-0"
           />
         </div>
@@ -425,13 +447,15 @@ export const PesagensPage: React.FC = () => {
               else setSelectedPesagemIds(pesagens.map(p => p.id));
             }}
           />
-          <Pagination
-            currentPage={page}
-            totalPages={Math.ceil((total || 0) / limit) || 1}
-            onPageChange={(p) => setPage(p)}
-            totalItems={total}
-            itemsPerPage={limit}
-          />
+          {!isOffline && (
+            <Pagination
+              currentPage={page}
+              totalPages={Math.ceil((total || 0) / limit) || 1}
+              onPageChange={(p) => setPage(p)}
+              totalItems={total}
+              itemsPerPage={limit}
+            />
+          )}
           </>
         )}
       </Card>

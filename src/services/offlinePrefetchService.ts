@@ -5,7 +5,7 @@ import { pastagensService, syncPastagens } from '@/services/pastagensService';
 import { appSettingsService } from '@/services/appSettingsService';
 import { dashboardService } from '@/services/dashboardService';
 import { financeiroService, syncFinanceiro } from '@/services/financeiroService';
-import { pesagensService } from '@/services/pesagensService';
+import { pesagensService, syncPesagens } from '@/services/pesagensService';
 import { useConnectivityStore } from '@/store/useConnectivityStore';
 
 const DASHBOARD_SNAPSHOT_KEY = 'dashboard-summary';
@@ -44,6 +44,14 @@ const runPrefetch = async (userId: string): Promise<void> => {
   useConnectivityStore.getState().setSyncing();
 
   try {
+    await runSource(userId, async () => {
+      await syncPesagens(userId);
+      if (!(await canContinue(userId))) return;
+      await pesagensService.prefetchFirstPage(userId);
+    });
+
+    if (!(await canContinue(userId))) return;
+    useConnectivityStore.getState().setSyncing();
     await runSource(userId, async () => {
       await syncAnimais(userId);
       if (!(await canContinue(userId))) return;
