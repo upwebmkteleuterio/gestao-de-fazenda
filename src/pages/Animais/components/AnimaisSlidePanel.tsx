@@ -9,6 +9,7 @@ import { MontaNaturalIcon } from '../../../components/MontaNaturalIcon';
 import { InseminacaoIcon } from '../../../components/InseminacaoIcon';
 import { Animal, TipoAnimal, CategoriaAnimal, StatusAnimal, SexoAnimal, RegistroToqueAno } from '../../../types/database';
 import { Tabs } from '../../../components/Tabs';
+import { isPlausibleAnimalWeight } from '@/services/domainValidation';
 
 
 export const AnimaisSlidePanel = ({
@@ -18,6 +19,11 @@ export const AnimaisSlidePanel = ({
   handleAddToque, handleRemoveToque, isSaving, calcularIdadeFormatada, showToast, animais = [], handleCreateFilho
 }: any) => {
   const [idadeMode, setIdadeMode] = React.useState<'data' | 'meses'>('data');
+  const parentLabel = (reference?: string) => {
+    if (!reference) return '';
+    const parent = animais.find((animal: any) => animal.id === reference || animal.brinco === reference);
+    return parent ? `${parent.brinco} (${parent.tipo_animal})` : `${reference} (referência legada)`;
+  };
   return (
   <>
     
@@ -73,6 +79,11 @@ export const AnimaisSlidePanel = ({
                 <h3 className="text-2xl font-extrabold text-gray-900 dark:text-white">{selectedAnimal.brinco}</h3>
                 <p className="text-xs text-gray-500 dark:text-gray-400 capitalize">{selectedAnimal.tipo_animal} &middot; {selectedAnimal.raca || 'Nelore'}</p>
               </div>
+              {selectedAnimal.brinco_duplicado && (
+                <div className="mt-3 col-span-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-200">
+                  Conflito legado: há outro animal ativo com este brinco. Os históricos continuam separados pelo ID interno; novos cadastros com este brinco são bloqueados.
+                </div>
+              )}
               <Badge variant={selectedAnimal.status === 'ativo' ? 'success' : 'danger'}>
                 {selectedAnimal.status.toUpperCase()}
               </Badge>
@@ -126,13 +137,13 @@ export const AnimaisSlidePanel = ({
               {selectedAnimal.mae_id && (
                 <div>
                   <p className="text-xs text-gray-400 uppercase font-semibold">Mãe</p>
-                  <p className="font-medium text-gray-800 dark:text-gray-200">{selectedAnimal.mae_id}</p>
+                  <p className="font-medium text-gray-800 dark:text-gray-200">{parentLabel(selectedAnimal.mae_id)}</p>
                 </div>
               )}
               {selectedAnimal.pai_id && (
                 <div>
                   <p className="text-xs text-gray-400 uppercase font-semibold">Pai</p>
-                  <p className="font-medium text-gray-800 dark:text-gray-200">{selectedAnimal.pai_id}</p>
+                  <p className="font-medium text-gray-800 dark:text-gray-200">{parentLabel(selectedAnimal.pai_id)}</p>
                 </div>
               )}
               {selectedAnimal.status === 'descarte' && (
@@ -331,6 +342,7 @@ export const AnimaisSlidePanel = ({
                     type="date"
                     value={formData.data_nascimento || ''}
                     onChange={(e) => setFormData({ ...formData, data_nascimento: e.target.value })}
+                    max={new Date().toISOString().split('T')[0]}
                     noMargin
                     hint={formData.data_nascimento ? `Idade atualizada: ${calcularIdadeFormatada(formData.data_nascimento)}` : ''}
                   />
@@ -338,14 +350,20 @@ export const AnimaisSlidePanel = ({
                   <Input
                     id="idade_estimada"
                     type="number"
+                    min={0}
+                    max={600}
+                    step={1}
                     placeholder="Quantos meses o animal tem hoje?"
                     onChange={(e) => {
-                      const meses = parseInt(e.target.value);
-                      if (!isNaN(meses) && meses >= 0) {
-                        const d = new Date();
-                        d.setMonth(d.getMonth() - meses);
-                        setFormData({ ...formData, data_nascimento: d.toISOString().split('T')[0] });
+                      const rawValue = e.target.value;
+                      const meses = Number(rawValue);
+                      if (rawValue === '' || !Number.isInteger(meses) || meses < 0 || meses > 600) {
+                        setFormData({ ...formData, data_nascimento: '' });
+                        return;
                       }
+                      const d = new Date();
+                      d.setMonth(d.getMonth() - meses);
+                      setFormData({ ...formData, data_nascimento: d.toISOString().split('T')[0] });
                     }}
                     noMargin
                     hint={formData.data_nascimento ? `Data de nascimento calculada: ${new Date(formData.data_nascimento).toLocaleDateString('pt-BR')} (${calcularIdadeFormatada(formData.data_nascimento)})` : ''}
@@ -413,8 +431,14 @@ export const AnimaisSlidePanel = ({
                 label="Peso Atual (kg)"
                 id="peso_atual"
                 type="number"
-                value={formData.peso_atual || ''}
+                min={0}
+                max={5000}
+                step="0.1"
+                value={formData.peso_atual ?? ''}
                 onChange={(e) => setFormData({ ...formData, peso_atual: Number(e.target.value) })}
+                hint={formData.peso_atual && isPlausibleAnimalWeight(formData.peso_atual)
+                  ? 'Atenção: este peso está fora da faixa usual. Confirme o valor antes de salvar.'
+                  : 'Use 0 somente quando o peso ainda não estiver informado.'}
               />
             </div>
 
@@ -450,21 +474,19 @@ export const AnimaisSlidePanel = ({
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <Input
-                    label="Mãe (Selecione ou Digite)"
+                  <Select
+                    label="Mãe (animal de referência)"
                     id="mae_id"
                     value={formData.mae_id || ''}
-                    onChange={(e) => setFormData({ ...formData, mae_id: e.target.value })}
-                    placeholder="Ex: BR-0012"
-                    list="maes-list"
+                    onChange={(e) => setFormData({ ...formData, mae_id: e.target.value || undefined })}
+                    options={[{ label: 'Sem mãe informada', value: '' }, ...animais.filter((a: any) => ['vaca', 'matriz', 'novilha', 'bezerra'].includes(a.tipo_animal) && a.id !== selectedAnimal?.id).map((a: any) => ({ label: `${a.brinco} - ${a.tipo_animal}`, value: a.id }))]}
                   />
-                  <Input
-                    label="Pai (Selecione ou Digite)"
+                  <Select
+                    label="Pai (animal de referência)"
                     id="pai_id"
                     value={formData.pai_id || ''}
-                    onChange={(e) => setFormData({ ...formData, pai_id: e.target.value })}
-                    placeholder="Ex: BR-0102"
-                    list="pais-list"
+                    onChange={(e) => setFormData({ ...formData, pai_id: e.target.value || undefined })}
+                    options={[{ label: 'Sem pai informado', value: '' }, ...animais.filter((a: any) => ['touro', 'garrote', 'bezerro'].includes(a.tipo_animal) && a.id !== selectedAnimal?.id).map((a: any) => ({ label: `${a.brinco} - ${a.tipo_animal}`, value: a.id }))]}
                   />
                 </div>
 
@@ -619,6 +641,7 @@ export const AnimaisSlidePanel = ({
                           id="toque_data"
                           type="date"
                           value={novoToqueData}
+                          max={new Date().toISOString().split('T')[0]}
                           onChange={(e) => setNovoToqueData(e.target.value)}
                         />
                         <Input

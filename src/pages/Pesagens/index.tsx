@@ -18,6 +18,7 @@ import { useAnimais } from '../../hooks/useAnimais';
 import { useUIStore } from '../../store/useUIStore';
 import { useConnectivityStore } from '../../store/useConnectivityStore';
 import { Pesagem } from '../../types/database';
+import { isPlausiblePesagem, validatePesagemFields } from '@/services/domainValidation';
 import { PesagemSlidePanel } from './components/PesagemSlidePanel';
 import { PesagemModals } from './components/PesagemModals';
 
@@ -134,10 +135,8 @@ export const PesagensPage: React.FC = () => {
     try {
       if (slideMode === 'create') {
         if (activeTabPanel === 'individual') {
-          if (!formData.brinco_animal || !formData.peso_kg) {
-            showToast('Preencha o brinco e peso do animal.', 'error');
-            return;
-          }
+          validatePesagemFields(formData);
+          if (isPlausiblePesagem(formData.peso_kg as number)) showToast('Atenção: este peso está fora da faixa usual, mas será salvo para conferência.', 'info');
           await createPesagem(formData as Omit<Pesagem, 'id' | 'createdAt' | 'status_sincronizacao'>);
           showToast(`Pesagem do animal ${formData.brinco_animal} salva com sucesso!`);
         } else {
@@ -155,17 +154,21 @@ export const PesagensPage: React.FC = () => {
             data_pesagem: formData.data_pesagem || new Date().toISOString().split('T')[0],
             observacoes: 'Pesagem registrada em grupo',
           }));
+          pesagensToCreate.forEach((item) => validatePesagemFields(item));
+          if (pesagensToCreate.some((item) => isPlausiblePesagem(item.peso_kg))) showToast('Atenção: há peso fora da faixa usual; os valores tecnicamente válidos serão salvos para conferência.', 'info');
 
           await createPesagemGrupo(pesagensToCreate);
           showToast(`${validGrupo.length} pesagens em grupo salvas com sucesso!`);
         }
       } else if (slideMode === 'edit' && selectedPesagem) {
+        validatePesagemFields(formData);
+        if (isPlausiblePesagem(formData.peso_kg as number)) showToast('Atenção: este peso está fora da faixa usual, mas será salvo para conferência.', 'info');
         await updatePesagem({ id: selectedPesagem.id, updates: formData });
         showToast('Pesagem atualizada com sucesso!');
       }
       setSlideOpen(false);
-    } catch (err) {
-      showToast('Erro ao salvar pesagem.', 'error');
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : 'Erro ao salvar pesagem.', 'error');
     }
   };
 
@@ -222,6 +225,7 @@ export const PesagensPage: React.FC = () => {
           <span className="text-xs text-gray-500 dark:text-gray-400 capitalize block">
             {row.tipo_animal || 'Vaca'}
           </span>
+          {row.brinco_duplicado && <span className="text-[10px] font-semibold text-amber-700 dark:text-amber-300">Brinco duplicado · histórico separado por animal</span>}
         </div>
       ),
     },
@@ -300,7 +304,7 @@ export const PesagensPage: React.FC = () => {
             );
           }
         }
-        return <span className="text-xs text-gray-400">Aguardando 2ª pesagem</span>;
+        return <span className="text-xs text-gray-400">Aguardando próxima pesagem ou intervalo válido</span>;
       },
     },
   ];

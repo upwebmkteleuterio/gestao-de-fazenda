@@ -3,6 +3,7 @@ import { Animal } from '@/types/database';
 import { useAnimais } from '@/hooks/useAnimais';
 import { usePastagens } from '@/hooks/usePastagens';
 import { useUIStore } from '@/store/useUIStore';
+import { isFutureDate, isValidDate, validateAnimalFields } from '@/services/domainValidation';
 
 const INITIAL_FORM_DATA: Partial<Animal> = {
   brinco: '',
@@ -110,6 +111,10 @@ export const useAnimalForm = () => {
 
   const handleAddToque = () => {
     if (!novoToqueData || !novoToqueResultado) return;
+    if (!isValidDate(novoToqueData) || isFutureDate(novoToqueData)) {
+      showToast('Informe uma data de toque válida e não futura.', 'error');
+      return;
+    }
     const novo = {
       id: Math.random().toString(36).substring(2, 11),
       data: novoToqueData,
@@ -136,8 +141,10 @@ export const useAnimalForm = () => {
   const handleSave = async (e: FormEvent) => {
     e.preventDefault();
     if (isSaving) return;
-    if (!formData.brinco?.trim()) {
-      showToast('Por favor, informe o Brinco/ID do animal.', 'error');
+    try {
+      validateAnimalFields(formData);
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : 'Confira os dados do animal.', 'error');
       return;
     }
 
@@ -159,8 +166,8 @@ export const useAnimalForm = () => {
         showToast(`Animal ${formData.brinco} atualizado com sucesso!`);
         syncLocalMutation();
       }
-    } catch {
-      showToast('Erro ao salvar animal.', 'error');
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : 'Erro ao salvar animal.', 'error');
     } finally {
       setIsSaving(false);
     }

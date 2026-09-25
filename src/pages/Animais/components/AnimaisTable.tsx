@@ -49,6 +49,11 @@ export const AnimaisTable: React.FC<AnimaisTableProps> = ({
         <div>
           <span className="font-bold text-emerald-700 dark:text-emerald-400 transition-colors inline-flex items-center gap-1.5">
             {row.brinco}
+            {row.brinco_duplicado && (
+              <span className="text-[10px] font-semibold text-amber-700 dark:text-amber-300" title="Há outro animal ativo com este brinco">
+                Brinco duplicado
+              </span>
+            )}
             {row.syncStatus && row.syncStatus !== 'synced' && (
               <span
                 className="inline-flex items-center gap-1 text-[10px] font-medium text-amber-600 dark:text-amber-300"

@@ -49,9 +49,13 @@ export interface Animal {
   syncStatus?: AnimalSyncStatus;
   syncError?: string;
   localDeleted?: boolean;
+  /** Sinaliza conflito legado de identidade sem misturar os históricos. */
+  brinco_duplicado?: boolean;
 }
 
 export interface Pesagem {
+  /** Identidade duplicada legada; o histórico permanece separado por animal_id. */
+  brinco_duplicado?: boolean;
   id: string;
   animal_id: string;
   brinco_animal: string;

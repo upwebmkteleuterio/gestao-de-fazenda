@@ -18,7 +18,8 @@ import {
 } from '@/offline/database';
 import { useConnectivityStore } from '@/store/useConnectivityStore';
 import { animaisService, syncAnimais } from './animaisService';
-import { Pesagem } from '@/types/database';
+import { Animal, Pesagem } from '@/types/database';
+import { DomainValidationError, validatePesagemFields } from './domainValidation';
 
 type PesagemDbRow = {
   id: string;
@@ -76,24 +77,14 @@ const toPesagem = (row: PesagemDbRow): Pesagem => ({
   createdAt: row.created_at,
 });
 
-const isDate = (value: unknown): value is string => {
-  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
-  const [year, month, day] = value.split('-').map(Number);
-  const parsed = new Date(Date.UTC(year, month - 1, day));
-  return parsed.getUTCFullYear() === year && parsed.getUTCMonth() === month - 1 && parsed.getUTCDate() === day;
-};
-
 const validateInput = (item: Partial<Pesagem>): PesagemInput => {
-  if (typeof item.animal_id !== 'string' || item.animal_id.trim() === '') throw new Error('Selecione um animal válido.');
-  if (typeof item.brinco_animal !== 'string' || item.brinco_animal.trim() === '') throw new Error('Informe o brinco do animal.');
-  if (!isDate(item.data_pesagem)) throw new Error('Informe uma data de pesagem válida.');
-  if (typeof item.peso_kg !== 'number' || !Number.isFinite(item.peso_kg) || item.peso_kg < 0) throw new Error('Informe um peso válido e não negativo.');
+  validatePesagemFields(item);
   return {
-    animal_id: item.animal_id,
-    brinco_animal: item.brinco_animal.trim(),
+    animal_id: item.animal_id as string,
+    brinco_animal: item.brinco_animal!.trim(),
     tipo_animal: item.tipo_animal,
-    peso_kg: item.peso_kg,
-    data_pesagem: item.data_pesagem,
+    peso_kg: item.peso_kg as number,
+    data_pesagem: item.data_pesagem as string,
     observacoes: item.observacoes?.trim() || undefined,
   };
 };
@@ -104,12 +95,14 @@ const sortPesagens = (items: Pesagem[]) => [...items].sort((a, b) => {
 });
 
 const calcularGMD = (animalId: string, novoPeso: number, dataNova: string, pesagensExistentes: Pesagem[]) => {
+  const sameDay = pesagensExistentes.some((item) => item.animal_id === animalId && item.data_pesagem === dataNova);
   const anterior = sortPesagens(
     pesagensExistentes.filter((item) => item.animal_id === animalId && item.data_pesagem < dataNova),
   )[0];
+  if (sameDay) return { gmd: undefined, diasIntervalo: undefined, pesoAnterior: undefined, dataAnterior: undefined, ganhoPeso: undefined };
   if (!anterior) return { gmd: undefined, diasIntervalo: undefined, pesoAnterior: undefined, dataAnterior: undefined, ganhoPeso: undefined };
-  const dias = Math.ceil(Math.abs(new Date(dataNova).getTime() - new Date(anterior.data_pesagem).getTime()) / 86400000);
-  if (dias <= 0) return { gmd: undefined, diasIntervalo: undefined, pesoAnterior: anterior.peso_kg, dataAnterior: anterior.data_pesagem, ganhoPeso: 0 };
+  const dias = Math.ceil((new Date(dataNova).getTime() - new Date(anterior.data_pesagem).getTime()) / 86400000);
+  if (dias <= 0) return { gmd: undefined, diasIntervalo: undefined, pesoAnterior: anterior.peso_kg, dataAnterior: anterior.data_pesagem, ganhoPeso: undefined };
   const ganho = Number((novoPeso - anterior.peso_kg).toFixed(2));
   return { gmd: Number((ganho / dias).toFixed(2)), diasIntervalo: dias, pesoAnterior: anterior.peso_kg, dataAnterior: anterior.data_pesagem, ganhoPeso: ganho };
 };
@@ -177,6 +170,97 @@ const fetchAllRemote = async (): Promise<Pesagem[]> => {
   return ((data ?? []) as unknown as PesagemDbRow[]).map(toPesagem);
 };
 
+const findAnimalForPesagem = async (animalId: string): Promise<Animal | null> => {
+  const userId = await getCurrentUserId();
+  if (!userId) return null;
+  const local = await listOfflineRecords<Animal>({ userId, entity: 'animal' });
+  const localAnimal = local.find((record) => record.entityId === animalId && !record.data.localDeleted)?.data;
+  if (localAnimal) return localAnimal;
+  if (!isBrowserOnline()) return null;
+  const { data, error } = await supabase.from('animais').select('*').eq('id', animalId).maybeSingle();
+  if (error) throw error;
+  return data as unknown as Animal | null;
+};
+
+const ensurePesagemReference = async (
+  item: PesagemInput,
+  exceptId?: string,
+  originalAnimalId?: string,
+  originalDate?: string,
+): Promise<void> => {
+  const animal = await findAnimalForPesagem(item.animal_id);
+  if (!animal || animal.brinco !== item.brinco_animal) throw new DomainValidationError('O animal selecionado não corresponde ao brinco informado. Selecione o animal novamente.');
+  const identityChanged = !exceptId || item.animal_id !== originalAnimalId || item.data_pesagem !== originalDate;
+  if (!identityChanged) return;
+  const userId = await getCurrentUserId();
+  if (!userId) throw new Error('Sua sessão expirou. Entre novamente.');
+  const existing = await listOfflineRecords<LocalPesagem>({ userId, entity: ENTITY });
+  if (existing.some((record) => !record.data.localDeleted && record.data.id !== exceptId && record.data.animal_id === item.animal_id && record.data.data_pesagem === item.data_pesagem)) throw new DomainValidationError('Já existe uma pesagem deste animal nesta data. Confira o histórico para evitar duplicidade.');
+  if (isBrowserOnline()) {
+    const { data, error } = await supabase.from('pesagens').select('id').eq('animal_id', item.animal_id).eq('data_pesagem', item.data_pesagem).limit(2);
+    if (error) throw error;
+    if (((data ?? []) as Array<{ id: string }>).some((row) => row.id !== exceptId)) throw new DomainValidationError('Já existe uma pesagem deste animal nesta data. Confira o histórico para evitar duplicidade.');
+  }
+};
+
+const annotatePesagens = async (items: Pesagem[]): Promise<Pesagem[]> => {
+  const userId = await getCurrentUserId();
+  if (!userId) return items;
+  let activeBrincos: string[] = [];
+  if (isBrowserOnline()) {
+    const { data, error } = await supabase.from('animais').select('id, brinco').eq('status', 'ativo');
+    if (error) throw error;
+    activeBrincos = ((data ?? []) as Array<{ id: string; brinco: string }>).map((row) => row.brinco);
+  } else {
+    const records = await listOfflineRecords<Animal>({ userId, entity: 'animal' });
+    activeBrincos = records.filter((record) => !record.data.localDeleted && record.data.status === 'ativo').map((record) => record.data.brinco);
+  }
+  const counts = new Map<string, number>();
+  activeBrincos.forEach((brinco) => {
+    const key = brinco.trim().toLocaleLowerCase();
+    counts.set(key, (counts.get(key) ?? 0) + 1);
+  });
+  return items.map((item) => ({
+    ...item,
+    brinco_duplicado: (counts.get(item.brinco_animal.trim().toLocaleLowerCase()) ?? 0) > 1,
+  }));
+};
+
+const recalculateLocalChain = async (userId: string, animalIds: string[]) => {
+  const records = await listOfflineRecords<LocalPesagem>({ userId, entity: ENTITY });
+  const activeRecords = records.filter((record) => !record.data.localDeleted);
+  const all = activeRecords.map((record) => record.data);
+  for (const animalId of [...new Set(animalIds)]) {
+    const chain = sortPesagens(all.filter((item) => item.animal_id === animalId));
+    for (const item of chain) {
+      const calc = calcularGMD(item.animal_id, item.peso_kg, item.data_pesagem, all.filter((other) => other.id !== item.id));
+      const record = activeRecords.find((candidate) => candidate.data.id === item.id);
+      if (!record) continue;
+      const changed = record.data.peso_anterior !== calc.pesoAnterior
+        || record.data.data_pesagem_anterior !== calc.dataAnterior
+        || record.data.ganho_peso_kg !== calc.ganhoPeso
+        || record.data.gmd_calculado !== calc.gmd
+        || record.data.dias_intervalo !== calc.diasIntervalo;
+      if (!changed) continue;
+      const updated = {
+        ...record,
+        data: {
+          ...record.data,
+          peso_anterior: calc.pesoAnterior,
+          data_pesagem_anterior: calc.dataAnterior,
+          ganho_peso_kg: calc.ganhoPeso,
+          gmd_calculado: calc.gmd,
+          dias_intervalo: calc.diasIntervalo,
+        },
+        updatedAt: new Date().toISOString(),
+      };
+      await saveOfflineRecord(updated);
+      const index = all.findIndex((candidate) => candidate.id === item.id);
+      if (index >= 0) all[index] = updated.data;
+    }
+  }
+};
+
 const syncRemoteAnimalWeight = async (animalIds: string[], pesagens: Pesagem[]) => {
   for (const animalId of [...new Set(animalIds)]) {
     const latest = sortPesagens(pesagens.filter((item) => item.animal_id === animalId))[0];
@@ -184,20 +268,38 @@ const syncRemoteAnimalWeight = async (animalIds: string[], pesagens: Pesagem[]) 
   }
 };
 
+const recalculateRemoteChain = async (animalIds: string[]): Promise<Pesagem[]> => {
+  const all = await fetchAllRemote();
+  for (const animalId of [...new Set(animalIds)]) {
+    const chain = sortPesagens(all.filter((item) => item.animal_id === animalId)).reverse();
+    for (const item of chain) {
+      const calc = calcularGMD(item.animal_id, item.peso_kg, item.data_pesagem, all.filter((other) => other.id !== item.id));
+      const patch = { peso_anterior: calc.pesoAnterior ?? null, data_pesagem_anterior: calc.dataAnterior ?? null, ganho_peso_kg: calc.ganhoPeso ?? null, gmd_calculado: calc.gmd ?? null, dias_intervalo: calc.diasIntervalo ?? null };
+      if (item.peso_anterior !== calc.pesoAnterior || item.data_pesagem_anterior !== calc.dataAnterior || item.ganho_peso_kg !== calc.ganhoPeso || item.gmd_calculado !== calc.gmd || item.dias_intervalo !== calc.diasIntervalo) {
+        const { error } = await supabase.from('pesagens').update(patch).eq('id', item.id);
+        if (error) throw error;
+      }
+    }
+  }
+  return fetchAllRemote();
+};
+
 const remoteCreate = async (payload: CreatePayload): Promise<Pesagem> => {
+  validateInput(payload.item);
+  await ensurePesagemReference(payload.item);
   const existing = await fetchAllRemote();
   const calc = calcularGMD(payload.item.animal_id, payload.item.peso_kg, payload.item.data_pesagem, existing);
   const { data, error } = await supabase.from('pesagens').insert(buildCreatePayload(payload.item, payload.id, calc)).select('*').single();
   if (error) {
     const found = (await fetchAllRemote()).find((item) => item.id === payload.id);
     if (!found) throw error;
-    const all = await fetchAllRemote();
+    const all = await recalculateRemoteChain([found.animal_id]);
     await syncRemoteAnimalWeight([found.animal_id], all);
-    return found;
+    return all.find((item) => item.id === payload.id) ?? found;
   }
-  const all = [...existing, toPesagem(data as unknown as PesagemDbRow)];
+  const all = await recalculateRemoteChain([payload.item.animal_id]);
   await syncRemoteAnimalWeight([payload.item.animal_id], all);
-  return toPesagem(data as unknown as PesagemDbRow);
+  return all.find((item) => item.id === payload.id) ?? toPesagem(data as unknown as PesagemDbRow);
 };
 
 const remoteUpdate = async (payload: UpdatePayload): Promise<Pesagem> => {
@@ -205,14 +307,15 @@ const remoteUpdate = async (payload: UpdatePayload): Promise<Pesagem> => {
   const current = before.find((item) => item.id === payload.id);
   if (!current) throw new Error('Pesagem não encontrada.');
   const next = validateInput({ ...current, ...payload.updates });
+  await ensurePesagemReference(next, payload.id, current.animal_id, current.data_pesagem);
   const calc = calcularGMD(next.animal_id, next.peso_kg, next.data_pesagem, before.filter((item) => item.id !== payload.id));
   const updatePayload = buildCreatePayload(next, payload.id, calc);
   const { id: _id, ...patch } = updatePayload;
   const { data, error } = await supabase.from('pesagens').update(patch).eq('id', payload.id).select('*').single();
   if (error) throw error;
-  const all = await fetchAllRemote();
+  const all = await recalculateRemoteChain([current.animal_id, next.animal_id]);
   await syncRemoteAnimalWeight([current.animal_id, next.animal_id], all);
-  return toPesagem(data as unknown as PesagemDbRow);
+  return all.find((item) => item.id === payload.id) ?? toPesagem(data as unknown as PesagemDbRow);
 };
 
 const remoteDelete = async (id: string): Promise<void> => {
@@ -220,7 +323,10 @@ const remoteDelete = async (id: string): Promise<void> => {
   const current = before.find((item) => item.id === id);
   const { error } = await supabase.from('pesagens').delete().eq('id', id);
   if (error) throw error;
-  if (current) await syncRemoteAnimalWeight([current.animal_id], before.filter((item) => item.id !== id));
+  if (current) {
+    const all = await recalculateRemoteChain([current.animal_id]);
+    await syncRemoteAnimalWeight([current.animal_id], all);
+  }
 };
 
 const getOperationId = (operation: OutboxOperation<PesagemOutboxPayload>) => operation.payload.id;
@@ -313,7 +419,8 @@ export const pesagensService = {
     if (!userId) return { data: [], total: 0, source: 'local' };
     if (!isBrowserOnline()) {
       const local = await readLocalPage(userId);
-      return { data: local.data, total: local.data.length, source: 'local', capturedAt: local.capturedAt };
+      const data = await annotatePesagens(local.data);
+      return { data, total: data.length, source: 'local', capturedAt: local.capturedAt };
     }
     try {
       let query = supabase.from('pesagens').select('*', { count: 'exact' });
@@ -326,17 +433,20 @@ export const pesagensService = {
       const { data, count, error } = await query;
       if (error) throw error;
       const items = ((data ?? []) as unknown as PesagemDbRow[]).map(toPesagem);
+      const itemsWithConflicts = await annotatePesagens(items);
       const isFirstPage = !filters?.search && (!filters?.tipoAnimal || filters.tipoAnimal === 'all') && !filters?.startDate && !filters?.endDate && filters?.page === 1 && filters.limit === PAGE_SIZE;
-      if (isFirstPage) await cacheOnlinePage(userId, items);
+      if (isFirstPage) await cacheOnlinePage(userId, itemsWithConflicts);
       const localPending = (await listOfflineRecords<LocalPesagem>({ userId, entity: ENTITY })).map((record) => record.data).filter((item) => item.syncStatus && item.syncStatus !== 'synced');
-      const merged = new Map(items.map((item) => [item.id, item]));
+      const merged = new Map(itemsWithConflicts.map((item) => [item.id, item]));
       localPending.forEach((item) => { if (item.localDeleted) merged.delete(item.id); else if (item.data_pesagem) merged.set(item.id, item); });
-      return { data: sortPesagens([...merged.values()]), total: Math.max(0, (count ?? items.length) + localPending.filter((item) => !items.some((remote) => remote.id === item.id) && !item.localDeleted).length), source: 'remote' };
+      const mergedData = await annotatePesagens(sortPesagens([...merged.values()]));
+      return { data: mergedData, total: Math.max(0, (count ?? itemsWithConflicts.length) + localPending.filter((item) => !itemsWithConflicts.some((remote) => remote.id === item.id) && !item.localDeleted).length), source: 'remote' };
     } catch (error) {
       const message = error instanceof Error ? error.message.toLowerCase() : '';
       if (!isBrowserOnline() || /network|fetch|offline|load failed|failed to fetch/.test(message)) {
         const local = await readLocalPage(userId);
-        return { data: local.data, total: local.data.length, source: 'local', capturedAt: local.capturedAt };
+        const data = await annotatePesagens(local.data);
+        return { data, total: data.length, source: 'local', capturedAt: local.capturedAt };
       }
       throw error;
     }
@@ -346,7 +456,7 @@ export const pesagensService = {
     if (!userId || !isBrowserOnline() || (await getCurrentUserId()) !== userId) return;
     const { data, error } = await supabase.from('pesagens').select('*').order('data_pesagem', { ascending: false }).order('created_at', { ascending: false }).order('id', { ascending: false }).range(0, PAGE_SIZE - 1);
     if (error) throw error;
-    const items = ((data ?? []) as unknown as PesagemDbRow[]).map(toPesagem);
+    const items = await annotatePesagens(((data ?? []) as unknown as PesagemDbRow[]).map(toPesagem));
     await cacheOnlinePage(userId, items);
   },
 
@@ -365,11 +475,13 @@ export const pesagensService = {
     const userId = await getCurrentUserId();
     if (!userId) throw new Error('Sua sessão expirou. Entre novamente.');
     const valid = validateInput(item);
+    await ensurePesagemReference(valid);
     const existing = (await listOfflineRecords<LocalPesagem>({ userId, entity: ENTITY })).map((record) => record.data).filter((record) => !record.localDeleted);
     const calc = calcularGMD(valid.animal_id, valid.peso_kg, valid.data_pesagem, existing);
     const id = `pes-${crypto.randomUUID()}`;
     const local: LocalPesagem = { ...valid, id, createdAt: new Date().toISOString(), status_sincronizacao: false, peso_anterior: calc.pesoAnterior, data_pesagem_anterior: calc.dataAnterior, ganho_peso_kg: calc.ganhoPeso, gmd_calculado: calc.gmd, dias_intervalo: calc.diasIntervalo, syncStatus: 'pending', localDeleted: false };
     await saveOfflineRecordAndEnqueue(localRecord(userId, local), { userId, entity: ENTITY, operation: 'create', payload: { id, item: toCreateItem(local) } });
+    await recalculateLocalChain(userId, [valid.animal_id]);
     return local;
   },
 
@@ -385,10 +497,12 @@ export const pesagensService = {
     const current = await readMutationRecord(userId, id);
     if (!current || current.data.localDeleted) throw new Error('Pesagem não encontrada no cache local.');
     const valid = validateInput({ ...current.data, ...updates });
+    await ensurePesagemReference(valid, id, current.data.animal_id, current.data.data_pesagem);
     const allLocal = (await listOfflineRecords<LocalPesagem>({ userId, entity: ENTITY })).map((record) => record.data).filter((record) => !record.localDeleted && record.id !== id);
     const calc = calcularGMD(valid.animal_id, valid.peso_kg, valid.data_pesagem, allLocal);
     const local: LocalPesagem = { ...current.data, ...valid, peso_anterior: calc.pesoAnterior, data_pesagem_anterior: calc.dataAnterior, ganho_peso_kg: calc.ganhoPeso, gmd_calculado: calc.gmd, dias_intervalo: calc.diasIntervalo, syncStatus: 'pending', syncError: undefined, localDeleted: false };
     await saveOfflineRecordAndEnqueue({ ...current, data: local, updatedAt: new Date().toISOString() }, { userId, entity: ENTITY, operation: 'update', payload: { id, updates: toUpdatePayload(valid) } });
+    await recalculateLocalChain(userId, [current.data.animal_id, valid.animal_id]);
     return local;
   },
 
@@ -399,6 +513,7 @@ export const pesagensService = {
     if (!current) throw new Error('Pesagem não encontrada no cache local.');
     const local: LocalPesagem = { ...current.data, syncStatus: 'pending', syncError: undefined, localDeleted: true };
     await saveOfflineRecordAndEnqueue({ ...current, data: local, updatedAt: new Date().toISOString() }, { userId, entity: ENTITY, operation: 'delete', payload: { id } });
+    await recalculateLocalChain(userId, [current.data.animal_id]);
     return true;
   },
 };

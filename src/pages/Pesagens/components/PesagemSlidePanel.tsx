@@ -72,6 +72,7 @@ export const PesagemSlidePanel: React.FC<PesagemSlidePanelProps> = ({
                   </span>
                 </div>
                 <p className="font-bold text-gray-900 dark:text-white text-base">Brinco: {selectedPesagem.brinco_animal}</p>
+                {selectedPesagem.brinco_duplicado && <p className="text-xs text-amber-700 dark:text-amber-300 mt-1">Brinco duplicado legado: este histórico permanece separado pelo animal_id.</p>}
               </div>
             </div>
 
@@ -191,7 +192,7 @@ export const PesagemSlidePanel: React.FC<PesagemSlidePanelProps> = ({
                 <div className="p-3 bg-amber-50 dark:bg-amber-950/30 rounded-lg border border-amber-200 dark:border-amber-800 text-xs text-amber-800 dark:text-amber-300 flex items-start space-x-2">
                   <Info className="w-4 h-4 shrink-0 mt-0.5" />
                   <span>
-                    Esta é a primeira pesagem registrada para este animal no rebanho ({selectedPesagem.peso_kg} kg em {selectedPesagem.data_pesagem}). O Ganho Médio Diário (GMD) será calculado automaticamente na próxima pesagem.
+                    Aguardando intervalo: esta é a primeira pesagem deste animal ou há outra pesagem na mesma data ({selectedPesagem.peso_kg} kg em {selectedPesagem.data_pesagem}). O GMD só será calculado entre pesagens do mesmo animal em datas diferentes.
                   </span>
                 </div>
               )}
@@ -246,6 +247,7 @@ export const PesagemSlidePanel: React.FC<PesagemSlidePanelProps> = ({
                   type="date"
                   value={formData.data_pesagem || ''}
                   onChange={(e) => setFormData({ ...formData, data_pesagem: e.target.value })}
+                  max={new Date().toISOString().split('T')[0]}
                   required
                 />
 
@@ -253,9 +255,12 @@ export const PesagemSlidePanel: React.FC<PesagemSlidePanelProps> = ({
                   label="Peso Atual (kg) *"
                   id="peso_kg"
                   type="number"
+                  min={0.1}
+                  max={5000}
                   step="0.1"
-                  value={formData.peso_kg || ''}
+                  value={formData.peso_kg ?? ''}
                   onChange={(e) => setFormData({ ...formData, peso_kg: Number(e.target.value) })}
+                  hint="Valores muito fora da faixa usual serão sinalizados, sem bloquear a conferência pecuária."
                   required
                 />
               </div>
@@ -268,6 +273,7 @@ export const PesagemSlidePanel: React.FC<PesagemSlidePanelProps> = ({
                   type="date"
                   value={formData.data_pesagem || ''}
                   onChange={(e) => setFormData({ ...formData, data_pesagem: e.target.value })}
+                  max={new Date().toISOString().split('T')[0]}
                 />
                 
                 <p className="text-xs font-bold uppercase text-gray-500">Animais e Pesos</p>
@@ -307,6 +313,9 @@ export const PesagemSlidePanel: React.FC<PesagemSlidePanelProps> = ({
                       <Input
                         id={`grupo_peso_${idx}`}
                         type="number"
+                        min={0.1}
+                        max={5000}
+                        step="0.1"
                         placeholder="kg"
                         value={row.peso_kg || ''}
                         onChange={(e) => {
