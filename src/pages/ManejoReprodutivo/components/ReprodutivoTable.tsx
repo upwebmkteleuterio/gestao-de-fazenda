@@ -23,6 +23,7 @@ interface ReprodutivoTableProps {
   limit?: number;
   onPageChange: (page: number) => void;
   isLoading: boolean;
+  isOffline?: boolean;
   isError?: boolean;
   onRetry?: () => void;
   onNovoEvento?: () => void;
@@ -41,6 +42,7 @@ export const ReprodutivoTable: React.FC<ReprodutivoTableProps> = ({
   limit = 10,
   onPageChange,
   isLoading,
+  isOffline = false,
   isError,
   onRetry,
   onNovoEvento,
@@ -206,23 +208,25 @@ export const ReprodutivoTable: React.FC<ReprodutivoTableProps> = ({
           <Table
             data={eventos}
             columns={columns}
-            selectedIds={selectedIds}
-            onToggleSelect={onToggleSelect}
-            onSelectAll={onSelectAll}
+            selectedIds={isOffline ? [] : selectedIds}
+            onToggleSelect={isOffline ? undefined : onToggleSelect}
+            onSelectAll={isOffline ? undefined : onSelectAll}
             onRowClick={(row) => onRowClick(row)}
-            onAction={(action, row) => {
+            onAction={isOffline ? undefined : (action, row) => {
               if (action === 'edit') onEdit(row);
               else if (action === 'view') onRowClick(row);
               else if (action === 'delete') onDelete(row);
             }}
           />
-          <Pagination
-            currentPage={page}
-            totalPages={Math.ceil((total || 0) / limit) || 1}
-            onPageChange={onPageChange}
-            totalItems={total}
-            itemsPerPage={limit}
-          />
+          {!isOffline && (
+            <Pagination
+              currentPage={page}
+              totalPages={Math.ceil((total || 0) / limit) || 1}
+              onPageChange={onPageChange}
+              totalItems={total}
+              itemsPerPage={limit}
+            />
+          )}
         </>
       )}
     </Card>

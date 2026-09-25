@@ -16,6 +16,7 @@ interface ReprodutivoFiltersProps {
   onDataFimChange: (value: string) => void;
   onClearFilters: () => void;
   hasActiveFilters: boolean;
+  disabled?: boolean;
 }
 
 export const ReprodutivoFilters: React.FC<ReprodutivoFiltersProps> = ({
@@ -29,6 +30,7 @@ export const ReprodutivoFilters: React.FC<ReprodutivoFiltersProps> = ({
   onDataFimChange,
   onClearFilters,
   hasActiveFilters,
+  disabled = false,
 }) => {
   return (
     <Card>
@@ -44,6 +46,7 @@ export const ReprodutivoFilters: React.FC<ReprodutivoFiltersProps> = ({
               value={search}
               onChange={(e) => onSearchChange(e.target.value)}
               icon={Search}
+              disabled={disabled}
             />
           </div>
 
@@ -55,6 +58,7 @@ export const ReprodutivoFilters: React.FC<ReprodutivoFiltersProps> = ({
               label="Tipo de Protocolo"
               value={protocolo}
               onChange={(e) => onProtocoloChange(e.target.value)}
+              disabled={disabled}
               options={[
                 { label: 'Todos os Protocolos', value: 'all' },
                 { label: 'IATF (Inseminação)', value: 'iatf' },
@@ -74,6 +78,7 @@ export const ReprodutivoFilters: React.FC<ReprodutivoFiltersProps> = ({
               label="Período De"
               value={dataInicio}
               onChange={(e) => onDataInicioChange(e.target.value)}
+              disabled={disabled}
             />
           </div>
 
@@ -86,6 +91,7 @@ export const ReprodutivoFilters: React.FC<ReprodutivoFiltersProps> = ({
               label="Período Até"
               value={dataFim}
               onChange={(e) => onDataFimChange(e.target.value)}
+              disabled={disabled}
             />
           </div>
         </div>
@@ -97,6 +103,7 @@ export const ReprodutivoFilters: React.FC<ReprodutivoFiltersProps> = ({
               variant="ghost"
               icon={RotateCcw}
               onClick={onClearFilters}
+              disabled={disabled}
               className="text-xs text-gray-500 hover:text-gray-700 dark:text-gray-400"
             >
               Limpar Filtros

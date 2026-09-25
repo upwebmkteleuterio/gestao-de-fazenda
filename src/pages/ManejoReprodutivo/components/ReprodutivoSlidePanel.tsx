@@ -15,7 +15,7 @@ export const ReprodutivoSlidePanel = ({
   slideOpen, setSlideOpen, slideMode, setSlideMode, selectedEvento,
   formData, setFormData, isSaving, handleSave, activeTab, setActiveTab,
   selectedCowIds, toggleCowSelection, toggleAllCows, matrizes, touros,
-  isFormValid, calcularPrevisaoParto, setModalOpen, setEventoToDelete
+  isFormValid, calcularPrevisaoParto, setModalOpen, setEventoToDelete, mutationsDisabled = false
 }: any) => {
   const [modoManualIatf, setModoManualIatf] = React.useState(false);
   const [modoManualDg, setModoManualDg] = React.useState(false);
@@ -92,7 +92,7 @@ export const ReprodutivoSlidePanel = ({
         width="lg"
         actions={
           <div className="flex items-center justify-between w-full">
-            {slideMode === 'view' ? (
+            {slideMode === 'view' || mutationsDisabled ? (
               <div />
             ) : slideMode === 'edit' && selectedEvento ? (
               <Button
@@ -110,15 +110,17 @@ export const ReprodutivoSlidePanel = ({
 
             <div className="flex space-x-3">
               {slideMode === 'view' ? (
-                <Button variant="primary" icon={Edit} onClick={() => setSlideMode('edit')}>
-                  Editar Registro
-                </Button>
+                !mutationsDisabled ? (
+                  <Button variant="primary" icon={Edit} onClick={() => setSlideMode('edit')}>
+                    Editar Registro
+                  </Button>
+                ) : null
               ) : (
                 <>
                   <Button variant="ghost" onClick={() => setSlideOpen(false)}>
                     Cancelar
                   </Button>
-                  <Button variant="primary" onClick={handleSave}>
+                  <Button variant="primary" onClick={handleSave} disabled={mutationsDisabled}>
                     Salvar Lançamento
                   </Button>
                 </>
@@ -127,7 +129,7 @@ export const ReprodutivoSlidePanel = ({
           </div>
         }
       >
-        <fieldset disabled={slideMode === 'view'} className="space-y-6 border-0 p-0 m-0 min-w-0">
+        <fieldset disabled={slideMode === 'view' || mutationsDisabled} className="space-y-6 border-0 p-0 m-0 min-w-0">
           {/* TABS SUPERIORES PARA SEGMENTAÇÃO DE PROTOCOLO (TELA 4.1) */}
           <div className="flex border-b border-gray-200 dark:border-gray-800 overflow-x-auto pb-1">
             <button

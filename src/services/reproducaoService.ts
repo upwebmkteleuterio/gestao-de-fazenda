@@ -1,6 +1,67 @@
-import { supabase } from '@/integrations/supabase/client';
+import { getCurrentUserId as readCurrentUserId, supabase } from '@/integrations/supabase/client';
+import { getOfflineSnapshot, listOfflineRecords, saveOfflineRecords, saveOfflineSnapshot, deleteOfflineRecords } from '@/offline/database';
+import { useConnectivityStore } from '@/store/useConnectivityStore';
 import { Animal, EventoReproducao } from '@/types/database';
 import { animaisService } from './animaisService';
+
+export type ReproducaoQuery = {
+  data: EventoReproducao[];
+  total: number;
+  source: 'remote' | 'local';
+  capturedAt?: string;
+};
+
+type LocalEvento = EventoReproducao;
+
+const PAGE_SIZE = 10;
+const ENTITY = 'evento_reproducao';
+const firstPageSnapshotKey = (userId: string) => `${ENTITY}:first-page:${userId}`;
+const localRecordKey = (userId: string, id: string) => `${ENTITY}:${userId}:${id}`;
+const isBrowserOnline = (): boolean => (
+  (typeof navigator === 'undefined' || navigator.onLine)
+  && useConnectivityStore.getState().status !== 'offline'
+);
+const getCurrentUserId = () => readCurrentUserId(isBrowserOnline());
+const isNetworkError = (error: unknown): boolean => {
+  const message = error instanceof Error ? error.message.toLowerCase() : '';
+  return !isBrowserOnline() || /network|fetch|offline|load failed|failed to fetch/.test(message);
+};
+
+const localRecord = (userId: string, evento: LocalEvento) => ({
+  key: localRecordKey(userId, evento.id),
+  userId,
+  entity: ENTITY,
+  entityId: evento.id,
+  data: evento,
+  updatedAt: new Date().toISOString(),
+});
+
+const readLocalFirstPage = async (userId: string): Promise<{ data: EventoReproducao[]; capturedAt?: string }> => {
+  const [records, snapshot] = await Promise.all([
+    listOfflineRecords<LocalEvento>({ userId, entity: ENTITY }),
+    getOfflineSnapshot<EventoReproducao[]>(firstPageSnapshotKey(userId)),
+  ]);
+  const localData = records
+    .filter((record) => record.userId === userId)
+    .map((record) => record.data);
+  const data = (localData.length > 0 ? localData : snapshot?.data ?? [])
+    .sort(compareEventosMaisRecentes)
+    .slice(0, PAGE_SIZE);
+  return { data, capturedAt: snapshot?.capturedAt };
+};
+
+const cacheFirstPage = async (userId: string, eventos: EventoReproducao[]): Promise<void> => {
+  const existing = await listOfflineRecords<LocalEvento>({ userId, entity: ENTITY });
+  await saveOfflineRecords(eventos.map((evento) => localRecord(userId, evento)));
+  const ids = new Set(eventos.map((evento) => evento.id));
+  await deleteOfflineRecords(existing.filter((record) => !ids.has(record.entityId)).map((record) => record.key));
+  await saveOfflineSnapshot({
+    key: firstPageSnapshotKey(userId),
+    scope: `${ENTITY}:${userId}`,
+    data: eventos,
+    capturedAt: new Date().toISOString(),
+  });
+};
 
 type ReproducaoDbRow = {
   id: string;
@@ -44,6 +105,7 @@ const toEvento = (row: ReproducaoDbRow): EventoReproducao => ({
 });
 
 const fetchEventos = async (): Promise<EventoReproducao[]> => {
+  if (!isBrowserOnline()) throw new Error('Ação indisponível offline.');
   const { data, error } = await supabase
     .from('eventos_reproducao')
     .select('*')
@@ -181,6 +243,7 @@ const toReportParams = (filters?: ReproducaoReportFilters) => ({
 
 export const reproducaoService = {
   getReportSummary: async (filters?: ReproducaoReportFilters): Promise<ReproducaoReportSummary> => {
+    if (!isBrowserOnline()) throw new Error('Relatório indisponível offline.');
     const { data, error } = await supabase.rpc('get_reproducao_report_summary', toReportParams(filters));
     if (error) throw error;
     const row = ((data ?? [])[0] ?? {}) as Partial<ReproducaoReportSummary>;
@@ -196,44 +259,88 @@ export const reproducaoService = {
     };
   },
 
-  getAll: async (filters?: ReproducaoReportFilters): Promise<{ data: EventoReproducao[]; total: number }> => {
-    let query = supabase
+  getAll: async (filters?: ReproducaoReportFilters): Promise<ReproducaoQuery> => {
+    const userId = await getCurrentUserId();
+    if (!userId) return { data: [], total: 0, source: 'local' };
+
+    const isFirstPage = !filters?.search
+      && (!filters?.protocolo || filters.protocolo === 'all')
+      && !filters?.dataEspecifica
+      && !filters?.dataInicio
+      && !filters?.dataFim
+      && !filters?.touro
+      && !filters?.resultadoDg
+      && filters?.page === 1
+      && filters.limit === PAGE_SIZE;
+
+    if (!isBrowserOnline()) {
+      const local = await readLocalFirstPage(userId);
+      return { data: local.data, total: local.data.length, source: 'local', capturedAt: local.capturedAt };
+    }
+
+    try {
+      let query = supabase
+        .from('eventos_reproducao')
+        .select('*', { count: 'exact' });
+
+      if (filters?.search?.trim()) {
+        const search = sanitizeSearch(filters.search);
+        query = query.or(`brinco_matriz.ilike.%${search}%,dados_protocolo->>touro.ilike.%${search}%`);
+      }
+      if (filters?.dataEspecifica) query = query.eq('data_principal', filters.dataEspecifica);
+      if (filters?.dataInicio) query = query.gte('data_principal', filters.dataInicio);
+      if (filters?.dataFim) query = query.lte('data_principal', filters.dataFim);
+      if (filters?.touro && filters.touro !== 'all') query = query.eq('dados_protocolo->>touro', filters.touro);
+      if (filters?.protocolo && filters.protocolo !== 'all') query = query.eq('tipo_protocolo', filters.protocolo);
+      if (filters?.resultadoDg && filters.resultadoDg !== 'all') {
+        query = filters.resultadoDg === 'pendente'
+          ? query.is('resultado_dg', null)
+          : query.eq('resultado_dg', filters.resultadoDg);
+      }
+
+      query = query
+        .order('data_principal', { ascending: false })
+        .order('created_at', { ascending: false })
+        .order('id', { ascending: false });
+
+      if (filters?.page !== undefined && filters.limit !== undefined) {
+        query = query.range(Math.max(0, (filters.page - 1) * filters.limit), filters.page * filters.limit - 1);
+      }
+
+      const { data, count, error } = await query;
+      if (error) throw error;
+      const items = ((data ?? []) as unknown as ReproducaoDbRow[]).map(toEvento);
+      if (isFirstPage) await cacheFirstPage(userId, items);
+      const snapshot = await getOfflineSnapshot<EventoReproducao[]>(firstPageSnapshotKey(userId));
+      return { data: items, total: count ?? items.length, source: 'remote', capturedAt: snapshot?.capturedAt };
+    } catch (error) {
+      if (!isNetworkError(error)) throw error;
+      const local = await readLocalFirstPage(userId);
+      return { data: local.data, total: local.data.length, source: 'local', capturedAt: local.capturedAt };
+    }
+  },
+
+  prefetchFirstPage: async (userId: string): Promise<void> => {
+    if (!userId || !isBrowserOnline() || (await getCurrentUserId()) !== userId) return;
+    const { data, error } = await supabase
       .from('eventos_reproducao')
-      .select('*', { count: 'exact' });
-
-    if (filters?.search?.trim()) {
-      const search = filters.search.replace(/[^\p{L}\p{N} _-]/gu, ' ').trim();
-      query = query.or(`brinco_matriz.ilike.%${search}%,dados_protocolo->>touro.ilike.%${search}%`);
-    }
-    if (filters?.dataEspecifica) query = query.eq('data_principal', filters.dataEspecifica);
-    if (filters?.dataInicio) query = query.gte('data_principal', filters.dataInicio);
-    if (filters?.dataFim) query = query.lte('data_principal', filters.dataFim);
-    if (filters?.touro && filters.touro !== 'all') query = query.eq('dados_protocolo->>touro', filters.touro);
-    if (filters?.protocolo && filters.protocolo !== 'all') query = query.eq('tipo_protocolo', filters.protocolo);
-    if (filters?.resultadoDg && filters.resultadoDg !== 'all') {
-      query = filters.resultadoDg === 'pendente'
-        ? query.is('resultado_dg', null)
-        : query.eq('resultado_dg', filters.resultadoDg);
-    }
-
-    query = query
+      .select('*')
       .order('data_principal', { ascending: false })
       .order('created_at', { ascending: false })
-      .order('id', { ascending: false });
-
-    if (filters?.page !== undefined && filters.limit !== undefined) {
-      query = query.range((filters.page - 1) * filters.limit, filters.page * filters.limit - 1);
-    }
-
-    const { data, count, error } = await query;
+      .order('id', { ascending: false })
+      .range(0, PAGE_SIZE - 1);
     if (error) throw error;
-    return {
-      data: ((data ?? []) as unknown as ReproducaoDbRow[]).map(toEvento),
-      total: count ?? 0,
-    };
+    const items = ((data ?? []) as unknown as ReproducaoDbRow[]).map(toEvento);
+    await cacheFirstPage(userId, items);
   },
 
   getById: async (id: string): Promise<EventoReproducao | null> => {
+    const userId = await getCurrentUserId();
+    if (!userId) return null;
+    if (!isBrowserOnline()) {
+      const local = await readLocalFirstPage(userId);
+      return local.data.find((evento) => evento.id === id) ?? null;
+    }
     const list = await fetchEventos();
     return list.find((evento) => evento.id === id) ?? null;
   },
@@ -241,6 +348,7 @@ export const reproducaoService = {
   create: async (
     item: Omit<EventoReproducao, 'id' | 'createdAt' | 'status_sincronizacao'>,
   ): Promise<EventoReproducao> => {
+    if (!isBrowserOnline()) throw new Error('Ação indisponível offline.');
     const previsaoParto =
       item.resultado_dg === 'cheia' && !item.previsao_parto
         ? calcularPrevisaoParto(item.data_principal || item.data_dg)
@@ -255,6 +363,7 @@ export const reproducaoService = {
   },
 
   update: async (id: string, updates: Partial<EventoReproducao>): Promise<EventoReproducao> => {
+    if (!isBrowserOnline()) throw new Error('Ação indisponível offline.');
     const list = await fetchEventos();
     const current = list.find((evento) => evento.id === id);
     if (!current) throw new Error('Evento não encontrado');
@@ -275,6 +384,7 @@ export const reproducaoService = {
   },
 
   delete: async (id: string): Promise<boolean> => {
+    if (!isBrowserOnline()) throw new Error('Ação indisponível offline.');
     const list = await fetchEventos();
     const eventToDelete = list.find((evento) => evento.id === id);
     const { error } = await supabase.from('eventos_reproducao').delete().eq('id', id);

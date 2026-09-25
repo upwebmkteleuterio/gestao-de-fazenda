@@ -1,5 +1,7 @@
-import React from 'react';
+import React, { useEffect } from 'react';
+import { WifiOff } from 'lucide-react';
 import { useUIStore } from '@/store/useUIStore';
+import { useConnectivityStore } from '@/store/useConnectivityStore';
 
 // Hooks locais de lógica
 import { useReproducaoTable } from './ManejoReprodutivo/hooks/useReproducaoTable';
@@ -16,6 +18,7 @@ import { ReprodutivoModals } from './ManejoReprodutivo/components/ReprodutivoMod
 
 export const ManejoReprodutivoPage: React.FC = () => {
   const { showToast } = useUIStore();
+  const connectivityStatus = useConnectivityStore((state) => state.status);
 
   // Hook de Listagem, Filtros de Busca e Seleção em Lote
   const {
@@ -30,6 +33,9 @@ export const ManejoReprodutivoPage: React.FC = () => {
     page,
     setPage,
     totalEventos,
+    source,
+    capturedAt,
+    isOffline,
     eventos,
     isLoading,
     isError,
@@ -44,6 +50,7 @@ export const ManejoReprodutivoPage: React.FC = () => {
     updateEvento,
     deleteEvento,
   } = useReproducaoTable();
+  const offline = isOffline || connectivityStatus === 'offline' || (typeof navigator !== 'undefined' && !navigator.onLine);
 
   // Hook de Formulário Reprodutivo (IATF, Monta, TETF, DG) e SlidePanel
   const {
@@ -76,6 +83,19 @@ export const ManejoReprodutivoPage: React.FC = () => {
     deleteEvento,
   });
 
+  useEffect(() => {
+    if (!offline) return;
+    setSearch('');
+    setProtocolo('all');
+    setDataInicio('');
+    setDataFim('');
+    setPage(1);
+    setSelectedEventoIds([]);
+    setSlideOpen(false);
+    setModalOpen(false);
+    setEventoToDelete(null);
+  }, [offline, setSearch, setProtocolo, setDataInicio, setDataFim, setPage, setSelectedEventoIds, setSlideOpen, setModalOpen, setEventoToDelete]);
+
   const handleRegistrarLote = () => {
     showToast(
       `Ação em lote aplicada para ${selectedEventoIds.length} eventos reprodutivos.`,
@@ -87,7 +107,18 @@ export const ManejoReprodutivoPage: React.FC = () => {
   return (
     <div className="space-y-6 animate-fade-in pb-12">
       {/* Header com ações principais */}
-      <ReprodutivoHeader onNovoRegistro={handleOpenCreate} />
+      <ReprodutivoHeader onNovoRegistro={handleOpenCreate} novoRegistroDisabled={offline} />
+
+      {(offline || source === 'local' || capturedAt) && (
+        <div className="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-200" role="status">
+          <WifiOff className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+          <div>
+            <p className="font-semibold">{offline ? 'Modo offline: exibindo a primeira página em cache.' : 'Cache offline disponível para o histórico reprodutivo.'}</p>
+            <p className="mt-0.5 text-xs">A busca, os filtros e a paginação ficam disponíveis novamente quando a conexão for restaurada. Novo registro, edição, exclusão e registro em lote ficam indisponíveis offline.</p>
+            {capturedAt && <p className="mt-1 text-[11px] opacity-80">Cache atualizado em {new Date(capturedAt).toLocaleString('pt-BR')}</p>}
+          </div>
+        </div>
+      )}
 
       {/* Card de Filtros (com alinhamento visual uniforme e campos padronizados) */}
       <ReprodutivoFilters
@@ -101,6 +132,7 @@ export const ManejoReprodutivoPage: React.FC = () => {
         onDataFimChange={setDataFim}
         onClearFilters={handleClearFilters}
         hasActiveFilters={hasActiveFilters}
+        disabled={offline}
       />
 
       {/* Tabela de Listagem de Eventos Reprodutivos */}
@@ -110,26 +142,32 @@ export const ManejoReprodutivoPage: React.FC = () => {
         page={page}
         onPageChange={setPage}
         isLoading={isLoading}
+        isOffline={offline}
         isError={isError}
         onRetry={refetch}
-        onNovoEvento={handleOpenCreate}
+        onNovoEvento={offline ? undefined : handleOpenCreate}
         selectedIds={selectedEventoIds}
         onToggleSelect={handleToggleSelectEvento}
         onSelectAll={handleSelectAllEventos}
         onRowClick={handleOpenView}
-        onEdit={handleOpenEdit}
+        onEdit={(evento) => {
+          if (!offline) handleOpenEdit(evento);
+        }}
         onDelete={(evento) => {
+          if (offline) return;
           setEventoToDelete(evento);
           setModalOpen(true);
         }}
       />
 
       {/* Barra Flutuante para Seleção em Lote */}
-      <ReprodutivoBatchBar
-        selectedCount={selectedEventoIds.length}
-        onRegistrarLote={handleRegistrarLote}
-        onLimparSelecao={() => setSelectedEventoIds([])}
-      />
+      {!offline && (
+        <ReprodutivoBatchBar
+          selectedCount={selectedEventoIds.length}
+          onRegistrarLote={handleRegistrarLote}
+          onLimparSelecao={() => setSelectedEventoIds([])}
+        />
+      )}
 
       {/* SlidePanel Lateral de Criação, Edição e Visualização */}
       <ReprodutivoSlidePanel
@@ -152,6 +190,7 @@ export const ManejoReprodutivoPage: React.FC = () => {
         calcularPrevisaoParto={calcularPrevisaoParto}
         setModalOpen={setModalOpen}
         setEventoToDelete={setEventoToDelete}
+        mutationsDisabled={offline}
       />
 
       {/* Modal de Confirmação de Exclusão */}

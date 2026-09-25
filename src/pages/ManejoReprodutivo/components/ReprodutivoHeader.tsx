@@ -5,9 +5,10 @@ import { Button } from '@/components/Button';
 
 interface ReprodutivoHeaderProps {
   onNovoRegistro: () => void;
+  novoRegistroDisabled?: boolean;
 }
 
-export const ReprodutivoHeader: React.FC<ReprodutivoHeaderProps> = ({ onNovoRegistro }) => {
+export const ReprodutivoHeader: React.FC<ReprodutivoHeaderProps> = ({ onNovoRegistro, novoRegistroDisabled = false }) => {
   const navigate = useNavigate();
 
   return (
@@ -30,7 +31,7 @@ export const ReprodutivoHeader: React.FC<ReprodutivoHeaderProps> = ({ onNovoRegi
         >
           Visualizar Relatório
         </Button>
-        <Button variant="primary" icon={Plus} onClick={onNovoRegistro}>
+        <Button variant="primary" icon={Plus} onClick={onNovoRegistro} disabled={novoRegistroDisabled}>
           Novo Registro Reprodutivo
         </Button>
       </div>

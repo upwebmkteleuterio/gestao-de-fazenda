@@ -18,6 +18,9 @@ export const useReproducaoTable = () => {
   const {
     eventos,
     totalEventos,
+    source,
+    capturedAt,
+    isOffline,
     isLoading,
     isError,
     error,
@@ -32,6 +35,8 @@ export const useReproducaoTable = () => {
     dataFim,
     page,
     limit,
+  }, {
+    useOfflineCache: true,
   });
 
   // Seleção em lote de eventos
@@ -77,6 +82,9 @@ export const useReproducaoTable = () => {
     limit,
     eventos,
     totalEventos,
+    source,
+    capturedAt,
+    isOffline,
     isLoading,
     isError,
     error,
