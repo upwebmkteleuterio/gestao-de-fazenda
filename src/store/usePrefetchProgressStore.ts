@@ -5,6 +5,7 @@ export const PREFETCH_STAGES = [
   'Lotes (primeira página)',
   'Pesagens (histórico recente)',
   'Manejo Reprodutivo (primeira página)',
+  'Manejo Sanitário (duas abas, primeira página)',
   'Pastagens (cadastro)',
   'Financeiro (mês atual)',
   'Insumos (cadastro + histórico recente)',

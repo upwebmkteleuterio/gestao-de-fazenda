@@ -8,6 +8,7 @@ import { financeiroService, syncFinanceiro } from '@/services/financeiroService'
 import { pesagensService, syncPesagens } from '@/services/pesagensService';
 import { lotesService, syncLotes } from '@/services/lotesService';
 import { reproducaoService } from '@/services/reproducaoService';
+import { sanitarioService } from '@/services/sanitarioService';
 import { insumosService, syncInsumos } from '@/services/insumosService';
 import { useConnectivityStore } from '@/store/useConnectivityStore';
 import { usePrefetchProgressStore, type PrefetchStage } from '@/store/usePrefetchProgressStore';
@@ -60,6 +61,7 @@ const runPrefetch = async (userId: string): Promise<void> => {
       { name: 'Lotes (primeira página)', source: async () => { await syncLotes(userId); await lotesService.getAll(userId, { page: 1, limit: 10 }); } },
       { name: 'Pesagens (histórico recente)', source: async () => { await syncPesagens(userId); await pesagensService.prefetchFirstPage(userId); } },
       { name: 'Manejo Reprodutivo (primeira página)', source: async () => { await reproducaoService.prefetchFirstPage(userId); } },
+      { name: 'Manejo Sanitário (duas abas, primeira página)', source: async () => { await sanitarioService.prefetchFirstPages(userId); } },
       { name: 'Pastagens (cadastro)', source: async () => { await syncPastagens(userId); await pastagensService.getAll(userId); } },
       { name: 'Financeiro (mês atual)', source: async () => { await syncFinanceiro(userId); await financeiroService.prefetchCurrentMonth(userId); } },
       { name: 'Insumos (cadastro + histórico recente)', source: async () => { await syncInsumos(userId); await insumosService.prefetch(userId); } },

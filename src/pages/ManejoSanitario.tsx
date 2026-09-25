@@ -19,7 +19,8 @@ import {
   ChevronRight,
   Filter,
   Check,
-  Edit
+  Edit,
+  WifiOff
 } from 'lucide-react';
 import { Button } from '../components/Button';
 import { Card } from '../components/Card';
@@ -58,7 +59,7 @@ export const ManejoSanitarioPage: React.FC = () => {
   }, [search, tipoManejoFilter, activeTab]);
 
   // Query dos manejos com paginação e filtros no banco/serviço
-  const { manejos, totalManejos, stats, isLoading, isError, error, refetch, createManejo, updateManejo, deleteManejo } = useSanitario({
+  const { manejos, totalManejos, stats, source, capturedAt, isOffline, isLoading, isError, refetch, createManejo, updateManejo, deleteManejo } = useSanitario({
     search,
     tipo: tipoManejoFilter,
     status: activeTab,
@@ -66,7 +67,18 @@ export const ManejoSanitarioPage: React.FC = () => {
     limit,
   });
 
-  // Contadores para as Tabs Estruturais vindos do serviço de banco
+  useEffect(() => {
+    if (!isOffline) return;
+    setSearch('');
+    setTipoManejoFilter('all');
+    setPage(1);
+    setSelectedManejoIds([]);
+    setModalOpen(false);
+    setGroupModalOpen(false);
+    if (slideMode !== 'view') setSlideOpen(false);
+  }, [isOffline]);
+
+  // Contadores para as Tabs Estruturais vindos do banco ou do snapshot local
   const countAndamento = stats.andamento;
   const countConcluidos = stats.concluido;
 
@@ -370,11 +382,22 @@ export const ManejoSanitarioPage: React.FC = () => {
         </div>
 
         <div className="flex items-center gap-3 shrink-0">
-          <Button variant="primary" icon={Plus} onClick={handleOpenCreate}>
+          <Button variant="primary" icon={Plus} onClick={isOffline ? undefined : handleOpenCreate} disabled={isOffline} title={isOffline ? 'Novo manejo indisponível offline' : undefined}>
             Novo Manejo
           </Button>
         </div>
       </div>
+
+      {(isOffline || source === 'local' || capturedAt) && (
+        <div className="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-amber-900 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-200">
+          <WifiOff className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+          <div className="text-sm">
+            <p className="font-semibold">{isOffline ? 'Modo offline: exibindo as duas primeiras páginas locais.' : source === 'local' ? 'Dados locais: exibindo o histórico sanitário em cache.' : 'Cache offline disponível para o histórico sanitário.'}</p>
+            <p className="mt-0.5 text-xs">Busca, filtro, paginação e ações ficam disponíveis novamente quando a conexão for restaurada. As duas abas continuam disponíveis offline.</p>
+            {capturedAt && <p className="mt-1 text-[11px] opacity-80">Cache atualizado em {new Date(capturedAt).toLocaleString('pt-BR')}</p>}
+          </div>
+        </div>
+      )}
 
       {/* TABS ESTRUTURAIS & FILTROS (TELA 5) */}
       <Card noPadding>
@@ -423,6 +446,7 @@ export const ManejoSanitarioPage: React.FC = () => {
               value={search}
               onChange={(e) => { setSearch(e.target.value); setPage(1); }}
               icon={Search}
+              disabled={isOffline}
             />
           </div>
 
@@ -430,6 +454,7 @@ export const ManejoSanitarioPage: React.FC = () => {
             <Select noMargin id="filter_tipo_manejo"
               value={tipoManejoFilter}
               onChange={(e) => setTipoManejoFilter(e.target.value)}
+              disabled={isOffline}
               options={[
                 { label: 'Todos os Tipos de Protocolo', value: 'all' },
                 { label: 'Vacinação', value: 'Vacinação' },
@@ -466,8 +491,8 @@ export const ManejoSanitarioPage: React.FC = () => {
                   ? 'Não há protocolos de vacinação, vermifugação ou tratamentos pendentes no momento.'
                   : 'Nenhum histórico de manejo finalizado encontrado para os filtros selecionados.'
               }
-              actionLabel="Novo Manejo"
-              onAction={handleOpenCreate}
+              actionLabel={isOffline ? undefined : 'Novo Manejo'}
+              onAction={isOffline ? undefined : handleOpenCreate}
             />
           </div>
         ) : (
@@ -475,10 +500,10 @@ export const ManejoSanitarioPage: React.FC = () => {
             data={listFiltrada}
             columns={columns}
             selectedIds={selectedManejoIds}
-            onToggleSelect={handleToggleSelectManejo}
-            onSelectAll={handleSelectAllManejos}
+            onToggleSelect={isOffline ? undefined : handleToggleSelectManejo}
+            onSelectAll={isOffline ? undefined : handleSelectAllManejos}
             onRowClick={(row) => handleOpenView(row)}
-            onAction={(action, row) => {
+            onAction={isOffline ? undefined : (action, row) => {
               if (action === 'edit') handleOpenEdit(row);
               else if (action === 'view') handleOpenView(row);
               else if (action === 'delete') {
@@ -488,17 +513,19 @@ export const ManejoSanitarioPage: React.FC = () => {
             }}
           />
         )}
-        <Pagination
-          currentPage={page}
-          totalPages={Math.ceil((totalManejos || 0) / limit) || 1}
-          onPageChange={setPage}
-          totalItems={totalManejos}
-          itemsPerPage={limit}
-        />
+        {!isOffline && (
+          <Pagination
+            currentPage={page}
+            totalPages={Math.ceil((totalManejos || 0) / limit) || 1}
+            onPageChange={setPage}
+            totalItems={totalManejos}
+            itemsPerPage={limit}
+          />
+        )}
       </Card>
 
       {/* STICKY BATCH ACTION BAR (Barra Flutuante para Ações em Lote) */}
-      {selectedManejoIds.length > 0 && (
+      {!isOffline && selectedManejoIds.length > 0 && (
         <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-gray-900/95 dark:bg-gray-900/95 text-white border border-gray-700/80 shadow-2xl rounded-2xl p-4 flex flex-wrap items-center justify-between gap-4 backdrop-blur-md max-w-2xl w-11/12 animate-slide-up">
           <div className="flex items-center space-x-3">
             <span className="flex items-center justify-center w-7 h-7 rounded-full bg-emerald-500 text-gray-950 font-bold text-xs">
@@ -547,6 +574,7 @@ export const ManejoSanitarioPage: React.FC = () => {
         
         isSaving={isSaving}
         handleSave={handleSave}
+        isOffline={isOffline}
         setGroupModalOpen={setGroupModalOpen}
         setItemToDelete={setItemToDelete}
         setModalOpen={setModalOpen}
@@ -568,6 +596,7 @@ export const ManejoSanitarioPage: React.FC = () => {
         groupModalOpen={groupModalOpen}
         setGroupModalOpen={setGroupModalOpen}
         formData={formData}
+        isOffline={isOffline}
         
         handleSelectAllAnimais={handleSelectAllAnimais}
         toggleAnimalInGroup={toggleAnimalInGroup}

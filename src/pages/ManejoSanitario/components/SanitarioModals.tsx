@@ -7,7 +7,7 @@ import { ManejoSanitario } from '../../../types/database';
 
 export const SanitarioModals = ({
   modalOpen, setModalOpen, itemToDelete, handleDelete,
-  groupModalOpen, setGroupModalOpen, formData, setFormData,
+  groupModalOpen, setGroupModalOpen, formData, setFormData, isOffline,
   handleSelectAllAnimais, toggleAnimalInGroup, animais
 }: any) => (
   <>
@@ -17,7 +17,7 @@ export const SanitarioModals = ({
         onClose={() => setGroupModalOpen(false)}
         title="Vincular Grupo de Animais"
         actions={
-          <Button variant="primary" onClick={() => setGroupModalOpen(false)}>
+          <Button variant="primary" onClick={() => setGroupModalOpen(false)} disabled={isOffline}>
             Confirmar Grupo ({formData.animais_ids.length} animais)
           </Button>
         }
@@ -27,7 +27,7 @@ export const SanitarioModals = ({
             <span className="text-xs font-bold text-gray-700 dark:text-gray-300">
               Selecione os animais para este manejo:
             </span>
-            <Button variant="ghost" onClick={handleSelectAllAnimais} className="text-xs text-emerald-700 dark:text-emerald-400 font-semibold hover:bg-emerald-50 dark:hover:bg-emerald-950/40 px-2.5 py-1 rounded-md transition-colors border border-emerald-200 dark:border-emerald-800/60 bg-emerald-50/50 dark:bg-emerald-950/20">
+            <Button variant="ghost" onClick={handleSelectAllAnimais} disabled={isOffline} className="text-xs text-emerald-700 dark:text-emerald-400 font-semibold hover:bg-emerald-50 dark:hover:bg-emerald-950/40 px-2.5 py-1 rounded-md transition-colors border border-emerald-200 dark:border-emerald-800/60 bg-emerald-50/50 dark:bg-emerald-950/20">
               {formData.animais_ids.length === animais.length ? 'Desmarcar Todos' : 'Selecionar Todos'}
             </Button>
           </div>
@@ -38,7 +38,7 @@ export const SanitarioModals = ({
               return (
                 <div
                   key={cow.id}
-                  onClick={() => toggleAnimalInGroup(cow.id)}
+                  onClick={isOffline ? undefined : () => toggleAnimalInGroup(cow.id)}
                   className={`flex items-center justify-between p-2.5 rounded-lg cursor-pointer transition-all text-xs font-medium ${
                     isSelected
                       ? 'bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-300 dark:border-emerald-800 text-emerald-900 dark:text-emerald-200'
@@ -50,6 +50,7 @@ export const SanitarioModals = ({
                       type="checkbox"
                       checked={isSelected}
                       onChange={() => {}}
+                      disabled={isOffline}
                       className="w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500"
                     />
                     <span className="font-bold">Brinco #{cow.brinco}</span>
@@ -70,7 +71,7 @@ export const SanitarioModals = ({
         title="Excluir Manejo Sanitário"
         actions={
           <>
-            <Button variant="danger" onClick={handleDelete}>
+            <Button variant="danger" onClick={handleDelete} disabled={isOffline}>
               Sim, Excluir
             </Button>
             <Button variant="secondary" onClick={() => setModalOpen(false)}>

@@ -37,7 +37,7 @@ const SUGESTOES_MANEJO = [
 
 export const SanitarioSlidePanel = ({
   slideOpen, setSlideOpen, slideMode, setSlideMode, selectedManejo,
-  formData, setFormData, isSaving, handleSave, setGroupModalOpen,
+  formData, setFormData, isSaving, handleSave, isOffline, setGroupModalOpen,
   setItemToDelete, setModalOpen,
   currentMedInsumoId, setCurrentMedInsumoId,
   currentMedDose, setCurrentMedDose,
@@ -65,7 +65,7 @@ export const SanitarioSlidePanel = ({
           <div className="flex items-center justify-between w-full">
             {slideMode === 'view' ? (
               <div />
-            ) : slideMode === 'edit' && selectedManejo ? (
+            ) : slideMode === 'edit' && selectedManejo && !isOffline ? (
               <Button
                 variant="ghost"
                 onClick={() => {
@@ -81,15 +81,17 @@ export const SanitarioSlidePanel = ({
 
             <div className="flex space-x-3">
               {slideMode === 'view' ? (
-                <Button variant="primary" icon={Edit} onClick={() => setSlideMode('edit')}>
-                  Editar Registro
-                </Button>
+                !isOffline ? (
+                  <Button variant="primary" icon={Edit} onClick={() => setSlideMode('edit')}>
+                    Editar Registro
+                  </Button>
+                ) : <div />
               ) : (
                 <>
                   <Button variant="ghost" onClick={() => setSlideOpen(false)} className="min-h-[44px]">
                     Cancelar
                   </Button>
-                  <Button variant="primary" onClick={handleSave} disabled={isSaving} className="min-h-[44px]">
+                  <Button variant="primary" onClick={handleSave} disabled={isSaving || isOffline} className="min-h-[44px]">
                     {isSaving ? 'Salvando...' : 'Salvar Manejo'}
                   </Button>
                 </>
@@ -98,7 +100,7 @@ export const SanitarioSlidePanel = ({
           </div>
         }
       >
-        <fieldset disabled={slideMode === 'view'} className="space-y-6 border-0 p-0 m-0 min-w-0">
+        <fieldset disabled={slideMode === 'view' || isOffline} className="space-y-6 border-0 p-0 m-0 min-w-0">
           {/* SESSÃO 1: INFORMAÇÕES */}
           <div className="border border-gray-200 dark:border-gray-800 rounded-xl p-4 bg-white dark:bg-gray-900 space-y-4 shadow-sm">
             <div className="flex items-center space-x-2 pb-2 border-b border-gray-100 dark:border-gray-800">

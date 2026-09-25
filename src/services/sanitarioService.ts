@@ -1,4 +1,12 @@
-import { supabase } from '@/integrations/supabase/client';
+import { getCurrentUserId as readCurrentUserId, supabase } from '@/integrations/supabase/client';
+import {
+  deleteOfflineRecords,
+  getOfflineSnapshot,
+  listOfflineRecords,
+  saveOfflineRecords,
+  saveOfflineSnapshot,
+} from '@/offline/database';
+import { useConnectivityStore } from '@/store/useConnectivityStore';
 import { ManejoSanitario, MedicamentoAplicado } from '@/types/database';
 import { insumosService, removerMovimentacoesPorOrigem } from '@/services/insumosService';
 
@@ -28,10 +36,39 @@ type MedicamentoDbRow = {
 };
 
 type AnimalRelationRow = { manejo_id: string; animal_id: string };
-
 type Relations = {
   medicamentos: Map<string, MedicamentoDbRow[]>;
   animais: Map<string, string[]>;
+};
+
+export type SanitarioQuery = {
+  data: ManejoSanitario[];
+  total: number;
+  source: 'remote' | 'local';
+  capturedAt?: string;
+};
+
+export type SanitarioStats = {
+  andamento: number;
+  concluido: number;
+  source: 'remote' | 'local';
+  capturedAt?: string;
+};
+
+const ENTITY = 'manejo_sanitario';
+const PAGE_SIZE = 10;
+const PAGE_SNAPSHOT_KEY = (userId: string, status: ManejoSanitario['status']) => `${ENTITY}:first-page:${status}:${userId}`;
+const STATS_SNAPSHOT_KEY = (userId: string) => `${ENTITY}:stats:${userId}`;
+const localRecordKey = (userId: string, id: string) => `${ENTITY}:${userId}:${id}`;
+
+const isBrowserOnline = (): boolean => (
+  (typeof navigator === 'undefined' || navigator.onLine)
+  && useConnectivityStore.getState().status !== 'offline'
+);
+const getCurrentUserId = () => readCurrentUserId(isBrowserOnline());
+const isNetworkError = (error: unknown): boolean => {
+  const message = error instanceof Error ? error.message.toLowerCase() : String(error).toLowerCase();
+  return !isBrowserOnline() || /network|fetch|offline|load failed|failed to fetch|timeout|timed out/.test(message);
 };
 
 const toNumber = (value: number | string): number => Number(value);
@@ -106,6 +143,7 @@ const getRelations = async (manejoIds: string[]): Promise<Relations> => {
 };
 
 const getManejoRow = async (id: string): Promise<ManejoDbRow | null> => {
+  if (!isBrowserOnline()) throw new Error('Consulta indisponível offline.');
   const { data, error } = await supabase.from('manejos_sanitarios').select('*').eq('id', id).maybeSingle();
   if (error) throw error;
   return data as unknown as ManejoDbRow | null;
@@ -114,6 +152,100 @@ const getManejoRow = async (id: string): Promise<ManejoDbRow | null> => {
 const getManejos = async (rows: ManejoDbRow[]): Promise<ManejoSanitario[]> => {
   const relations = await getRelations(rows.map((row) => row.id));
   return rows.map((row) => toManejo(row, relations));
+};
+
+const compareMaisRecentes = (left: ManejoSanitario, right: ManejoSanitario): number => {
+  const dateDiff = new Date(right.data_manejo).getTime() - new Date(left.data_manejo).getTime();
+  if (dateDiff !== 0) return dateDiff;
+  const createdDiff = new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime();
+  if (createdDiff !== 0) return createdDiff;
+  return right.id.localeCompare(left.id);
+};
+
+const localRecord = (userId: string, manejo: ManejoSanitario) => ({
+  key: localRecordKey(userId, manejo.id),
+  userId,
+  entity: ENTITY,
+  entityId: manejo.id,
+  data: manejo,
+  updatedAt: new Date().toISOString(),
+});
+
+const readLocalPage = async (
+  userId: string,
+  status: ManejoSanitario['status'],
+): Promise<{ data: ManejoSanitario[]; capturedAt?: string }> => {
+  const [snapshot, records] = await Promise.all([
+    getOfflineSnapshot<ManejoSanitario[]>(PAGE_SNAPSHOT_KEY(userId, status)),
+    listOfflineRecords<ManejoSanitario>({ userId, entity: ENTITY }),
+  ]);
+  const snapshotData = Array.isArray(snapshot?.data) ? snapshot.data : undefined;
+  const data = (snapshotData ?? records
+    .filter((record) => record.userId === userId && record.data.status === status)
+    .map((record) => record.data))
+    .filter((manejo) => manejo.status === status)
+    .sort(compareMaisRecentes)
+    .slice(0, PAGE_SIZE);
+  return { data, capturedAt: snapshot?.capturedAt };
+};
+
+const readLocalStats = async (userId: string): Promise<SanitarioStats> => {
+  const [snapshot, records] = await Promise.all([
+    getOfflineSnapshot<{ andamento: number; concluido: number }>(STATS_SNAPSHOT_KEY(userId)),
+    listOfflineRecords<ManejoSanitario>({ userId, entity: ENTITY }),
+  ]);
+  if (snapshot?.data) {
+    return { ...snapshot.data, source: 'local', capturedAt: snapshot.capturedAt };
+  }
+  return {
+    andamento: records.filter((record) => record.data.status === 'andamento').length,
+    concluido: records.filter((record) => record.data.status === 'concluido').length,
+    source: 'local',
+  };
+};
+
+const cachePage = async (
+  userId: string,
+  status: ManejoSanitario['status'],
+  data: ManejoSanitario[],
+): Promise<void> => {
+  const existing = await listOfflineRecords<ManejoSanitario>({ userId, entity: ENTITY });
+  await saveOfflineRecords(data.map((manejo) => localRecord(userId, manejo)));
+  const ids = new Set(data.map((manejo) => manejo.id));
+  await deleteOfflineRecords(existing
+    .filter((record) => record.data.status === status && !ids.has(record.entityId))
+    .map((record) => record.key));
+  await saveOfflineSnapshot({
+    key: PAGE_SNAPSHOT_KEY(userId, status),
+    scope: `${ENTITY}:${userId}:${status}`,
+    data,
+    capturedAt: new Date().toISOString(),
+  });
+};
+
+const cacheStats = async (userId: string, stats: { andamento: number; concluido: number }): Promise<string> => {
+  const capturedAt = new Date().toISOString();
+  await saveOfflineSnapshot({
+    key: STATS_SNAPSHOT_KEY(userId),
+    scope: `${ENTITY}:${userId}:stats`,
+    data: stats,
+    capturedAt,
+  });
+  return capturedAt;
+};
+
+const getRemotePage = async (status: ManejoSanitario['status']): Promise<ManejoSanitario[]> => {
+  if (!isBrowserOnline()) throw new Error('Consulta indisponível offline.');
+  const { data, error } = await supabase
+    .from('manejos_sanitarios')
+    .select('*')
+    .eq('status', status)
+    .order('data_manejo', { ascending: false })
+    .order('created_at', { ascending: false })
+    .order('id', { ascending: false })
+    .range(0, PAGE_SIZE - 1);
+  if (error) throw error;
+  return getManejos((data ?? []) as unknown as ManejoDbRow[]);
 };
 
 const syncRelations = async (manejo: ManejoSanitario): Promise<void> => {
@@ -182,62 +314,114 @@ const restoreAutomaticMovimentacoes = async (movimentacoes: Awaited<ReturnType<t
 };
 
 export const sanitarioService = {
-  getAll: async (filters?: { search?: string; tipo?: string; status?: string; page?: number; limit?: number }): Promise<{ data: ManejoSanitario[]; total: number }> => {
-    let query = supabase
-      .from('manejos_sanitarios')
-      .select('*', { count: 'exact' });
+  getAll: async (filters?: { search?: string; tipo?: string; status?: string; page?: number; limit?: number }): Promise<SanitarioQuery> => {
+    const userId = await getCurrentUserId();
+    const status = filters?.status === 'concluido' ? 'concluido' : 'andamento';
+    if (!userId) return { data: [], total: 0, source: 'local' };
 
-    if (filters?.search) {
-      const search = filters.search.replace(/[^\p{L}\p{N} _-]/gu, ' ');
-      query = query.or(`nome_lote.ilike.%${search}%,responsavel_tecnico.ilike.%${search}%`);
-    }
-    if (filters?.tipo && filters.tipo !== 'all') query = query.eq('tipo_manejo', filters.tipo);
-    if (filters?.status && filters.status !== 'all') query = query.eq('status', filters.status);
-
-    query = query
-      .order('data_manejo', { ascending: false })
-      .order('created_at', { ascending: false })
-      .order('id', { ascending: false });
-
-    if (filters?.page !== undefined && filters.limit !== undefined) {
-      query = query.range((filters.page - 1) * filters.limit, filters.page * filters.limit - 1);
+    if (!isBrowserOnline()) {
+      const local = await readLocalPage(userId, status);
+      return { data: local.data, total: local.data.length, source: 'local', capturedAt: local.capturedAt };
     }
 
-    const { data, count, error } = await query;
-    if (error) throw error;
-    const rows = (data ?? []) as unknown as ManejoDbRow[];
-    return { data: await getManejos(rows), total: count ?? 0 };
+    try {
+      let query = supabase.from('manejos_sanitarios').select('*', { count: 'exact' });
+      if (filters?.search?.trim()) {
+        const search = filters.search.replace(/[^\p{L}\p{N} _-]/gu, ' ');
+        query = query.or(`nome_lote.ilike.%${search}%,responsavel_tecnico.ilike.%${search}%`);
+      }
+      if (filters?.tipo && filters.tipo !== 'all') query = query.eq('tipo_manejo', filters.tipo);
+      if (filters?.status && filters.status !== 'all') query = query.eq('status', filters.status);
+      query = query
+        .order('data_manejo', { ascending: false })
+        .order('created_at', { ascending: false })
+        .order('id', { ascending: false });
+      if (filters?.page !== undefined && filters.limit !== undefined) {
+        query = query.range(Math.max(0, (filters.page - 1) * filters.limit), filters.page * filters.limit - 1);
+      }
+
+      const { data, count, error } = await query;
+      if (error) throw error;
+      const rows = (data ?? []) as unknown as ManejoDbRow[];
+      const items = await getManejos(rows);
+      const isFirstPage = (!filters?.search?.trim())
+        && (!filters?.tipo || filters.tipo === 'all')
+        && filters?.page === 1
+        && filters.limit === PAGE_SIZE;
+      if (isFirstPage) await cachePage(userId, status, items);
+      return { data: items, total: count ?? items.length, source: 'remote' };
+    } catch (error) {
+      if (!isNetworkError(error)) throw error;
+      const local = await readLocalPage(userId, status);
+      return { data: local.data, total: local.data.length, source: 'local', capturedAt: local.capturedAt };
+    }
   },
 
-  getStats: async (): Promise<{ andamento: number; concluido: number }> => {
-    const [andamentoResult, concluidoResult] = await Promise.all([
+  getStats: async (): Promise<SanitarioStats> => {
+    const userId = await getCurrentUserId();
+    if (!userId) return { andamento: 0, concluido: 0, source: 'local' };
+    if (!isBrowserOnline()) return readLocalStats(userId);
+
+    try {
+      const [andamentoResult, concluidoResult] = await Promise.all([
+        supabase.from('manejos_sanitarios').select('id', { count: 'exact', head: true }).eq('status', 'andamento'),
+        supabase.from('manejos_sanitarios').select('id', { count: 'exact', head: true }).eq('status', 'concluido'),
+      ]);
+      if (andamentoResult.error) throw andamentoResult.error;
+      if (concluidoResult.error) throw concluidoResult.error;
+      const stats = { andamento: andamentoResult.count ?? 0, concluido: concluidoResult.count ?? 0 };
+      const capturedAt = await cacheStats(userId, stats);
+      return { ...stats, source: 'remote', capturedAt };
+    } catch (error) {
+      if (!isNetworkError(error)) throw error;
+      return readLocalStats(userId);
+    }
+  },
+
+  prefetchFirstPages: async (userId: string): Promise<void> => {
+    if (!userId || !isBrowserOnline() || (await getCurrentUserId()) !== userId) return;
+    const [andamento, concluido, andamentoResult, concluidoResult] = await Promise.all([
+      getRemotePage('andamento'),
+      getRemotePage('concluido'),
       supabase.from('manejos_sanitarios').select('id', { count: 'exact', head: true }).eq('status', 'andamento'),
       supabase.from('manejos_sanitarios').select('id', { count: 'exact', head: true }).eq('status', 'concluido'),
     ]);
     if (andamentoResult.error) throw andamentoResult.error;
     if (concluidoResult.error) throw concluidoResult.error;
-    return {
-      andamento: andamentoResult.count ?? 0,
-      concluido: concluidoResult.count ?? 0,
-    };
+    await Promise.all([
+      cachePage(userId, 'andamento', andamento),
+      cachePage(userId, 'concluido', concluido),
+      cacheStats(userId, { andamento: andamentoResult.count ?? 0, concluido: concluidoResult.count ?? 0 }),
+    ]);
   },
 
   getById: async (id: string): Promise<ManejoSanitario | null> => {
-    const row = await getManejoRow(id);
-    if (!row) return null;
-    const manejos = await getManejos([row]);
-    return manejos[0] ?? null;
+    const userId = await getCurrentUserId();
+    if (!userId) return null;
+    const readLocal = async (): Promise<ManejoSanitario | null> => {
+      const [andamento, concluido] = await Promise.all([
+        readLocalPage(userId, 'andamento'),
+        readLocalPage(userId, 'concluido'),
+      ]);
+      return [...andamento.data, ...concluido.data].find((manejo) => manejo.id === id) ?? null;
+    };
+    if (!isBrowserOnline()) return readLocal();
+
+    try {
+      const row = await getManejoRow(id);
+      if (!row) return null;
+      const manejos = await getManejos([row]);
+      return manejos[0] ?? null;
+    } catch (error) {
+      if (!isNetworkError(error)) throw error;
+      return readLocal();
+    }
   },
 
   create: async (item: Omit<ManejoSanitario, 'id' | 'createdAt' | 'status_sincronizacao'>): Promise<ManejoSanitario> => {
+    if (!isBrowserOnline()) throw new Error('Ação indisponível offline.');
     const id = `man-${crypto.randomUUID()}`;
-    const manejo: ManejoSanitario = {
-      ...item,
-      id,
-      status_sincronizacao: false,
-      createdAt: '',
-    };
-
+    const manejo: ManejoSanitario = { ...item, id, status_sincronizacao: false, createdAt: '' };
     const { error } = await supabase.from('manejos_sanitarios').insert({
       id,
       nome_lote: manejo.nome_lote,
@@ -262,22 +446,16 @@ export const sanitarioService = {
       await supabase.from('manejos_sanitarios').delete().eq('id', id);
       throw createError;
     }
-
     const created = await sanitarioService.getById(id);
     if (!created) throw new Error('Manejo não encontrado');
     return created;
   },
 
   update: async (id: string, updates: Partial<ManejoSanitario>): Promise<ManejoSanitario> => {
+    if (!isBrowserOnline()) throw new Error('Ação indisponível offline.');
     const previous = await sanitarioService.getById(id);
     if (!previous) throw new Error('Manejo não encontrado');
-
-    const updated: ManejoSanitario = {
-      ...previous,
-      ...updates,
-      id,
-      status_sincronizacao: false,
-    };
+    const updated: ManejoSanitario = { ...previous, ...updates, id, status_sincronizacao: false };
     const { error } = await supabase.from('manejos_sanitarios').update({
       nome_lote: updated.nome_lote,
       data_manejo: updated.data_manejo,
@@ -323,19 +501,16 @@ export const sanitarioService = {
       await syncRelations(previous);
       throw updateError;
     }
-
     const result = await sanitarioService.getById(id);
     if (!result) throw new Error('Manejo não encontrado');
     return result;
   },
 
   delete: async (id: string): Promise<boolean> => {
+    if (!isBrowserOnline()) throw new Error('Ação indisponível offline.');
     const manejo = await sanitarioService.getById(id);
     if (!manejo) return true;
-
-    const movimentacoes = manejo.status === 'concluido'
-      ? await removerMovimentacoesPorOrigem(id)
-      : [];
+    const movimentacoes = manejo.status === 'concluido' ? await removerMovimentacoesPorOrigem(id) : [];
     const { error } = await supabase.from('manejos_sanitarios').delete().eq('id', id);
     if (error) {
       if (movimentacoes.length > 0) await restoreAutomaticMovimentacoes(movimentacoes);
