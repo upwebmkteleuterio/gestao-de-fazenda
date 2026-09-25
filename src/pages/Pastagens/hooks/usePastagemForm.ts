@@ -1,5 +1,6 @@
 import { useState, useMemo, FormEvent } from 'react';
 import { Pastagem, ServicoPastagem } from '@/types/database';
+import { validatePastagemFields, validateServicoPastagemFields } from '@/services/domainValidation';
 import { useAnimais } from '@/hooks/useAnimais';
 import { useUIStore } from '@/store/useUIStore';
 
@@ -12,8 +13,15 @@ const INITIAL_PASTO_FORM: Partial<Pastagem> = {
   data_saida_prevista: '',
 };
 
-const INITIAL_SERVICO_FORM = {
-  tipo_servico: 'Adubação' as const,
+export type ServicoFormValues = {
+  tipo_servico: ServicoPastagem['tipo_servico'];
+  data: string;
+  responsavel: string;
+  observacoes: string;
+};
+
+const INITIAL_SERVICO_FORM: ServicoFormValues = {
+  tipo_servico: 'Adubação',
   data: new Date().toISOString().split('T')[0],
   responsavel: '',
   observacoes: '',
@@ -22,8 +30,8 @@ const INITIAL_SERVICO_FORM = {
 interface UsePastagemFormParams {
   createPastagem: (data: Omit<Pastagem, 'id' | 'createdAt'>) => Promise<Pastagem>;
   updatePastagem: (params: { id: string; updates: Partial<Pastagem> }) => Promise<Pastagem>;
-  deletePastagem: (id: string) => Promise<any>;
-  addServico: (data: Omit<ServicoPastagem, 'id' | 'createdAt'>) => Promise<any>;
+  deletePastagem: (id: string) => Promise<boolean>;
+  addServico: (data: Omit<ServicoPastagem, 'id' | 'createdAt'>) => Promise<ServicoPastagem>;
   servicos: ServicoPastagem[];
   syncLocalMutation: () => void;
 }
@@ -45,6 +53,7 @@ export const usePastagemForm = ({
   const [selectedPasto, setSelectedPasto] = useState<Pastagem | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isAddingServico, setIsAddingServico] = useState(false);
 
   // Form Pastagem
   const [pastoForm, setPastoForm] = useState<Partial<Pastagem>>(INITIAL_PASTO_FORM);
@@ -85,24 +94,10 @@ export const usePastagemForm = ({
   const handleSavePasto = async (e?: FormEvent) => {
     if (e) e.preventDefault();
     if (isSaving) return;
-    if (!pastoForm.nome_pasto?.trim()) {
-      showToast('Informe o nome da área/pasto.', 'error');
-      return;
-    }
-    if (!pastoForm.tipo_capim?.trim()) {
-      showToast('Informe o tipo de capim.', 'error');
-      return;
-    }
-    if (!pastoForm.data_entrada?.trim()) {
-      showToast('Informe a data de entrada.', 'error');
-      return;
-    }
-    if (typeof pastoForm.area_ha !== 'number' || !Number.isFinite(pastoForm.area_ha)) {
-      showToast('Informe uma área em hectares válida.', 'error');
-      return;
-    }
-    if (typeof pastoForm.lotacao_maxima !== 'number' || !Number.isFinite(pastoForm.lotacao_maxima)) {
-      showToast('Informe uma lotação máxima válida.', 'error');
+    try {
+      validatePastagemFields(pastoForm);
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : 'Confira os dados da pastagem.', 'error');
       return;
     }
 
@@ -128,27 +123,32 @@ export const usePastagemForm = ({
   // Salvar Novo Serviço de Terra na Aba de Anotação de Serviços
   const handleAddServico = async (e: FormEvent) => {
     e.preventDefault();
+    if (isAddingServico) return;
     if (!selectedPasto) {
       showToast('Selecione ou salve o pasto primeiro para lançar serviço.', 'error');
       return;
     }
-
+    const serviceData = {
+      pasto_id: selectedPasto.id,
+      nome_pasto: selectedPasto.nome_pasto,
+      tipo_servico: servicoForm.tipo_servico,
+      data: servicoForm.data,
+      responsavel: servicoForm.responsavel,
+      observacoes: servicoForm.observacoes,
+    };
     try {
-      await addServico({
-        pasto_id: selectedPasto.id,
-        nome_pasto: selectedPasto.nome_pasto,
-        tipo_servico: servicoForm.tipo_servico,
-        data: servicoForm.data,
-        responsavel: servicoForm.responsavel,
-        observacoes: servicoForm.observacoes,
-      });
+      validateServicoPastagemFields(serviceData, selectedPasto.data_entrada);
+      setIsAddingServico(true);
+      await addServico(serviceData);
       showToast('Anotação de serviço de solo registrada!');
       setServicoForm({
         ...INITIAL_SERVICO_FORM,
         data: new Date().toISOString().split('T')[0],
       });
-    } catch {
-      showToast('Erro ao registrar serviço.', 'error');
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : 'Erro ao registrar serviço.', 'error');
+    } finally {
+      setIsAddingServico(false);
     }
   };
 
@@ -211,6 +211,7 @@ export const usePastagemForm = ({
     setIsEditing,
     isSaving,
     isDeleting,
+    isAddingServico,
     activeTab,
     setActiveTab,
     selectedPasto,

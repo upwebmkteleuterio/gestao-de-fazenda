@@ -2,7 +2,7 @@ import { getCurrentUserId as readCurrentUserId, supabase } from '@/integrations/
 import { getOfflineSnapshot, listOfflineRecords, saveOfflineRecords, saveOfflineSnapshot, deleteOfflineRecords } from '@/offline/database';
 import { useConnectivityStore } from '@/store/useConnectivityStore';
 import { Animal, EventoReproducao } from '@/types/database';
-import { DomainValidationError, validateDateRange, validateReproducaoFields } from './domainValidation';
+import { DomainValidationError, sanitizeReportSearch, validateReportFilters, validateReproducaoFields } from './domainValidation';
 import { animaisService } from './animaisService';
 
 export type ReproducaoQuery = {
@@ -342,21 +342,19 @@ export type ReproducaoReportSummary = {
   touros: string[];
 };
 
-const sanitizeSearch = (value: string) => value.replace(/[^\p{L}\p{N} _-]/gu, ' ').trim();
-
 const toReportParams = (filters?: ReproducaoReportFilters) => ({
   p_data_especifica: filters?.dataEspecifica || null,
   p_data_inicio: filters?.dataInicio || null,
   p_data_fim: filters?.dataFim || null,
-  p_touro: filters?.touro && filters.touro !== 'all' ? filters.touro : null,
+  p_touro: filters?.touro && filters.touro !== 'all' ? sanitizeReportSearch(filters.touro) : null,
   p_protocolo: filters?.protocolo && filters.protocolo !== 'all' ? filters.protocolo : null,
   p_resultado_dg: filters?.resultadoDg && filters.resultadoDg !== 'all' ? filters.resultadoDg : null,
-  p_search: filters?.search?.trim() ? sanitizeSearch(filters.search) : null,
+  p_search: sanitizeReportSearch(filters?.search) || null,
 });
 
 export const reproducaoService = {
   getReportSummary: async (filters?: ReproducaoReportFilters): Promise<ReproducaoReportSummary> => {
-    validateDateRange(filters?.dataInicio, filters?.dataFim);
+    validateReportFilters(filters ?? {});
     if (!isBrowserOnline()) throw new Error('Relatório indisponível offline.');
     const { data, error } = await supabase.rpc('get_reproducao_report_summary', toReportParams(filters));
     if (error) throw error;
@@ -374,7 +372,7 @@ export const reproducaoService = {
   },
 
   getAll: async (filters?: ReproducaoReportFilters): Promise<ReproducaoQuery> => {
-    validateDateRange(filters?.dataInicio, filters?.dataFim);
+    validateReportFilters(filters ?? {});
     const userId = await getCurrentUserId();
     if (!userId) return { data: [], total: 0, source: 'local' };
 
@@ -398,10 +396,8 @@ export const reproducaoService = {
         .from('eventos_reproducao')
         .select('*', { count: 'exact' });
 
-      if (filters?.search?.trim()) {
-        const search = sanitizeSearch(filters.search);
-        query = query.or(`brinco_matriz.ilike.%${search}%,dados_protocolo->>touro.ilike.%${search}%`);
-      }
+      const search = sanitizeReportSearch(filters?.search);
+      if (search) query = query.or(`brinco_matriz.ilike.%${search}%,dados_protocolo->>touro.ilike.%${search}%`);
       if (filters?.dataEspecifica) query = query.eq('data_principal', filters.dataEspecifica);
       if (filters?.dataInicio) query = query.gte('data_principal', filters.dataInicio);
       if (filters?.dataFim) query = query.lte('data_principal', filters.dataFim);

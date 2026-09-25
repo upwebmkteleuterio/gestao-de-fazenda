@@ -52,6 +52,7 @@ export const PastagensPage: React.FC = () => {
     isEditing,
     isSaving,
     isDeleting,
+    isAddingServico,
     activeTab,
     setActiveTab,
     selectedPasto,
@@ -140,6 +141,8 @@ export const PastagensPage: React.FC = () => {
         setSlideOpen={setSlideOpen}
         isEditing={isEditing}
         isSaving={isSaving}
+        isDeleting={isDeleting}
+        isAddingServico={isAddingServico}
         activeTab={activeTab}
         setActiveTab={setActiveTab}
         selectedPasto={selectedPasto}

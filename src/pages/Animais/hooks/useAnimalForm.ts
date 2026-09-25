@@ -115,20 +115,31 @@ export const useAnimalForm = () => {
       showToast('Informe uma data de toque válida e não futura.', 'error');
       return;
     }
+    if (novoToqueObs.trim().length > 2000) {
+      showToast('As observações do toque devem ter no máximo 2.000 caracteres.', 'error');
+      return;
+    }
+    if ((formData.historico_toque || []).some((toque) => toque.data === novoToqueData)) {
+      showToast('Já existe um toque registrado para este animal nesta data.', 'error');
+      return;
+    }
     const novo = {
-      id: Math.random().toString(36).substring(2, 11),
+      id: `toq-${crypto.randomUUID()}`,
       data: novoToqueData,
-      ano: parseInt(novoToqueData.split('-')[0]),
+      ano: Number(novoToqueData.slice(0, 4)),
       resultado: novoToqueResultado,
-      observacoes: novoToqueObs,
+      observacoes: novoToqueObs.trim() || undefined,
       brinco: formData.brinco || '',
     };
     setFormData((prev) => ({
       ...prev,
       historico_toque: [...(prev.historico_toque || []), novo],
+      status_reprodutivo: novoToqueResultado === 'cheia' ? 'Gestante' : 'Vazia',
     }));
     setNovoToqueData(new Date().toISOString().split('T')[0]);
+    setNovoToqueResultado('vazia');
     setNovoToqueObs('');
+    showToast('Exame de toque registrado com sucesso!', 'success');
   };
 
   const handleRemoveToque = (id: string) => {
@@ -149,19 +160,14 @@ export const useAnimalForm = () => {
     }
 
     setIsSaving(true);
-    console.log('>>> [1] CLICOU EM SALVAR - DADOS LOCAIS OBTIDOS');
     try {
       if (slideMode === 'create') {
         await createAnimal(formData as Omit<Animal, 'id' | 'createdAt' | 'status_sincronizacao'>);
-        console.log('>>> [2] GRAVOU NO INDEXEDDB');
-        console.log('>>> [3] FECHOU O PAINEL/MODAL');
         setSlideOpen(false);
         showToast(`Animal ${formData.brinco} cadastrado com sucesso!`);
         syncLocalMutation();
       } else if (slideMode === 'edit' && selectedAnimal) {
         await updateAnimal({ id: selectedAnimal.id, updates: formData });
-        console.log('>>> [2] GRAVOU NO INDEXEDDB');
-        console.log('>>> [3] FECHOU O PAINEL/MODAL');
         setSlideOpen(false);
         showToast(`Animal ${formData.brinco} atualizado com sucesso!`);
         syncLocalMutation();
@@ -175,11 +181,8 @@ export const useAnimalForm = () => {
 
   const handleDeleteConfirm = async () => {
     if (!animalToDelete || isDeleting) return;
-    console.log('>>> [1] CLICOU EM EXCLUIR - DADOS LOCAIS OBTIDOS');
     try {
       await deleteAnimal(animalToDelete.id);
-      console.log('>>> [2] GRAVOU NO INDEXEDDB - EXCLUSÃO');
-      console.log('>>> [3] FECHOU O PAINEL/MODAL - EXCLUSÃO');
       setModalOpen(false);
       showToast(`Animal ${animalToDelete.brinco} excluído com sucesso.`, 'info');
       syncLocalMutation();
@@ -218,5 +221,6 @@ export const useAnimalForm = () => {
     handleRemoveToque,
     handleSave,
     handleDeleteConfirm,
+    showToast,
   };
 };

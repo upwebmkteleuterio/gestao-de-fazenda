@@ -38,6 +38,7 @@ import { useInsumos } from '../hooks/useInsumos';
 import { useAnimais } from '../hooks/useAnimais';
 import { useUIStore } from '../store/useUIStore';
 import { ManejoSanitario, MedicamentoAplicado } from '../types/database';
+import { MAX_DOMAIN_QUANTITY, MAX_DOMAIN_TEXT_LENGTH } from '../services/domainValidation';
 
 export const ManejoSanitarioPage: React.FC = () => {
   const { showToast } = useUIStore();
@@ -59,7 +60,7 @@ export const ManejoSanitarioPage: React.FC = () => {
   }, [search, tipoManejoFilter, activeTab]);
 
   // Query dos manejos com paginação e filtros no banco/serviço
-  const { manejos, totalManejos, stats, source, capturedAt, isOffline, isLoading, isError, refetch, createManejo, updateManejo, deleteManejo } = useSanitario({
+  const { manejos, totalManejos, stats, source, capturedAt, isOffline, isLoading, isError, refetch, createManejo, updateManejo, deleteManejo, isMutating, isDeleting: isDeletingMutation } = useSanitario({
     search,
     tipo: tipoManejoFilter,
     status: activeTab,
@@ -99,6 +100,7 @@ export const ManejoSanitarioPage: React.FC = () => {
 
   // Submitting state para prevenir cliques duplos no salvamento
   const [isSaving, setIsSaving] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   // Selection state para seleção em lote de manejos sanitários
   const [selectedManejoIds, setSelectedManejoIds] = useState<string[]>([]);
@@ -229,13 +231,28 @@ export const ManejoSanitarioPage: React.FC = () => {
     }
 
     const insumoFound = insumos.find(i => i.id === currentMedInsumoId);
-    if (!insumoFound) return;
+    if (!insumoFound) {
+      showToast('Medicamento não encontrado no estoque disponível.', 'error');
+      return;
+    }
+    if (formData.medicamentos.some((medicamento) => medicamento.insumo_id === currentMedInsumoId)) {
+      showToast('Este medicamento já foi adicionado ao protocolo.', 'error');
+      return;
+    }
+    if (!currentMedDose.trim() || currentMedDose.trim().length > MAX_DOMAIN_TEXT_LENGTH) {
+      showToast(`Informe uma dose com no máximo ${MAX_DOMAIN_TEXT_LENGTH} caracteres.`, 'error');
+      return;
+    }
+    if (!Number.isFinite(currentMedQtd) || currentMedQtd <= 0 || currentMedQtd > MAX_DOMAIN_QUANTITY) {
+      showToast(`Informe uma quantidade positiva menor que ${MAX_DOMAIN_QUANTITY}.`, 'error');
+      return;
+    }
 
     const novoMed: MedicamentoAplicado = {
       insumo_id: insumoFound.id,
       nome_produto: insumoFound.nome_produto,
-      dose: currentMedDose || '5 ml',
-      quantidade_total: currentMedQtd > 0 ? currentMedQtd : 1,
+      dose: currentMedDose.trim(),
+      quantidade_total: currentMedQtd,
     };
 
     setFormData(prev => ({
@@ -277,7 +294,7 @@ export const ManejoSanitarioPage: React.FC = () => {
   // Salvar Manejo Sanitário
   const handleSave = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
-    if (isSaving) return;
+    if (isSaving || isMutating) return;
 
     if (!formData.nome_lote) {
       showToast('Informe o nome do manejo ou lote.', 'error');
@@ -302,21 +319,24 @@ export const ManejoSanitarioPage: React.FC = () => {
       }
       setSlideOpen(false);
     } catch (err) {
-      showToast('Erro ao salvar manejo sanitário.', 'error');
+      showToast(err instanceof Error ? err.message : 'Erro ao salvar manejo sanitário.', 'error');
     } finally {
       setIsSaving(false);
     }
   };
 
   const handleDelete = async () => {
-    if (!itemToDelete) return;
+    if (!itemToDelete || isDeleting || isDeletingMutation) return;
+    setIsDeleting(true);
     try {
       await deleteManejo(itemToDelete.id);
       showToast('Manejo sanitário removido do histórico.');
       setModalOpen(false);
       setSlideOpen(false);
     } catch (err) {
-      showToast('Erro ao remover manejo.', 'error');
+      showToast(err instanceof Error ? err.message : 'Erro ao remover manejo.', 'error');
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -561,7 +581,7 @@ export const ManejoSanitarioPage: React.FC = () => {
       {/* TELA 5.1 - NOVO MANEJO SANITÁRIO [SLIDE PANEL] */}
       <SanitarioSlidePanel
         slideOpen={slideOpen}
-        setSlideOpen={setSlideOpen}
+        setSlideOpen={(open) => { if (!isSaving && !isDeleting && !isMutating) setSlideOpen(open); }}
         slideMode={slideMode}
         setSlideMode={setSlideMode}
         selectedManejo={selectedManejo}
@@ -572,7 +592,8 @@ export const ManejoSanitarioPage: React.FC = () => {
         toggleAnimalInGroup={toggleAnimalInGroup}
         animais={animais}
         
-        isSaving={isSaving}
+        isSaving={isSaving || isMutating}
+        isMutating={isSaving || isDeleting || isMutating}
         handleSave={handleSave}
         isOffline={isOffline}
         setGroupModalOpen={setGroupModalOpen}
@@ -590,9 +611,10 @@ export const ManejoSanitarioPage: React.FC = () => {
       />
       <SanitarioModals
         modalOpen={modalOpen}
-        setModalOpen={setModalOpen}
+        setModalOpen={(open) => { if (!isDeleting && !isDeletingMutation) setModalOpen(open); }}
         itemToDelete={itemToDelete}
         handleDelete={handleDelete}
+        isMutating={isDeleting || isDeletingMutation || isMutating}
         groupModalOpen={groupModalOpen}
         setGroupModalOpen={setGroupModalOpen}
         formData={formData}

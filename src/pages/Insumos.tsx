@@ -32,6 +32,7 @@ import { useUIStore } from '../store/useUIStore';
 import { InsumosSlidePanel } from './Insumos/components/InsumosSlidePanel';
 import { InsumosModals } from './Insumos/components/InsumosModals';
 import { Insumo, MovimentacaoInsumo } from '../types/database';
+import { validateInsumoFields, validateMovimentacaoFields } from '../services/domainValidation';
 
 export const InsumosPage: React.FC = () => {
   const { showToast } = useUIStore();
@@ -63,8 +64,15 @@ export const InsumosPage: React.FC = () => {
     createInsumo,
     updateInsumo,
     deleteInsumo,
-    registrarMovimentacao
+    registrarMovimentacao,
+    isMutating,
+    isSaving: isCatalogSaving,
+    isDeleting: isCatalogDeleting,
+    isMovementPending,
   } = useInsumos(categoriaFilter, { search, estoqueBaixo: apenasEstoqueBaixo, page, limit });
+
+  const [isSaving, setIsSaving] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const insumosFiltrados = insumos;
 
@@ -81,7 +89,7 @@ export const InsumosPage: React.FC = () => {
   const [formCadastro, setFormCadastro] = useState<{
     nome_produto: string;
     categoria: 'medicamento' | 'suplemento' | 'racao' | 'defensivo' | 'outros';
-    unidade_medida: string;
+    unidade_medida: Insumo['unidade_medida'];
     quantidade_inicial: number;
     estoque_minimo: number;
     custo_unitario: number;
@@ -150,20 +158,26 @@ export const InsumosPage: React.FC = () => {
   // Salvar Tela 6.1 (Cadastro / Edição)
   const handleSaveCadastro = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
+    if (isSaving || isMutating) return;
 
-    if (!formCadastro.nome_produto) {
-      showToast('Informe o nome do produto.', 'error');
-      return;
-    }
-
+    const catalogPayload = {
+      nome_produto: formCadastro.nome_produto,
+      categoria: formCadastro.categoria,
+      unidade_medida: formCadastro.unidade_medida,
+      estoque_atual: formCadastro.quantidade_inicial,
+      estoque_minimo: formCadastro.estoque_minimo,
+      custo_unitario: formCadastro.custo_unitario,
+    };
     try {
+      validateInsumoFields(catalogPayload);
+      setIsSaving(true);
       if (selectedInsumo) {
         await updateInsumo({
           id: selectedInsumo.id,
           updates: {
             nome_produto: formCadastro.nome_produto,
             categoria: formCadastro.categoria,
-            unidade_medida: formCadastro.unidade_medida as any,
+            unidade_medida: formCadastro.unidade_medida,
             estoque_atual: formCadastro.quantidade_inicial,
             estoque_minimo: formCadastro.estoque_minimo,
             custo_unitario: formCadastro.custo_unitario,
@@ -174,7 +188,7 @@ export const InsumosPage: React.FC = () => {
         await createInsumo({
           nome_produto: formCadastro.nome_produto,
           categoria: formCadastro.categoria,
-          unidade_medida: formCadastro.unidade_medida as any,
+          unidade_medida: formCadastro.unidade_medida,
           estoque_atual: formCadastro.quantidade_inicial,
           estoque_minimo: formCadastro.estoque_minimo,
           custo_unitario: formCadastro.custo_unitario,
@@ -183,13 +197,16 @@ export const InsumosPage: React.FC = () => {
       }
       setSlideOpen(false);
     } catch (err) {
-      showToast('Erro ao cadastrar insumo.', 'error');
+      showToast(err instanceof Error ? err.message : 'Erro ao cadastrar insumo.', 'error');
+    } finally {
+      setIsSaving(false);
     }
   };
 
   // Salvar Tela 6.2 (Baixa de Estoque)
   const handleSaveBaixa = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
+    if (isSaving || isMutating) return;
 
     if (isMovimentacaoDisabledOffline) {
       showToast('Offline: registrar movimentação está indisponível para preservar o saldo e o histórico.', 'error');
@@ -207,31 +224,39 @@ export const InsumosPage: React.FC = () => {
     }
 
     try {
-      await registrarMovimentacao({
+      const movement = {
         insumo_id: formBaixa.insumo_id,
         nome_insumo: insumoTarget.nome_produto,
-        tipo: 'saida',
+        tipo: 'saida' as const,
         quantidade: formBaixa.quantidade_utilizada,
         data_movimento: formBaixa.data,
         observacao: formBaixa.observacao_motivo,
-      });
+      };
+      validateMovimentacaoFields(movement);
+      setIsSaving(true);
+      await registrarMovimentacao(movement);
 
       showToast(`Baixa realizada! ${formBaixa.quantidade_utilizada} ${insumoTarget.unidade_medida}(s) de ${insumoTarget.nome_produto} foram descontados do saldo.`);
       setSlideOpen(false);
     } catch (err) {
-      showToast('Erro ao realizar baixa de estoque.', 'error');
+      showToast(err instanceof Error ? err.message : 'Erro ao realizar baixa de estoque.', 'error');
+    } finally {
+      setIsSaving(false);
     }
   };
 
   const handleDelete = async () => {
-    if (!itemToDelete) return;
+    if (!itemToDelete || isDeleting || isCatalogDeleting || isMutating) return;
+    setIsDeleting(true);
     try {
       await deleteInsumo(itemToDelete.id);
       showToast('Insumo excluído do estoque.');
       setModalOpen(false);
       setSlideOpen(false);
     } catch (err) {
-      showToast('Erro ao excluir insumo.', 'error');
+      showToast(err instanceof Error ? err.message : 'Erro ao excluir insumo.', 'error');
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -636,7 +661,7 @@ export const InsumosPage: React.FC = () => {
       {/* SLIDE PANEL COMPARTILHADO (TELA 6.1 OU TELA 6.2) */}
       <InsumosSlidePanel
         slideOpen={slideOpen}
-        setSlideOpen={setSlideOpen}
+        setSlideOpen={(open) => { if (!isSaving && !isDeleting && !isMutating) setSlideOpen(open); }}
         slideMode={slideMode}
         setSlideMode={setSlideMode}
         selectedInsumo={selectedInsumo}
@@ -650,12 +675,15 @@ export const InsumosPage: React.FC = () => {
         setModalOpen={setModalOpen}
         insumos={insumos}
         isMovimentacaoDisabledOffline={isMovimentacaoDisabledOffline}
+        isMutating={isSaving || isDeleting || isMutating}
+        isSaving={isSaving || isCatalogSaving || isMovementPending}
       />
       <InsumosModals
         modalOpen={modalOpen}
-        setModalOpen={setModalOpen}
+        setModalOpen={(open) => { if (!isDeleting && !isCatalogDeleting && !isMutating) setModalOpen(open); }}
         itemToDelete={itemToDelete}
         handleDelete={handleDelete}
+        isMutating={isDeleting || isCatalogDeleting || isMutating}
       />
     </div>
   );

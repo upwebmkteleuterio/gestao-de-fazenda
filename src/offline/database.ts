@@ -179,6 +179,33 @@ export const saveOfflineRecordAndEnqueue = async <TPayload>(
   return operation;
 };
 
+export const saveOfflineRecordsAndEnqueue = async <TPayload>(
+  records: OfflineRecord[],
+  inputs: Array<OutboxOperationInput<TPayload>>,
+): Promise<void> => {
+  if (records.length !== inputs.length) throw new Error('Registros e operações offline inconsistentes.');
+  const operations = inputs.map((input) => {
+    const now = createOperationTimestamp();
+    return {
+      id: input.id ?? createOperationId(),
+      userId: input.userId,
+      entity: input.entity,
+      operation: input.operation,
+      payload: input.payload,
+      status: 'pending' as const,
+      createdAt: now,
+      updatedAt: now,
+      retryCount: 0,
+      nextRetryAt: null,
+      lastError: null,
+    };
+  });
+  await offlineDb.transaction('rw', offlineDb.localRecords, offlineDb.outbox, async () => {
+    await offlineDb.localRecords.bulkPut(records);
+    await offlineDb.outbox.bulkPut(operations);
+  });
+};
+
 export const listOutboxOperations = async <TPayload = unknown>(
   options: OutboxListOptions = {},
 ): Promise<Array<OutboxOperation<TPayload>>> => {

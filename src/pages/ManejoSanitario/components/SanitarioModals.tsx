@@ -3,21 +3,40 @@ import { Modal } from '../../../components/Modal';
 import { Button } from '../../../components/Button';
 import { Badge } from '../../../components/Badge';
 import { Select } from '../../../components/Select';
-import { ManejoSanitario } from '../../../types/database';
+import { Animal, ManejoSanitario } from '../../../types/database';
 
-export const SanitarioModals = ({
+type SanitarioFormData = {
+  animais_ids: string[];
+};
+
+type SanitarioModalsProps = {
+  modalOpen: boolean;
+  setModalOpen: React.Dispatch<React.SetStateAction<boolean>>;
+  itemToDelete: ManejoSanitario | null;
+  handleDelete: () => Promise<void>;
+  groupModalOpen: boolean;
+  setGroupModalOpen: React.Dispatch<React.SetStateAction<boolean>>;
+  formData: SanitarioFormData;
+  isOffline: boolean;
+  isMutating: boolean;
+  handleSelectAllAnimais: () => void;
+  toggleAnimalInGroup: (animalId: string) => void;
+  animais: Animal[];
+};
+
+export const SanitarioModals: React.FC<SanitarioModalsProps> = ({
   modalOpen, setModalOpen, itemToDelete, handleDelete,
-  groupModalOpen, setGroupModalOpen, formData, setFormData, isOffline,
-  handleSelectAllAnimais, toggleAnimalInGroup, animais
-}: any) => (
+  groupModalOpen, setGroupModalOpen, formData, isOffline, isMutating,
+  handleSelectAllAnimais, toggleAnimalInGroup, animais,
+}) => (
   <>
     {/* MODAL GRUPO DE MANEJO (SESSÃO 3) */}
       <Modal
         isOpen={groupModalOpen}
-        onClose={() => setGroupModalOpen(false)}
+        onClose={() => { if (!isMutating) setGroupModalOpen(false); }}
         title="Vincular Grupo de Animais"
         actions={
-          <Button variant="primary" onClick={() => setGroupModalOpen(false)} disabled={isOffline}>
+          <Button variant="primary" onClick={() => setGroupModalOpen(false)} disabled={isOffline || isMutating}>
             Confirmar Grupo ({formData.animais_ids.length} animais)
           </Button>
         }
@@ -67,12 +86,12 @@ export const SanitarioModals = ({
       {/* MODAL EXCLUSÃO */}
       <Modal
         isOpen={modalOpen}
-        onClose={() => setModalOpen(false)}
+        onClose={() => { if (!isMutating) setModalOpen(false); }}
         title="Excluir Manejo Sanitário"
         actions={
           <>
-            <Button variant="danger" onClick={handleDelete} disabled={isOffline}>
-              Sim, Excluir
+            <Button variant="danger" onClick={handleDelete} loading={isMutating} disabled={isOffline || isMutating}>
+              {isMutating ? 'Excluindo...' : 'Sim, Excluir'}
             </Button>
             <Button variant="secondary" onClick={() => setModalOpen(false)}>
               Cancelar

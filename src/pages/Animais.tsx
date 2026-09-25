@@ -96,6 +96,7 @@ export const AnimaisPage: React.FC = () => {
     handleRemoveToque,
     handleSave,
     handleDeleteConfirm,
+    showToast,
   } = useAnimalForm();
 
   return (
@@ -127,7 +128,7 @@ export const AnimaisPage: React.FC = () => {
             },
           ]}
           activeTab={mainTab}
-          onChange={(t) => setMainTab(t as any)}
+          onChange={(t) => setMainTab(t as 'rebanho' | 'descartadas')}
         />
 
         {mainTab === 'rebanho' ? (
@@ -213,6 +214,7 @@ export const AnimaisPage: React.FC = () => {
         handleRemoveToque={handleRemoveToque}
         isSaving={isSaving}
         calcularIdadeFormatada={calcularIdadeFormatada}
+        showToast={showToast}
       />
 
       {/* Modal de Exclusão */}

@@ -7,39 +7,67 @@ import { Badge } from '../../../components/Badge';
 import { Trash2, Syringe, Wheat, Activity, Calendar, AlertTriangle, CheckCircle2, X, Edit } from 'lucide-react';
 import { MontaNaturalIcon } from '../../../components/MontaNaturalIcon';
 import { InseminacaoIcon } from '../../../components/InseminacaoIcon';
-import { Animal, TipoAnimal, CategoriaAnimal, StatusAnimal, SexoAnimal, RegistroToqueAno } from '../../../types/database';
+import { Animal, TipoAnimal, CategoriaAnimal, StatusAnimal, SexoAnimal, RegistroToqueAno, TipoCobertura } from '../../../types/database';
 import { Tabs } from '../../../components/Tabs';
 import { isPlausibleAnimalWeight } from '@/services/domainValidation';
 
+type MatrizTab = 'cobertas' | 'paridas' | 'solteiras' | 'toque';
+type Toast = (message: string, type?: 'success' | 'error' | 'info') => void;
 
-export const AnimaisSlidePanel = ({
-  slideOpen, setSlideOpen, slideMode, setSlideMode, selectedAnimal, formData, setFormData, 
-  handleSave, matrizTab, setMatrizTab, novoToqueData, setNovoToqueData, 
-  novoToqueResultado, setNovoToqueResultado, novoToqueObs, setNovoToqueObs, 
+interface AnimaisSlidePanelProps {
+  slideOpen: boolean;
+  setSlideOpen: (value: boolean) => void;
+  slideMode: 'create' | 'edit' | 'view';
+  setSlideMode: (mode: 'create' | 'edit' | 'view') => void;
+  selectedAnimal: Animal | null;
+  formData: Partial<Animal>;
+  setFormData: React.Dispatch<React.SetStateAction<Partial<Animal>>>;
+  handleSave: (event: React.FormEvent) => void;
+  matrizTab: MatrizTab;
+  setMatrizTab: (tab: MatrizTab) => void;
+  novoToqueData: string;
+  setNovoToqueData: (value: string) => void;
+  novoToqueResultado: 'cheia' | 'vazia';
+  setNovoToqueResultado: (value: 'cheia' | 'vazia') => void;
+  novoToqueObs: string;
+  setNovoToqueObs: (value: string) => void;
+  handleAddToque: () => void;
+  handleRemoveToque: (id: string) => void;
+  isSaving: boolean;
+  calcularIdadeFormatada: (date: string) => string;
+  showToast: Toast;
+  animais?: Animal[];
+  handleCreateFilho?: (maeId: string) => void;
+}
+
+export const AnimaisSlidePanel: React.FC<AnimaisSlidePanelProps> = ({
+  slideOpen, setSlideOpen, slideMode, setSlideMode, selectedAnimal, formData, setFormData,
+  handleSave, matrizTab, setMatrizTab, novoToqueData, setNovoToqueData,
+  novoToqueResultado, setNovoToqueResultado, novoToqueObs, setNovoToqueObs,
   handleAddToque, handleRemoveToque, isSaving, calcularIdadeFormatada, showToast, animais = [], handleCreateFilho
-}: any) => {
+}) => {
   const [idadeMode, setIdadeMode] = React.useState<'data' | 'meses'>('data');
   const parentLabel = (reference?: string) => {
     if (!reference) return '';
-    const parent = animais.find((animal: any) => animal.id === reference || animal.brinco === reference);
+    const parent = animais.find((animal) => animal.id === reference || animal.brinco === reference);
     return parent ? `${parent.brinco} (${parent.tipo_animal})` : `${reference} (referência legada)`;
   };
   return (
   <>
     
     <datalist id="maes-list">
-      {animais.filter((a: any) => ['vaca', 'matriz', 'novilha', 'bezerra'].includes(a.tipo_animal)).map((a: any) => (
+      {animais.filter((a) => ['vaca', 'matriz', 'novilha', 'bezerra'].includes(a.tipo_animal)).map((a) => (
         <option key={a.brinco} value={a.brinco}>{a.brinco} ({a.raca || 'Sem raça'})</option>
       ))}
     </datalist>
     <datalist id="pais-list">
-      {animais.filter((a: any) => ['touro', 'garrote'].includes(a.tipo_animal)).map((a: any) => (
+      {animais.filter((a) => ['touro', 'garrote'].includes(a.tipo_animal)).map((a) => (
         <option key={a.brinco} value={a.brinco}>{a.brinco} ({a.raca || 'Sem raça'})</option>
       ))}
     </datalist>
     <SlidePanel
         isOpen={slideOpen}
-        onClose={() => setSlideOpen(false)}
+        onClose={() => { if (!isSaving) setSlideOpen(false); }}
         title={
           slideMode === 'create'
             ? 'Cadastrar Novo Animal'
@@ -199,7 +227,7 @@ export const AnimaisSlidePanel = ({
                   <div className="pt-2 border-t border-purple-100 dark:border-purple-800/40">
                     <p className="text-xs font-bold text-gray-700 dark:text-gray-300 mb-2">Histórico de Toques (Diagnósticos)</p>
                     <div className="space-y-2">
-                      {selectedAnimal.historico_toque.map((toq: any) => (
+                      {selectedAnimal.historico_toque.map((toq: RegistroToqueAno) => (
                         <div key={toq.id} className="p-2 bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-lg flex justify-between items-center text-sm">
                           <div>
                             <span className="font-bold">{toq.ano}</span> - {new Date(toq.data + 'T00:00:00').toLocaleDateString('pt-BR')}
@@ -256,6 +284,7 @@ export const AnimaisSlidePanel = ({
                 value={formData.brinco || ''}
                 onChange={(e) => setFormData({ ...formData, brinco: e.target.value })}
                 placeholder="Ex: BR-0099"
+                maxLength={200}
                 required
                 noMargin
               />
@@ -304,7 +333,7 @@ export const AnimaisSlidePanel = ({
               <Select
                 id="tipo_cobertura"
                 value={formData.tipo_cobertura === 'Inseminação' || formData.tipo_cobertura === 'Inseminacao' ? 'Inseminação' : 'Monta Natural'}
-                onChange={(e) => setFormData({ ...formData, tipo_cobertura: e.target.value as any })}
+                onChange={(e) => setFormData({ ...formData, tipo_cobertura: e.target.value as TipoCobertura })}
                 options={[
                   { label: '💉 Inseminação', value: 'Inseminação' },
                   { label: '🌿 Monta Natural (Touro & Vaca a Campo)', value: 'Monta Natural' },
@@ -378,7 +407,7 @@ export const AnimaisSlidePanel = ({
                 label="Sexo *"
                 id="sexo"
                 value={formData.sexo || 'F'}
-                onChange={(e) => setFormData({ ...formData, sexo: e.target.value as any })}
+                onChange={(e) => setFormData({ ...formData, sexo: e.target.value as SexoAnimal })}
                 disabled={['vaca', 'touro', 'bezerra', 'bezerro', 'novilha', 'garrote', 'matriz'].includes(formData.tipo_animal as string)}
                 options={[
                   { label: 'Fêmea', value: 'F' },
@@ -391,13 +420,14 @@ export const AnimaisSlidePanel = ({
                 value={formData.raca || ''}
                 onChange={(e) => setFormData({ ...formData, raca: e.target.value })}
                 placeholder="Ex: Nelore, Angus..."
+                maxLength={200}
               />
 
               <Select
                 label="Categoria *"
                 id="categoria"
                 value={formData.categoria || 'PA'}
-                onChange={(e) => setFormData({ ...formData, categoria: e.target.value as any })}
+                onChange={(e) => setFormData({ ...formData, categoria: e.target.value as CategoriaAnimal })}
                 options={[
                   { label: 'PA – Puro por Avaliação', value: 'PA' },
                   { label: 'PC – Puro por Cruzamento', value: 'PC' },
@@ -410,7 +440,7 @@ export const AnimaisSlidePanel = ({
                 label="Status do Animal *"
                 id="status"
                 value={formData.status || 'ativo'}
-                onChange={(e) => setFormData({ ...formData, status: e.target.value as any })}
+                onChange={(e) => setFormData({ ...formData, status: e.target.value as StatusAnimal })}
                 options={[
                   { label: 'Ativo', value: 'ativo' },
                   { label: 'Descarte', value: 'descarte' },
@@ -425,6 +455,7 @@ export const AnimaisSlidePanel = ({
                 value={formData.cor || ''}
                 onChange={(e) => setFormData({ ...formData, cor: e.target.value })}
                 placeholder="Ex: Castanho, Vermelho, Preto"
+                maxLength={200}
               />
 
               <Input
@@ -451,6 +482,17 @@ export const AnimaisSlidePanel = ({
                   value={formData.motivo_descarte || ''}
                   onChange={(e) => setFormData({ ...formData, motivo_descarte: e.target.value })}
                   placeholder="Ex: Idade avançada, problema reprodutivo..."
+                  maxLength={200}
+                />
+                <Input
+                  label="Data do Descarte"
+                  id="data_descarte"
+                  type="date"
+                  value={formData.data_descarte || ''}
+                  onChange={(e) => setFormData({ ...formData, data_descarte: e.target.value })}
+                  min={formData.data_nascimento || undefined}
+                  max={new Date().toISOString().split('T')[0]}
+                  required
                 />
                 <div className="text-xs font-medium text-red-700 dark:text-red-300 flex justify-between items-center pt-1">
                   <span>Quantidade de animais descartados por este brinco:</span>
@@ -479,14 +521,14 @@ export const AnimaisSlidePanel = ({
                     id="mae_id"
                     value={formData.mae_id || ''}
                     onChange={(e) => setFormData({ ...formData, mae_id: e.target.value || undefined })}
-                    options={[{ label: 'Sem mãe informada', value: '' }, ...animais.filter((a: any) => ['vaca', 'matriz', 'novilha', 'bezerra'].includes(a.tipo_animal) && a.id !== selectedAnimal?.id).map((a: any) => ({ label: `${a.brinco} - ${a.tipo_animal}`, value: a.id }))]}
+                    options={[{ label: 'Sem mãe informada', value: '' }, ...animais.filter((a) => ['vaca', 'matriz', 'novilha', 'bezerra'].includes(a.tipo_animal) && a.id !== selectedAnimal?.id).map((a) => ({ label: `${a.brinco} - ${a.tipo_animal}`, value: a.id }))]}
                   />
                   <Select
                     label="Pai (animal de referência)"
                     id="pai_id"
                     value={formData.pai_id || ''}
                     onChange={(e) => setFormData({ ...formData, pai_id: e.target.value || undefined })}
-                    options={[{ label: 'Sem pai informado', value: '' }, ...animais.filter((a: any) => ['touro', 'garrote', 'bezerro'].includes(a.tipo_animal) && a.id !== selectedAnimal?.id).map((a: any) => ({ label: `${a.brinco} - ${a.tipo_animal}`, value: a.id }))]}
+                    options={[{ label: 'Sem pai informado', value: '' }, ...animais.filter((a) => ['touro', 'garrote', 'bezerro'].includes(a.tipo_animal) && a.id !== selectedAnimal?.id).map((a) => ({ label: `${a.brinco} - ${a.tipo_animal}`, value: a.id }))]}
                   />
                 </div>
 
@@ -542,7 +584,7 @@ export const AnimaisSlidePanel = ({
                     { id: 'toque', label: 'Toque Ano a Ano' },
                   ]}
                   activeTab={matrizTab}
-                  onChange={(t) => setMatrizTab(t as any)}
+                  onChange={(t) => setMatrizTab(t as MatrizTab)}
                 />
 
                 {matrizTab === 'cobertas' && (
@@ -558,7 +600,7 @@ export const AnimaisSlidePanel = ({
                       label="Tipo de Cobertura"
                       id="tipo_cobertura"
                       value={formData.tipo_cobertura || 'Monta'}
-                      onChange={(e) => setFormData({ ...formData, tipo_cobertura: e.target.value as any })}
+                      onChange={(e) => setFormData({ ...formData, tipo_cobertura: e.target.value as TipoCobertura })}
                       options={[
                         { label: 'Monta Natural', value: 'Monta' },
                         { label: 'Inseminação Artificial', value: 'Inseminacao' },
@@ -692,6 +734,7 @@ export const AnimaisSlidePanel = ({
                           rows={2}
                           value={novoToqueObs}
                           onChange={(e) => setNovoToqueObs(e.target.value)}
+                          maxLength={2000}
                           placeholder="Condição corporal, tamanho uterino..."
                           className="w-full rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 px-3 py-2 text-sm outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500"
                         />
@@ -699,29 +742,7 @@ export const AnimaisSlidePanel = ({
 
                       <Button
                         type="button"
-                        onClick={() => {
-                            if (!novoToqueData) return;
-                            const ano = new Date(novoToqueData + 'T00:00:00').getFullYear();
-                            const novoToque = {
-                              id: `toq-${Date.now()}`,
-                              data: novoToqueData,
-                              ano: isNaN(ano) ? new Date().getFullYear() : ano,
-                              brinco: formData.brinco || 'N/A',
-                              resultado: novoToqueResultado,
-                              observacoes: novoToqueObs,
-                            };
-                            const historico = formData.historico_toque || [];
-                            const updated = [novoToque, ...historico];
-                            setFormData({
-                              ...formData,
-                              historico_toque: updated as any,
-                              status_reprodutivo: novoToqueResultado === 'cheia' ? 'Gestante' : 'Vazia',
-                            });
-                            setNovoToqueData(new Date().toISOString().split('T')[0]);
-                            setNovoToqueResultado('vazia');
-                            setNovoToqueObs('');
-                            showToast('Exame de toque registrado com sucesso!', 'success');
-                        }}
+                        onClick={handleAddToque}
                         className="w-full justify-center bg-purple-700 hover:bg-purple-800 text-white font-bold"
                       >
                         Salvar Toque na Matriz
@@ -740,7 +761,7 @@ export const AnimaisSlidePanel = ({
                         </div>
                       ) : (
                         <div className="space-y-2">
-                          {(formData.historico_toque || []).map((toq: any) => (
+                          {(formData.historico_toque || []).map((toq: RegistroToqueAno) => (
                             <div key={toq.id} className="p-3 bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-lg flex items-center justify-between">
                               <div className="flex items-center space-x-3">
                                 <div className={`w-2 h-2 rounded-full ${toq.resultado === 'cheia' ? 'bg-emerald-500' : 'bg-red-500'}`} />
@@ -763,7 +784,7 @@ export const AnimaisSlidePanel = ({
                                   type="button"
                                   onClick={() => {
                                      const historico = formData.historico_toque || [];
-                                     const updated = historico.filter((t: any) => t.id !== toq.id);
+                                     const updated = historico.filter((t: RegistroToqueAno) => t.id !== toq.id);
                                      setFormData({
                                        ...formData,
                                        historico_toque: updated,
@@ -794,6 +815,7 @@ export const AnimaisSlidePanel = ({
                 rows={3}
                 value={formData.observacoes || ''}
                 onChange={(e) => setFormData({ ...formData, observacoes: e.target.value })}
+                maxLength={2000}
                 className="w-full rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 p-3 text-sm focus:ring-emerald-500 focus:border-emerald-500"
                 placeholder="Histórico sanitário, genética, observações de pasto..."
               />

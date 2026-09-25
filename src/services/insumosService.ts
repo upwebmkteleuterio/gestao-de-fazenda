@@ -19,6 +19,7 @@ import {
 } from '@/offline/database';
 import { useConnectivityStore } from '@/store/useConnectivityStore';
 import type { Insumo, MovimentacaoInsumo } from '@/types/database';
+import { MAX_DOMAIN_QUANTITY, validateInsumoFields, validateMovimentacaoFields } from '@/services/domainValidation';
 
 type InsumoDbRow = {
   id: string;
@@ -288,7 +289,9 @@ const queueCreate = async (userId: string, item: Omit<Insumo, 'id' | 'createdAt'
 const queueUpdate = async (userId: string, id: string, updates: Partial<Insumo>): Promise<LocalInsumo> => {
   const current = await getOfflineRecord<LocalInsumo>(localRecordKey(userId, id));
   if (!current || current.data.localDeleted) throw new Error('Insumo não encontrado no cache local.');
-  const local: LocalInsumo = { ...current.data, ...updates, id, syncStatus: 'pending', syncError: undefined, localDeleted: false };
+  const merged: Insumo = { ...current.data, ...updates, id, createdAt: current.data.createdAt };
+  validateInsumoFields(merged);
+  const local: LocalInsumo = { ...merged, syncStatus: 'pending', syncError: undefined, localDeleted: false };
   await saveOfflineRecordAndEnqueue({ ...current, data: local, updatedAt: new Date().toISOString() }, { userId, entity: ENTITY, operation: 'update', payload: { id, updates } });
   return local;
 };
@@ -396,6 +399,7 @@ export const insumosService = {
   },
 
   create: async (item: Omit<Insumo, 'id' | 'createdAt'>): Promise<Insumo> => {
+    validateInsumoFields(item);
     const userId = await getCurrentUserId();
     if (!userId) throw new Error('Sua sessão expirou. Entre novamente.');
     const local = await queueCreate(userId, item);
@@ -403,6 +407,7 @@ export const insumosService = {
     return local;
   },
   update: async (id: string, updates: Partial<Insumo>): Promise<Insumo> => {
+    if (!id.trim()) throw new Error('Insumo inválido.');
     const userId = await getCurrentUserId();
     if (!userId) throw new Error('Sua sessão expirou. Entre novamente.');
     const local = await queueUpdate(userId, id, updates);
@@ -410,6 +415,7 @@ export const insumosService = {
     return local;
   },
   delete: async (id: string): Promise<boolean> => {
+    if (!id.trim()) throw new Error('Insumo inválido.');
     const userId = await getCurrentUserId();
     if (!userId) throw new Error('Sua sessão expirou. Entre novamente.');
     const result = await queueDelete(userId, id);
@@ -418,13 +424,15 @@ export const insumosService = {
   },
   registrarMovimentacao: async (mov: Omit<MovimentacaoInsumo, 'id' | 'createdAt'>): Promise<MovimentacaoInsumo> => {
     if (!isBrowserOnline()) throw new Error('Offline: registrar movimentação está indisponível para preservar o saldo e o histórico.');
-    if (mov.quantidade <= 0) throw new Error('A quantidade deve ser maior que zero');
+    validateMovimentacaoFields(mov);
     const rows = await getInsumosRows();
     const insumo = rows.find((row) => row.id === mov.insumo_id);
     if (!insumo) throw new Error('Insumo não encontrado');
     const currentStock = toNumber(insumo.estoque_atual);
+    if (!Number.isFinite(currentStock) || currentStock < 0) throw new Error('O saldo atual do insumo é inválido.');
     if (mov.tipo === 'saida' && mov.quantidade > currentStock) throw new Error('Estoque insuficiente para registrar a saída');
     const nextStock = mov.tipo === 'entrada' ? currentStock + mov.quantidade : currentStock - mov.quantidade;
+    if (!Number.isFinite(nextStock) || nextStock < 0 || nextStock > MAX_DOMAIN_QUANTITY) throw new Error('O saldo resultante da movimentação está fora do limite permitido.');
     const { error: stockError } = await supabase.from('insumos').update({ estoque_atual: nextStock }).eq('id', insumo.id);
     if (stockError) throw stockError;
     const movementId = `mov-${crypto.randomUUID()}`;

@@ -38,7 +38,10 @@ export const PastagensFilters: React.FC<PastagensFiltersProps> = ({
             noMargin
             id="filtro_status_ocupacao"
             value={statusFiltro}
-            onChange={(e) => onStatusChange(e.target.value as any)}
+            onChange={(e) => {
+              const value = e.target.value;
+              if (value === 'todos' || value === 'normal' || value === 'excedido' || value === 'vazio') onStatusChange(value);
+            }}
             options={[
               { label: 'Todos os Status de Ocupação', value: 'todos' },
               { label: 'Normal (Ocupação Regular)', value: 'normal' },

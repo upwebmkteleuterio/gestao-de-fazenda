@@ -3,6 +3,7 @@ import React from 'react';import { Modal } from '../../../components/Modal';impo
   setModalOpen: (val: boolean) => void;
   pesagemToDelete: Pesagem | null;
   handleDeleteConfirm: () => void;
+  isDeleting: boolean;
   loteModalOpen: boolean;
   setLoteModalOpen: (val: boolean) => void;
   loteName: string;
@@ -12,7 +13,7 @@ import React from 'react';import { Modal } from '../../../components/Modal';impo
 }
 
 export const PesagemModals: React.FC<PesagemModalsProps> = ({
-  modalOpen, setModalOpen, pesagemToDelete, handleDeleteConfirm,
+  modalOpen, setModalOpen, pesagemToDelete, handleDeleteConfirm, isDeleting,
   loteModalOpen, setLoteModalOpen, loteName, setLoteName,
   selectedPesagemIds, confirmarCriacaoLote
 }) => {
@@ -20,14 +21,14 @@ export const PesagemModals: React.FC<PesagemModalsProps> = ({
     <>
       <Modal
         isOpen={modalOpen}
-        onClose={() => setModalOpen(false)}
+        onClose={() => { if (!isDeleting) setModalOpen(false); }}
         title="Excluir Pesagem"
         actions={
           <>
-            <Button variant="danger" onClick={handleDeleteConfirm}>
+            <Button variant="danger" onClick={handleDeleteConfirm} loading={isDeleting} disabled={isDeleting}>
               Sim, Excluir
             </Button>
-            <Button variant="secondary" onClick={() => setModalOpen(false)}>
+            <Button variant="secondary" onClick={() => setModalOpen(false)} disabled={isDeleting}>
               Cancelar
             </Button>
           </>

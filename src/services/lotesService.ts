@@ -19,6 +19,7 @@ import {
 } from '@/offline/database';
 import { useConnectivityStore } from '@/store/useConnectivityStore';
 import { animaisService, syncAnimais } from '@/services/animaisService';
+import { validateLoteFields } from '@/services/domainValidation';
 import { Lote } from '@/types/database';
 
 export type { Lote };
@@ -50,6 +51,7 @@ type LoteFilters = { search?: string; page?: number; limit?: number };
 
 const ENTITY = 'lote';
 const localRecordKey = (userId: string, loteId: string) => `${ENTITY}:${userId}:${loteId}`;
+const pastureLocalRecordKey = (userId: string, pastureId: string) => `pastagem:${userId}:${pastureId}`;
 const snapshotKey = (userId: string) => `${ENTITY}:${userId}:snapshot`;
 const isBrowserOnline = () => (
   (typeof navigator === 'undefined' || navigator.onLine)
@@ -120,7 +122,28 @@ const validAnimalIdsForSync = async (userId: string, animalIds: string[]): Promi
   if (uniqueIds.some((animalId) => pendingCreates.has(animalId))) {
     throw new Error('Aguardando a sincronização dos animais vinculados ao lote.');
   }
+  if (uniqueIds.length === 0) return uniqueIds;
+  const { data, error } = await supabase.from('animais').select('id').in('id', uniqueIds);
+  if (error) throw error;
+  const existingIds = new Set(((data ?? []) as Array<{ id: string }>).map((animal) => animal.id));
+  if (uniqueIds.some((animalId) => !existingIds.has(animalId))) throw new Error('Um ou mais animais selecionados não foram encontrados.');
   return uniqueIds;
+};
+
+const validateLoteInput = async (userId: string, item: Partial<Lote>): Promise<void> => {
+  validateLoteFields(item);
+  const animalIds = item.animais_ids ?? [];
+  if (animalIds.length > 0) {
+    const animals = await animaisService.getAll({ includeHistorico: false });
+    validateLoteFields(item, animals.data.map((animal) => animal.id));
+  }
+  if (!item.pasto_id) return;
+  const localPasto = await getOfflineRecord<{ id: string; nome_pasto?: string; localDeleted?: boolean }>(pastureLocalRecordKey(userId, item.pasto_id));
+  if (localPasto && localPasto.userId === userId && localPasto.entity === 'pastagem' && !localPasto.data.localDeleted) return;
+  if (!isBrowserOnline()) throw new Error('O pasto selecionado não está disponível no cache offline.');
+  const { data, error } = await supabase.from('pastagens').select('id').eq('id', item.pasto_id).maybeSingle();
+  if (error) throw error;
+  if (!data) throw new Error('Pasto de destino não encontrado.');
 };
 
 const readLocalLotes = async (userId: string): Promise<{ data: LoteLocal[]; capturedAt?: string }> => {
@@ -232,10 +255,12 @@ const queueAnimalPastureUpdates = async (userId: string, animalIds: string[], pa
 };
 
 const queueLocalCreate = async (userId: string, item: CreateLoteDTO, id: string): Promise<Lote> => {
+  const data_criacao = new Date().toISOString();
+  await validateLoteInput(userId, { ...item, data_criacao });
   const lote: LoteLocal = {
     id,
     nome: item.nome.trim(),
-    data_criacao: new Date().toISOString(),
+    data_criacao,
     animais_ids: [...new Set(item.animais_ids)],
     pasto_id: item.pasto_id,
     pasto_nome: item.pasto_nome,
@@ -257,10 +282,16 @@ const queueLocalUpdate = async (userId: string, id: string, updates: Partial<Lot
   if (!current || current.userId !== userId || current.entity !== ENTITY || current.data.localDeleted) {
     throw new Error('Lote não encontrado');
   }
-  const local: LoteLocal = {
+  const next: Lote = {
     ...current.data,
     ...updates,
     animais_ids: updates.animais_ids ? [...new Set(updates.animais_ids)] : current.data.animais_ids,
+    id,
+  };
+  await validateLoteInput(userId, next);
+  const local: LoteLocal = {
+    ...next,
+    animais_ids: next.animais_ids,
     id,
     syncStatus: 'pending',
     syncError: undefined,
@@ -287,6 +318,7 @@ const queueLocalDelete = async (userId: string, id: string): Promise<boolean> =>
 };
 
 const remoteCreateLote = async (userId: string, item: Omit<Lote, 'id'>, id: string): Promise<Lote> => {
+  await validateLoteInput(userId, { ...item, id });
   const animalIds = await validAnimalIdsForSync(userId, item.animais_ids);
   const { data, error } = await supabase.from('lotes').insert({
     id,
@@ -317,7 +349,9 @@ const remoteUpdateLote = async (userId: string, id: string, updates: Partial<Lot
   const currentMemberships = await getMemberships([id]);
   const current = withMemberships([currentRow], currentMemberships)[0];
   if (!current) throw new Error('Lote não encontrado');
-  const nextAnimalIds = await validAnimalIdsForSync(userId, updates.animais_ids ?? current.animais_ids);
+  const next = { ...current, ...updates, animais_ids: updates.animais_ids ?? current.animais_ids, id };
+  await validateLoteInput(userId, next);
+  const nextAnimalIds = await validAnimalIdsForSync(userId, next.animais_ids);
   const nextPastoId = 'pasto_id' in updates ? updates.pasto_id : current.pasto_id;
   const nextPastoNome = 'pasto_nome' in updates ? updates.pasto_nome : current.pasto_nome;
   const patch: Record<string, unknown> = {};
@@ -405,7 +439,6 @@ export const lotesService = {
 
   create: async (userId: string, data: CreateLoteDTO): Promise<Lote> => {
     if (!userId) throw new Error('Sua sessão expirou. Entre novamente.');
-    if (!data.nome.trim()) throw new Error('Informe o nome do lote.');
     return queueLocalCreate(userId, data, `lote-${crypto.randomUUID()}`);
   },
 
@@ -414,9 +447,12 @@ export const lotesService = {
     return queueLocalUpdate(userId, id, updates);
   },
 
-  moverPasto: async (userId: string, loteId: string, pastoId: string, pastoNome: string): Promise<Lote> => (
-    lotesService.update(userId, loteId, { pasto_id: pastoId, pasto_nome: pastoNome })
-  ),
+  moverPasto: async (userId: string, loteId: string, pastoId: string, pastoNome: string): Promise<Lote> => {
+    const current = await lotesService.getById(userId, loteId);
+    if (!current) throw new Error('Lote não encontrado.');
+    if (current.pasto_id === pastoId) throw new Error('Selecione um pasto diferente do atual.');
+    return lotesService.update(userId, loteId, { pasto_id: pastoId, pasto_nome: pastoNome });
+  },
 
   delete: async (userId: string, id: string): Promise<boolean> => {
     if (!userId) throw new Error('Sua sessão expirou. Entre novamente.');

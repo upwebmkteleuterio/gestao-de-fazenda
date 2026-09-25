@@ -16,6 +16,7 @@ import { useAnimais } from '../../hooks/useAnimais';
 import { useUIStore } from '../../store/useUIStore';
 import { Pagination } from '../../components/Pagination';
 import { Lote } from '../../services/lotesService';
+import { MAX_DOMAIN_TEXT_LENGTH } from '../../services/domainValidation';
 
 export const Lotes: React.FC = () => {
   const navigate = useNavigate();
@@ -37,7 +38,7 @@ export const Lotes: React.FC = () => {
     }
   }, [isOffline]);
 
-  const { lotes, totalLotes, source, capturedAt, isLoading, isError, refetch, createLote, moverPasto, deleteLote } = useLotes({ search, page, limit });
+  const { lotes, totalLotes, source, capturedAt, isLoading, isError, refetch, createLote, moverPasto, deleteLote, isDeleting } = useLotes({ search, page, limit });
   const showingOfflineCache = isOffline || source === 'local';
   const { pastagens } = usePastagens();
   const { animais = [] } = useAnimais();
@@ -68,14 +69,15 @@ export const Lotes: React.FC = () => {
   };
 
   const confirmDelete = async () => {
-    if (loteToDelete && deleteLote) {
+    if (!loteToDelete || isDeleting) return;
+    try {
       await deleteLote(loteToDelete.id);
       showToast(`Lote "${loteToDelete.nome}" excluído.`, 'info');
       setDeleteModalOpen(false);
       setLoteToDelete(null);
-      if (selectedLote?.id === loteToDelete.id) {
-        setSelectedLote(null);
-      }
+      if (selectedLote?.id === loteToDelete.id) setSelectedLote(null);
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : 'Erro ao excluir lote.', 'error');
     }
   };
 
@@ -86,8 +88,13 @@ export const Lotes: React.FC = () => {
   };
 
   const confirmMoverPasto = async () => {
+    if (isMoving) return;
     if (!loteToMove || !targetPastoId) {
       showToast('Selecione o pasto de destino.', 'error');
+      return;
+    }
+    if (targetPastoId === loteToMove.pasto_id) {
+      showToast('Selecione um pasto diferente do atual.', 'error');
       return;
     }
 
@@ -121,16 +128,22 @@ export const Lotes: React.FC = () => {
 
       setMoverPastoModalOpen(false);
       setLoteToMove(null);
-    } catch (err) {
-      showToast('Erro ao transferir lote de pasto.', 'error');
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : 'Erro ao transferir lote de pasto.', 'error');
     } finally {
       setIsMoving(false);
     }
   };
 
   const handleCreateNovoLote = async () => {
-    if (!novoLoteNome.trim()) {
+    if (isCreating) return;
+    const nome = novoLoteNome.trim();
+    if (!nome) {
       showToast('Informe o nome do lote.', 'error');
+      return;
+    }
+    if (nome.length > MAX_DOMAIN_TEXT_LENGTH) {
+      showToast(`O nome do lote deve ter no máximo ${MAX_DOMAIN_TEXT_LENGTH} caracteres.`, 'error');
       return;
     }
 
@@ -139,7 +152,7 @@ export const Lotes: React.FC = () => {
     setIsCreating(true);
     try {
       await createLote({
-        nome: novoLoteNome.trim(),
+        nome,
         animais_ids: [],
         pasto_id: novoLotePastoId || undefined,
         pasto_nome: pastoEscolhido?.nome_pasto || undefined,
@@ -334,11 +347,11 @@ export const Lotes: React.FC = () => {
       {/* Modal Mudar Lote de Pasto */}
       <Modal
         isOpen={moverPastoModalOpen}
-        onClose={() => setMoverPastoModalOpen(false)}
+        onClose={() => { if (!isMoving) setMoverPastoModalOpen(false); }}
         title="Mudar Lote de Pasto"
         actions={
           <div className="flex items-center justify-end gap-2 w-full">
-            <Button variant="secondary" onClick={() => setMoverPastoModalOpen(false)}>
+            <Button variant="secondary" onClick={() => setMoverPastoModalOpen(false)} disabled={isMoving}>
               Cancelar
             </Button>
             <Button
@@ -394,11 +407,11 @@ export const Lotes: React.FC = () => {
       {/* Modal Criar Lote Avulso */}
       <Modal
         isOpen={createModalOpen}
-        onClose={() => setCreateModalOpen(false)}
+        onClose={() => { if (!isCreating) setCreateModalOpen(false); }}
         title="Criar Novo Lote"
         actions={
           <div className="flex items-center justify-end gap-2 w-full">
-            <Button variant="secondary" onClick={() => setCreateModalOpen(false)}>
+            <Button variant="secondary" onClick={() => setCreateModalOpen(false)} disabled={isCreating}>
               Cancelar
             </Button>
             <Button
@@ -418,6 +431,7 @@ export const Lotes: React.FC = () => {
             id="input-novo-lote-nome"
             label="Nome do Lote *"
             placeholder="Ex: Lote Recria Piquete 02, Confinamento Março..."
+            maxLength={MAX_DOMAIN_TEXT_LENGTH}
             value={novoLoteNome}
             onChange={(e) => setNovoLoteNome(e.target.value)}
             autoFocus
@@ -546,14 +560,14 @@ export const Lotes: React.FC = () => {
       {/* Delete Lote Modal */}
       <Modal
         isOpen={deleteModalOpen}
-        onClose={() => setDeleteModalOpen(false)}
+        onClose={() => { if (!isDeleting) setDeleteModalOpen(false); }}
         title="Excluir Lote"
         actions={
           <div className="flex items-center justify-end gap-2 w-full">
-            <Button variant="secondary" onClick={() => setDeleteModalOpen(false)}>
+            <Button variant="secondary" onClick={() => setDeleteModalOpen(false)} disabled={isDeleting}>
               Cancelar
             </Button>
-            <Button variant="danger" onClick={confirmDelete}>
+            <Button variant="danger" onClick={confirmDelete} loading={isDeleting} disabled={isDeleting}>
               Sim, Excluir Lote
             </Button>
           </div>

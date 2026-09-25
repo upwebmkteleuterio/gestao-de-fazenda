@@ -18,6 +18,7 @@ import {
 } from '@/offline/database';
 import { useConnectivityStore } from '@/store/useConnectivityStore';
 import { animaisService } from '@/services/animaisService';
+import { validatePastagemFields, validateServicoPastagemFields } from '@/services/domainValidation';
 import { Pastagem, ServicoPastagem } from '@/types/database';
 
 export type { Pastagem };
@@ -144,7 +145,9 @@ const requiredNumber = (value: unknown, field: string): number => {
   return number;
 };
 
-const buildPastagemInsert = (item: Omit<Pastagem, 'id' | 'createdAt'>, id: string): PastagemDbWrite => ({
+const buildPastagemInsert = (item: Omit<Pastagem, 'id' | 'createdAt'>, id: string): PastagemDbWrite => {
+  validatePastagemFields(item);
+  return {
   id,
   nome_pasto: requiredString(item.nome_pasto, 'o nome da pastagem'),
   tipo_capim: requiredString(item.tipo_capim, 'o tipo de capim'),
@@ -163,7 +166,8 @@ const buildPastagemInsert = (item: Omit<Pastagem, 'id' | 'createdAt'>, id: strin
   bezerros_count: 0,
   matrizes_count: 0,
   touros_count: 0,
-});
+  };
+};
 
 const buildPastagemPatch = (updates: Partial<Pastagem>): Partial<PastagemDbWrite> => {
   const patch: Partial<PastagemDbWrite> = {};
@@ -342,10 +346,10 @@ const queueLocalUpdate = async (userId: string, id: string, updates: Partial<Pas
   if (!current || current.userId !== userId || current.entity !== ENTITY || current.data.localDeleted) {
     throw new Error('Pastagem não encontrada');
   }
+  const next: Pastagem = { ...current.data, ...updates, id };
+  validatePastagemFields(next);
   const local: PastagemLocal = {
-    ...current.data,
-    ...updates,
-    id,
+    ...next,
     syncStatus: 'pending',
     syncError: undefined,
     localDeleted: false,
@@ -399,6 +403,12 @@ const remoteCreatePastagem = async (item: Omit<Pastagem, 'id' | 'createdAt'>, id
 };
 
 const remoteUpdatePastagem = async (id: string, updates: Partial<Pastagem>): Promise<Pastagem> => {
+  const { data: currentData, error: currentError } = await supabase.from('pastagens').select('*').eq('id', id).maybeSingle();
+  if (currentError) throw currentError;
+  if (!currentData) throw new Error('Pastagem não encontrada');
+  const current = toPastagem(currentData as unknown as PastagemDbRow);
+  const next = { ...current, ...updates, id };
+  validatePastagemFields(next);
   const { data, error } = await supabase.from('pastagens').update(buildPastagemPatch(updates)).eq('id', id).select('*').single();
   if (error) throw error;
   return toPastagem(data as unknown as PastagemDbRow);
@@ -484,9 +494,19 @@ export const pastagensService = {
   },
 
   getById: async (id: string): Promise<Pastagem | null> => {
-    const { data, error } = await supabase.from('pastagens').select('*').eq('id', id).maybeSingle();
-    if (error) throw error;
-    return data ? toPastagem(data as unknown as PastagemDbRow) : null;
+    const userId = await getCurrentUserId();
+    if (!userId) return null;
+    const local = await getOfflineRecord<PastagemLocal>(localRecordKey(userId, id));
+    if (!isBrowserOnline()) return local && !local.data.localDeleted ? local.data : null;
+    try {
+      const { data, error } = await supabase.from('pastagens').select('*').eq('id', id).maybeSingle();
+      if (error) throw error;
+      return data ? toPastagem(data as unknown as PastagemDbRow) : null;
+    } catch (error) {
+      const message = error instanceof Error ? error.message.toLowerCase() : '';
+      if (/network|fetch|offline|load failed|timeout/.test(message) && local && !local.data.localDeleted) return local.data;
+      throw error;
+    }
   },
 
   create: async (userId: string, item: Omit<Pastagem, 'id' | 'createdAt'>): Promise<Pastagem> => {
@@ -517,6 +537,19 @@ export const pastagensService = {
   },
 
   addServico: async (item: Omit<ServicoPastagem, 'id' | 'createdAt'>): Promise<ServicoPastagem> => {
+    const userId = await getCurrentUserId();
+    if (!userId) throw new Error('Sua sessão expirou. Entre novamente.');
+    const localPasto = await getOfflineRecord<PastagemLocal>(localRecordKey(userId, item.pasto_id));
+    let pastoEntrada = localPasto && localPasto.userId === userId && !localPasto.data.localDeleted
+      ? localPasto.data.data_entrada
+      : undefined;
+    if (!pastoEntrada && isBrowserOnline()) {
+      const { data, error } = await supabase.from('pastagens').select('data_entrada').eq('id', item.pasto_id).maybeSingle();
+      if (error) throw error;
+      pastoEntrada = (data as { data_entrada?: string } | null)?.data_entrada;
+    }
+    if (!pastoEntrada) throw new Error('Pastagem não encontrada para registrar o serviço.');
+    validateServicoPastagemFields(item, pastoEntrada);
     const id = `ser-${crypto.randomUUID()}`;
     const payload = {
       id,

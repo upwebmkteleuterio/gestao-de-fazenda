@@ -21,7 +21,7 @@ interface PesagemSlidePanelProps {
   activeTabPanel: 'individual' | 'grupo';
   setActiveTabPanel: (tab: 'individual' | 'grupo') => void;
   grupoRows: { animal_id: string; brinco_animal: string; peso_kg: number }[];
-  setGrupoRows: (rows: any) => void;
+  setGrupoRows: (rows: { animal_id: string; brinco_animal: string; peso_kg: number }[]) => void;
   animais: Animal[];
 }
 
@@ -33,7 +33,7 @@ export const PesagemSlidePanel: React.FC<PesagemSlidePanelProps> = ({
   return (
     <SlidePanel
       isOpen={slideOpen}
-      onClose={() => setSlideOpen(false)}
+      onClose={() => { if (!isSaving) setSlideOpen(false); }}
       title={slideMode === 'create' ? 'Nova Pesagem' : slideMode === 'edit' ? 'Editar Pesagem' : 'Detalhes e Comparativo de Pesagem'}
       subtitle="Acompanhe as duas pesagens, intervalo de dias e ganho diário (GMD)."
       width="lg"
@@ -45,10 +45,10 @@ export const PesagemSlidePanel: React.FC<PesagemSlidePanelProps> = ({
             </Button>
           ) : (
             <>
-              <Button variant="ghost" onClick={() => setSlideOpen(false)} className="min-h-[44px]">
+              <Button variant="ghost" onClick={() => setSlideOpen(false)} disabled={isSaving} className="min-h-[44px]">
                 Cancelar
               </Button>
-              <Button variant="primary" onClick={handleSave} disabled={isSaving} className="min-h-[44px]">
+              <Button variant="primary" onClick={handleSave} loading={isSaving} disabled={isSaving} className="min-h-[44px]">
                 {isSaving ? 'Salvando...' : 'Salvar Pesagem'}
               </Button>
             </>
@@ -215,7 +215,7 @@ export const PesagemSlidePanel: React.FC<PesagemSlidePanelProps> = ({
                   { id: 'grupo', label: 'Pesagem em Grupo' },
                 ]}
                 activeTab={activeTabPanel}
-                onChange={(t) => setActiveTabPanel(t as any)}
+                onChange={(t) => setActiveTabPanel(t as 'individual' | 'grupo')}
               />
             )}
 
@@ -268,12 +268,13 @@ export const PesagemSlidePanel: React.FC<PesagemSlidePanelProps> = ({
               /* MODO GRUPO */
               <div className="space-y-4 pt-2">
                 <Input
-                  label="Data da Pesagem em Grupo"
+                  label="Data da Pesagem em Grupo *"
                   id="data_grupo"
                   type="date"
                   value={formData.data_pesagem || ''}
                   onChange={(e) => setFormData({ ...formData, data_pesagem: e.target.value })}
                   max={new Date().toISOString().split('T')[0]}
+                  required
                 />
                 
                 <p className="text-xs font-bold uppercase text-gray-500">Animais e Pesos</p>
@@ -363,6 +364,7 @@ export const PesagemSlidePanel: React.FC<PesagemSlidePanelProps> = ({
                 rows={3}
                 value={formData.observacoes || ''}
                 onChange={(e) => setFormData({ ...formData, observacoes: e.target.value })}
+                maxLength={2000}
                 className="w-full rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 p-3 text-sm focus:ring-emerald-500 focus:border-emerald-500"
                 placeholder="Condições do animal, jejum..."
               />

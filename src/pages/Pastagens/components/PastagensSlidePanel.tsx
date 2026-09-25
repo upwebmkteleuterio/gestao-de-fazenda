@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { Dispatch, FormEvent, SetStateAction } from 'react';
 import { SlidePanel } from '../../../components/SlidePanel';
 import { Input } from '../../../components/Input';
 import { Select } from '../../../components/Select';
@@ -8,18 +8,45 @@ import {
   Plus, Map, Sprout, Search, AlertTriangle, Calendar, Users, Edit3, Trash2, 
   Clock, CheckCircle2, ShieldAlert, Layers, Wrench, ChevronRight, Filter
 } from 'lucide-react';
-import { Pastagem, ServicoPastagem } from '../../../types/database';
+import { Animal, Pastagem, ServicoPastagem } from '../../../types/database';
+import type { ServicoFormValues } from '../hooks/usePastagemForm';
+
+type ResumoRebanhoPasto = { vacas: number; bezerras: number; bezerros: number; matrizes: number; touros: number; total: number; isManual: boolean };
+
+interface PastagensSlidePanelProps {
+  slideOpen: boolean;
+  setSlideOpen: Dispatch<SetStateAction<boolean>>;
+  isEditing: boolean;
+  isSaving: boolean;
+  isDeleting: boolean;
+  isAddingServico: boolean;
+  activeTab: 'dados' | 'servicos';
+  setActiveTab: Dispatch<SetStateAction<'dados' | 'servicos'>>;
+  selectedPasto: Pastagem | null;
+  pastoForm: Partial<Pastagem>;
+  setPastoForm: Dispatch<SetStateAction<Partial<Pastagem>>>;
+  servicoForm: ServicoFormValues;
+  setServicoForm: Dispatch<SetStateAction<ServicoFormValues>>;
+  handleSavePasto: (event?: FormEvent) => Promise<void>;
+  handleAddServico: (event: FormEvent) => Promise<void>;
+  setModalOpen: Dispatch<SetStateAction<boolean>>;
+  setPastoToDelete: Dispatch<SetStateAction<Pastagem | null>>;
+  animaisNoPasto: Animal[];
+  resumoRebanhoPasto: ResumoRebanhoPasto;
+  servicosDoPasto: ServicoPastagem[];
+  checkSaidaVencida: (date?: string) => boolean;
+}
 
 export const PastagensSlidePanel = ({
-  slideOpen, setSlideOpen, isEditing, isSaving, activeTab, setActiveTab,
+  slideOpen, setSlideOpen, isEditing, isSaving, isDeleting, isAddingServico, activeTab, setActiveTab,
   selectedPasto, pastoForm, setPastoForm, servicoForm, setServicoForm,
   handleSavePasto, handleAddServico, setModalOpen, setPastoToDelete,
   animaisNoPasto, resumoRebanhoPasto, servicosDoPasto, checkSaidaVencida
-}: any) => (
+}: PastagensSlidePanelProps) => (
   <>
     <SlidePanel
         isOpen={slideOpen}
-        onClose={() => setSlideOpen(false)}
+        onClose={() => { if (!isSaving && !isDeleting && !isAddingServico) setSlideOpen(false); }}
         title={selectedPasto ? `Área: ${selectedPasto.nome_pasto}` : 'Criar Novo Piquete'}
         subtitle="Configuração da área, resumo automático do rebanho e anotação de serviços de solo."
         width="xl"
@@ -32,6 +59,7 @@ export const PastagensSlidePanel = ({
                   setPastoToDelete(selectedPasto);
                   setModalOpen(true);
                 }}
+                disabled={isSaving || isDeleting || isAddingServico}
                 className="text-xs text-red-600 hover:text-red-700 dark:text-red-400"
               >
                 <Trash2 className="w-4 h-4 mr-1" />
@@ -40,10 +68,10 @@ export const PastagensSlidePanel = ({
             ) : <div />}
 
             <div className="flex space-x-3">
-              <Button variant="ghost" onClick={() => setSlideOpen(false)} disabled={isSaving}>
+              <Button variant="ghost" onClick={() => setSlideOpen(false)} disabled={isSaving || isDeleting || isAddingServico}>
                 Cancelar
               </Button>
-              <Button variant="primary" onClick={handleSavePasto} loading={isSaving}>
+              <Button variant="primary" onClick={handleSavePasto} loading={isSaving} disabled={isDeleting || isAddingServico}>
                 Salvar Alterações
               </Button>
             </div>
@@ -105,6 +133,7 @@ export const PastagensSlidePanel = ({
                   value={pastoForm.nome_pasto || ''}
                   onChange={(e) => setPastoForm({ ...pastoForm, nome_pasto: e.target.value })}
                   placeholder="Ex: Pasto Manguinho Piquete Norte"
+                  maxLength={200}
                   required
                 />
 
@@ -115,6 +144,7 @@ export const PastagensSlidePanel = ({
                   value={pastoForm.tipo_capim || ''}
                   onChange={(e) => setPastoForm({ ...pastoForm, tipo_capim: e.target.value })}
                   placeholder="Ex: Brachiaria Brizantha, Mombaça, Tifton 85, Capiaçu..."
+                  maxLength={200}
                   required
                 />
 
@@ -134,7 +164,8 @@ export const PastagensSlidePanel = ({
                     label="Lotação Máxima Suportada (Cabeças) *"
                     id="lotacao_maxima_form"
                     type="number"
-                    min="0"
+                    min="1"
+                    step="1"
                     value={pastoForm.lotacao_maxima !== undefined ? pastoForm.lotacao_maxima : ''}
                     onChange={(e) => setPastoForm({ ...pastoForm, lotacao_maxima: e.target.value === '' ? '' : Number(e.target.value) })}
                     placeholder="Ex: 30"
@@ -358,7 +389,7 @@ export const PastagensSlidePanel = ({
                     label="Tipo de Serviço *"
                     id="tipo_servico_select"
                     value={servicoForm.tipo_servico}
-                    onChange={(e) => setServicoForm({ ...servicoForm, tipo_servico: e.target.value as any })}
+                    onChange={(e) => setServicoForm({ ...servicoForm, tipo_servico: e.target.value as ServicoPastagem['tipo_servico'] })}
                     options={[
                       { label: 'Roço / Roçagem Mecânica', value: 'Roçagem' },
                       { label: 'Herbicida / Pulverização de Invasoras', value: 'Pulverização' },
@@ -384,6 +415,7 @@ export const PastagensSlidePanel = ({
                   value={servicoForm.responsavel}
                   onChange={(e) => setServicoForm({ ...servicoForm, responsavel: e.target.value })}
                   placeholder="Ex: Carlos Silva / Equipe de Campo"
+                  maxLength={200}
                 />
 
                 <div>
@@ -397,11 +429,12 @@ export const PastagensSlidePanel = ({
                     onChange={(e) => setServicoForm({ ...servicoForm, observacoes: e.target.value })}
                     className="w-full rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 p-3 text-sm text-gray-900 dark:text-white focus:ring-2 focus:ring-emerald-500"
                     placeholder="Detalhes dos insumos aplicados, dosagem, estado do capim..."
+                    maxLength={2000}
                   />
                 </div>
 
                 <div className="text-right">
-                  <Button type="submit" variant="primary" icon={Plus}>
+                  <Button type="submit" variant="primary" icon={Plus} loading={isAddingServico} disabled={isAddingServico || isSaving || isDeleting}>
                     Lançar Serviço na Terra
                   </Button>
                 </div>

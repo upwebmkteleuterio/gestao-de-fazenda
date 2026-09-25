@@ -355,10 +355,17 @@ const normalizeAndValidateAnimal = async (
   return {
     ...input,
     brinco,
-    mae_id: normalizeParent(input.mae_id, 'mae', originalMaeId),
-    pai_id: normalizeParent(input.pai_id, 'pai', originalPaiId),
+    raca: input.raca?.trim() || undefined,
+    cor: input.cor?.trim() || undefined,
+    cdc: input.cdc?.trim() || undefined,
+    cdn: input.cdn?.trim() || undefined,
+    touro_cobertura: input.touro_cobertura?.trim() || undefined,
+    observacoes: input.observacoes?.trim() || undefined,
     motivo_descarte: input.motivo_descarte?.trim() || undefined,
     data_descarte: input.data_descarte || undefined,
+    historico_toque: input.historico_toque?.map((toque) => ({ ...toque, brinco, observacoes: toque.observacoes?.trim() || undefined })),
+    mae_id: normalizeParent(input.mae_id, 'mae', originalMaeId),
+    pai_id: normalizeParent(input.pai_id, 'pai', originalPaiId),
   };
 };
 

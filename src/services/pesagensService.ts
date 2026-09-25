@@ -13,6 +13,7 @@ import {
   saveOfflineRecord,
   saveOfflineRecordAndEnqueue,
   saveOfflineRecords,
+  saveOfflineRecordsAndEnqueue,
   saveOfflineSnapshot,
   type OutboxOperation,
 } from '@/offline/database';
@@ -486,9 +487,48 @@ export const pesagensService = {
   },
 
   createGroup: async (items: PesagemInput[]): Promise<LocalPesagem[]> => {
-    const results: LocalPesagem[] = [];
-    for (const item of items) results.push(await pesagensService.create(item));
-    return results;
+    const userId = await getCurrentUserId();
+    if (!userId) throw new Error('Sua sessão expirou. Entre novamente.');
+    if (items.length === 0) throw new DomainValidationError('Informe ao menos um animal para a pesagem em grupo.');
+    const validItems = items.map((item) => validateInput(item));
+    const keys = new Set<string>();
+    validItems.forEach((item) => {
+      const key = `${item.animal_id}:${item.data_pesagem}`;
+      if (keys.has(key)) throw new DomainValidationError('Há animais repetidos na mesma data na pesagem em grupo.');
+      keys.add(key);
+    });
+    for (const item of validItems) await ensurePesagemReference(item);
+
+    const existing = (await listOfflineRecords<LocalPesagem>({ userId, entity: ENTITY }))
+      .map((record) => record.data)
+      .filter((record) => !record.localDeleted);
+    const working = [...existing];
+    const locals: LocalPesagem[] = [];
+    const records = [] as ReturnType<typeof localRecord>[];
+    const operations: Array<{ userId: string; entity: string; operation: 'create'; payload: CreatePayload }> = [];
+    validItems.forEach((item) => {
+      const calc = calcularGMD(item.animal_id, item.peso_kg, item.data_pesagem, working);
+      const local: LocalPesagem = {
+        ...item,
+        id: `pes-${crypto.randomUUID()}`,
+        createdAt: new Date().toISOString(),
+        status_sincronizacao: false,
+        peso_anterior: calc.pesoAnterior,
+        data_pesagem_anterior: calc.dataAnterior,
+        ganho_peso_kg: calc.ganhoPeso,
+        gmd_calculado: calc.gmd,
+        dias_intervalo: calc.diasIntervalo,
+        syncStatus: 'pending',
+        localDeleted: false,
+      };
+      locals.push(local);
+      records.push(localRecord(userId, local));
+      operations.push({ userId, entity: ENTITY, operation: 'create', payload: { id: local.id, item: toCreateItem(local) } });
+      working.push(local);
+    });
+    await saveOfflineRecordsAndEnqueue(records, operations);
+    await recalculateLocalChain(userId, validItems.map((item) => item.animal_id));
+    return locals;
   },
 
   update: async (id: string, updates: Partial<Pesagem>): Promise<LocalPesagem> => {

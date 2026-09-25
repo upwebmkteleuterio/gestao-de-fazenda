@@ -8,6 +8,7 @@ import {
 } from '@/offline/database';
 import { useConnectivityStore } from '@/store/useConnectivityStore';
 import { ManejoSanitario, MedicamentoAplicado } from '@/types/database';
+import { MAX_DOMAIN_QUANTITY, validateSanitarioFields } from '@/services/domainValidation';
 import { insumosService, removerMovimentacoesPorOrigem } from '@/services/insumosService';
 
 type ManejoDbRow = {
@@ -313,6 +314,43 @@ const restoreAutomaticMovimentacoes = async (movimentacoes: Awaited<ReturnType<t
   }
 };
 
+const validatePersistence = async (manejo: ManejoSanitario, previous?: ManejoSanitario): Promise<void> => {
+  const animalIds = manejo.animais_ids;
+  const insumoIds = [...new Set(manejo.medicamentos.map((medicamento) => medicamento.insumo_id))];
+  const [animalsResult, insumosResult] = await Promise.all([
+    animalIds.length > 0 ? supabase.from('animais').select('id').in('id', animalIds) : Promise.resolve({ data: [], error: null }),
+    insumoIds.length > 0 ? supabase.from('insumos').select('id, estoque_atual').in('id', insumoIds) : Promise.resolve({ data: [], error: null }),
+  ]);
+  if (animalsResult.error) throw animalsResult.error;
+  if (insumosResult.error) throw insumosResult.error;
+  const animals = (animalsResult.data ?? []) as unknown as Array<{ id: string }>;
+  const insumos = (insumosResult.data ?? []) as unknown as Array<{ id: string; estoque_atual: number | string }>;
+  validateSanitarioFields(manejo, animals.map((animal) => animal.id), insumos.map((insumo) => insumo.id));
+
+  if (manejo.status !== 'concluido') return;
+  const previousMovimentacoes = previous?.status === 'concluido'
+    ? await supabase.from('movimentacoes_insumos').select('insumo_id, quantidade, tipo').eq('origem_manejo_id', manejo.id)
+    : { data: [], error: null };
+  if (previousMovimentacoes.error) throw previousMovimentacoes.error;
+  const restoredByInsumo = new Map<string, number>();
+  for (const movimentacao of (previousMovimentacoes.data ?? []) as unknown as Array<{ insumo_id: string; quantidade: number | string; tipo: 'entrada' | 'saida' }>) {
+    const quantity = toNumber(movimentacao.quantidade);
+    restoredByInsumo.set(movimentacao.insumo_id, (restoredByInsumo.get(movimentacao.insumo_id) ?? 0) + (movimentacao.tipo === 'saida' ? quantity : -quantity));
+  }
+  const stockByInsumo = new Map(insumos.map((insumo) => [insumo.id, toNumber(insumo.estoque_atual)]));
+  stockByInsumo.forEach((stock) => {
+    if (!Number.isFinite(stock) || stock < 0 || stock > MAX_DOMAIN_QUANTITY) throw new Error('O saldo atual de um insumo é inválido.');
+  });
+  const requestedByInsumo = new Map<string, number>();
+  manejo.medicamentos.forEach((medicamento) => {
+    requestedByInsumo.set(medicamento.insumo_id, (requestedByInsumo.get(medicamento.insumo_id) ?? 0) + medicamento.quantidade_total);
+  });
+  requestedByInsumo.forEach((quantity, insumoId) => {
+    const available = (stockByInsumo.get(insumoId) ?? 0) + (restoredByInsumo.get(insumoId) ?? 0);
+    if (quantity > available) throw new Error('Estoque insuficiente para registrar as baixas automáticas do manejo.');
+  });
+};
+
 export const sanitarioService = {
   getAll: async (filters?: { search?: string; tipo?: string; status?: string; page?: number; limit?: number }): Promise<SanitarioQuery> => {
     const userId = await getCurrentUserId();
@@ -422,6 +460,7 @@ export const sanitarioService = {
     if (!isBrowserOnline()) throw new Error('Ação indisponível offline.');
     const id = `man-${crypto.randomUUID()}`;
     const manejo: ManejoSanitario = { ...item, id, status_sincronizacao: false, createdAt: '' };
+    await validatePersistence(manejo);
     const { error } = await supabase.from('manejos_sanitarios').insert({
       id,
       nome_lote: manejo.nome_lote,
@@ -456,6 +495,7 @@ export const sanitarioService = {
     const previous = await sanitarioService.getById(id);
     if (!previous) throw new Error('Manejo não encontrado');
     const updated: ManejoSanitario = { ...previous, ...updates, id, status_sincronizacao: false };
+    await validatePersistence(updated, previous);
     const { error } = await supabase.from('manejos_sanitarios').update({
       nome_lote: updated.nome_lote,
       data_manejo: updated.data_manejo,

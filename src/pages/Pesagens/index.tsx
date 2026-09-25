@@ -34,7 +34,7 @@ export const PesagensPage: React.FC = () => {
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(10);
 
-  const { pesagens, total, source, capturedAt, isLoading, isError, error, refetch, createPesagem, createPesagemGrupo, updatePesagem, deletePesagem } = usePesagens({
+  const { pesagens, total, source, capturedAt, isLoading, isError, error, refetch, createPesagem, createPesagemGrupo, updatePesagem, deletePesagem, isCreating, isCreatingGrupo, isUpdating, isDeleting } = usePesagens({
     search,
     tipoAnimal,
     startDate,
@@ -43,6 +43,8 @@ export const PesagensPage: React.FC = () => {
     limit,
   });
   const { createLote } = useLotes();
+  const [isSubmitting, setIsSubmitting] = React.useState(false);
+  const isSaving = isSubmitting || isCreating || isCreatingGrupo || isUpdating;
 
   // Seleção múltipla para Ação em Lote "Criar Lote de Animais"
   const [selectedPesagemIds, setSelectedPesagemIds] = useState<string[]>([]);
@@ -105,6 +107,7 @@ export const PesagensPage: React.FC = () => {
   const handleOpenEdit = (p: Pesagem) => {
     setSelectedPesagem(p);
     setFormData({ ...p });
+    setActiveTabPanel('individual');
     setSlideMode('edit');
     setSlideOpen(true);
   };
@@ -131,6 +134,8 @@ export const PesagensPage: React.FC = () => {
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSaving) return;
+    setIsSubmitting(true);
 
     try {
       if (slideMode === 'create') {
@@ -140,23 +145,28 @@ export const PesagensPage: React.FC = () => {
           await createPesagem(formData as Omit<Pesagem, 'id' | 'createdAt' | 'status_sincronizacao'>);
           showToast(`Pesagem do animal ${formData.brinco_animal} salva com sucesso!`);
         } else {
-          // Salva Pesagem em Grupo
-          const validGrupo = grupoRows.filter(r => r.animal_id && r.brinco_animal && r.peso_kg > 0);
-          if (validGrupo.length === 0 || validGrupo.length !== grupoRows.filter(r => r.brinco_animal || r.peso_kg > 0).length) {
+          const filledRows = grupoRows.filter((row) => row.animal_id || row.brinco_animal || row.peso_kg > 0);
+          const validGrupo = grupoRows.filter((row) => row.animal_id && row.brinco_animal && row.peso_kg > 0);
+          if (validGrupo.length === 0 || validGrupo.length !== filledRows.length) {
             showToast('Selecione um animal real e informe um peso válido em cada linha preenchida.', 'error');
             return;
           }
-          const pesagensToCreate = validGrupo.map(r => ({
-            animal_id: r.animal_id,
-            brinco_animal: r.brinco_animal,
-            tipo_animal: (animais.find((animal) => animal.id === r.animal_id)?.tipo_animal || 'vaca') as Pesagem['tipo_animal'],
-            peso_kg: r.peso_kg,
-            data_pesagem: formData.data_pesagem || new Date().toISOString().split('T')[0],
+          const animalIds = new Set<string>();
+          validGrupo.forEach((row) => {
+            if (animalIds.has(row.animal_id)) throw new Error('Não é possível repetir o mesmo animal na pesagem em grupo.');
+            animalIds.add(row.animal_id);
+          });
+          const dataPesagem = formData.data_pesagem || '';
+          const pesagensToCreate = validGrupo.map((row) => ({
+            animal_id: row.animal_id,
+            brinco_animal: row.brinco_animal,
+            tipo_animal: (animais.find((animal) => animal.id === row.animal_id)?.tipo_animal || 'vaca') as Pesagem['tipo_animal'],
+            peso_kg: row.peso_kg,
+            data_pesagem: dataPesagem,
             observacoes: 'Pesagem registrada em grupo',
           }));
           pesagensToCreate.forEach((item) => validatePesagemFields(item));
           if (pesagensToCreate.some((item) => isPlausiblePesagem(item.peso_kg))) showToast('Atenção: há peso fora da faixa usual; os valores tecnicamente válidos serão salvos para conferência.', 'info');
-
           await createPesagemGrupo(pesagensToCreate);
           showToast(`${validGrupo.length} pesagens em grupo salvas com sucesso!`);
         }
@@ -169,11 +179,13 @@ export const PesagensPage: React.FC = () => {
       setSlideOpen(false);
     } catch (error) {
       showToast(error instanceof Error ? error.message : 'Erro ao salvar pesagem.', 'error');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
   const handleDeleteConfirm = async () => {
-    if (!pesagemToDelete) return;
+    if (!pesagemToDelete || isDeleting) return;
     try {
       await deletePesagem(pesagemToDelete.id);
       showToast('Pesagem excluída do histórico.', 'info');
@@ -506,7 +518,7 @@ export const PesagensPage: React.FC = () => {
         selectedPesagem={selectedPesagem}
         formData={formData}
         setFormData={setFormData}
-        isSaving={false}
+        isSaving={isSaving}
         handleSave={handleSave}
         activeTabPanel={activeTabPanel}
         setActiveTabPanel={setActiveTabPanel}
@@ -519,6 +531,7 @@ export const PesagensPage: React.FC = () => {
         setModalOpen={setModalOpen}
         pesagemToDelete={pesagemToDelete}
         handleDeleteConfirm={handleDeleteConfirm}
+        isDeleting={isDeleting}
         loteModalOpen={loteModalOpen}
         setLoteModalOpen={setLoteModalOpen}
         loteName={loteName}

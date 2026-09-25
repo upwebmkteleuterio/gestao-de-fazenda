@@ -9,7 +9,47 @@ import {
   HeartHandshake, Edit, Trash2, Calendar, FileText, Activity, Layers, ArrowRight, Save, Plus, ChevronRight, ShieldCheck, Users, Bell,
   ShieldAlert, Syringe, Pill, TestTube, Search, Check, X, Clock, HelpCircle, AlertTriangle, List, PenLine
 } from 'lucide-react';
-import { ManejoSanitario } from '../../../types/database';
+import { Animal, Insumo, ManejoSanitario } from '../../../types/database';
+
+type SanitarioFormData = {
+  nome_lote: string;
+  tipo_manejo: string;
+  data_manejo: string;
+  responsavel_tecnico: string;
+  status: 'andamento' | 'concluido';
+  observacoes: string;
+  medicamentos: ManejoSanitario['medicamentos'];
+  animais_ids: string[];
+  criar_lembrete: boolean;
+  data_lembrete: string;
+};
+
+type SanitarioSlidePanelProps = {
+  slideOpen: boolean;
+  setSlideOpen: (open: boolean) => void;
+  slideMode: 'create' | 'edit' | 'view';
+  setSlideMode: React.Dispatch<React.SetStateAction<'create' | 'edit' | 'view'>>;
+  selectedManejo: ManejoSanitario | null;
+  formData: SanitarioFormData;
+  setFormData: React.Dispatch<React.SetStateAction<SanitarioFormData>>;
+  isSaving: boolean;
+  isMutating: boolean;
+  handleSave: (event?: React.FormEvent) => Promise<void>;
+  isOffline: boolean;
+  setGroupModalOpen: React.Dispatch<React.SetStateAction<boolean>>;
+  setItemToDelete: React.Dispatch<React.SetStateAction<ManejoSanitario | null>>;
+  setModalOpen: React.Dispatch<React.SetStateAction<boolean>>;
+  currentMedInsumoId: string;
+  setCurrentMedInsumoId: React.Dispatch<React.SetStateAction<string>>;
+  currentMedDose: string;
+  setCurrentMedDose: React.Dispatch<React.SetStateAction<string>>;
+  currentMedQtd: number;
+  setCurrentMedQtd: React.Dispatch<React.SetStateAction<number>>;
+  insumos: Insumo[];
+  handleAddMedicamento: () => void;
+  handleRemoveMedicamento: (index: number) => void;
+  animais: Animal[];
+};
 
 const STANDARD_TIPOS_MANEJO = [
   'Vacinação',
@@ -35,14 +75,14 @@ const SUGESTOES_MANEJO = [
   'Outro',
 ];
 
-export const SanitarioSlidePanel = ({
+export const SanitarioSlidePanel: React.FC<SanitarioSlidePanelProps> = ({
   slideOpen, setSlideOpen, slideMode, setSlideMode, selectedManejo,
-  formData, setFormData, isSaving, handleSave, isOffline, setGroupModalOpen,
+  formData, setFormData, isSaving, isMutating, handleSave, isOffline, setGroupModalOpen,
   setItemToDelete, setModalOpen,
   currentMedInsumoId, setCurrentMedInsumoId,
   currentMedDose, setCurrentMedDose,
-  currentMedQtd, setCurrentMedQtd, insumos, handleAddMedicamento, handleRemoveMedicamento
-}: any) => {
+  currentMedQtd, setCurrentMedQtd, insumos, handleAddMedicamento, handleRemoveMedicamento, animais,
+}) => {
   const [modoManualTipo, setModoManualTipo] = useState(() => {
     return Boolean(formData?.tipo_manejo && !STANDARD_TIPOS_MANEJO.includes(formData.tipo_manejo));
   });
@@ -57,7 +97,7 @@ export const SanitarioSlidePanel = ({
   <>
     <SlidePanel
         isOpen={slideOpen}
-        onClose={() => setSlideOpen(false)}
+        onClose={() => { if (!isMutating) setSlideOpen(false); }}
         title={slideMode === 'create' ? 'Novo Manejo Sanitário' : slideMode === 'edit' ? 'Editar Manejo Sanitário' : 'Detalhes do Manejo Sanitário'}
         subtitle="Registrar aplicação de vacinas, vermífugos e tratamentos em lote."
         width="lg"
@@ -73,6 +113,7 @@ export const SanitarioSlidePanel = ({
                   setModalOpen(true);
                 }}
                 className="text-xs text-red-600 hover:text-red-700 dark:text-red-400 min-h-[44px]"
+                disabled={isMutating}
               >
                 <Trash2 className="w-4 h-4 mr-1" />
                 Excluir Manejo
@@ -88,10 +129,10 @@ export const SanitarioSlidePanel = ({
                 ) : <div />
               ) : (
                 <>
-                  <Button variant="ghost" onClick={() => setSlideOpen(false)} className="min-h-[44px]">
+                  <Button variant="ghost" onClick={() => setSlideOpen(false)} disabled={isMutating} className="min-h-[44px]">
                     Cancelar
                   </Button>
-                  <Button variant="primary" onClick={handleSave} disabled={isSaving || isOffline} className="min-h-[44px]">
+                  <Button variant="primary" onClick={handleSave} loading={isSaving} disabled={isOffline || isMutating} className="min-h-[44px]">
                     {isSaving ? 'Salvando...' : 'Salvar Manejo'}
                   </Button>
                 </>
@@ -100,7 +141,7 @@ export const SanitarioSlidePanel = ({
           </div>
         }
       >
-        <fieldset disabled={slideMode === 'view' || isOffline} className="space-y-6 border-0 p-0 m-0 min-w-0">
+        <fieldset disabled={slideMode === 'view' || isOffline || isMutating} className="space-y-6 border-0 p-0 m-0 min-w-0">
           {/* SESSÃO 1: INFORMAÇÕES */}
           <div className="border border-gray-200 dark:border-gray-800 rounded-xl p-4 bg-white dark:bg-gray-900 space-y-4 shadow-sm">
             <div className="flex items-center space-x-2 pb-2 border-b border-gray-100 dark:border-gray-800">
@@ -356,7 +397,7 @@ export const SanitarioSlidePanel = ({
                 }))}
               />
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 items-end">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 items-start">
                 <Input
                   label="Dose por Animal (ex: 5 ml)"
                   id="dose_med_input"

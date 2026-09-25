@@ -17,6 +17,7 @@ import {
   type OutboxOperation,
 } from '@/offline/database';
 import { useConnectivityStore } from '@/store/useConnectivityStore';
+import { MAX_FINANCEIRO_DESCRIPTION_LENGTH, MAX_FINANCEIRO_VALUE, sanitizeReportSearch, validateFinanceiroFields } from '@/services/domainValidation';
 import type { TransacaoFinanceira } from '@/types/database';
 
 export type FinanceiroResumo = { receitas: number; despesas: number; saldo: number; pendentes: number };
@@ -115,9 +116,11 @@ const toTransaction = (row: DbRow): TransacaoFinanceira => ({
 });
 
 const normalizeOptionalId = (value: unknown): string | null => {
-  if (value === undefined || value === null) return null;
+  if (value === undefined || value === null || value === '') return null;
   if (typeof value !== 'string') throw new Error('Identificador relacionado inválido.');
-  return value.trim() || null;
+  const normalized = value.trim();
+  if (!normalized || normalized.length > 200 || /[\u0000-\u001F\u007F]/.test(normalized)) throw new Error('Identificador relacionado inválido.');
+  return normalized;
 };
 
 const allowedTipo = new Set<TransacaoFinanceira['tipo']>(['receita', 'despesa']);
@@ -140,15 +143,19 @@ const normalizeStatus = (value: unknown): TransacaoFinanceira['status'] => {
 };
 const normalizeDescription = (value: unknown): string => {
   if (typeof value !== 'string' || value.trim() === '') throw new Error('Informe a descrição.');
-  return value.trim();
+  const normalized = value.trim();
+  if (normalized.length > MAX_FINANCEIRO_DESCRIPTION_LENGTH) throw new Error(`A descrição deve ter no máximo ${MAX_FINANCEIRO_DESCRIPTION_LENGTH} caracteres.`);
+  return normalized;
 };
 const normalizeValor = (value: unknown): number => {
   const valor = typeof value === 'number' ? value : typeof value === 'string' && value.trim() ? Number(value) : NaN;
-  if (!Number.isFinite(valor) || valor < 0) throw new Error('Informe um valor válido e não negativo.');
+  if (!Number.isFinite(valor) || valor < 0 || valor > MAX_FINANCEIRO_VALUE) throw new Error(`O valor deve ser um número entre 0 e ${MAX_FINANCEIRO_VALUE.toLocaleString('pt-BR')}.`);
   return valor;
 };
 
-const buildInsert = (item: Omit<TransacaoFinanceira, 'id' | 'createdAt'>, id: string) => ({
+const buildInsert = (item: Omit<TransacaoFinanceira, 'id' | 'createdAt'>, id: string) => {
+  validateFinanceiroFields(item);
+  return ({
   id,
   tipo: normalizeTipo(item.tipo),
   categoria: normalizeCategoria(item.categoria),
@@ -158,7 +165,8 @@ const buildInsert = (item: Omit<TransacaoFinanceira, 'id' | 'createdAt'>, id: st
   status: normalizeStatus(item.status),
   animal_id: normalizeOptionalId(item.animal_id),
   pasto_id: normalizeOptionalId(item.pasto_id),
-});
+  });
+};
 
 const buildPatch = (updates: Record<string, unknown>): Record<string, unknown> => {
   const patch: Record<string, unknown> = {};
@@ -241,8 +249,19 @@ const cacheOnlineTransactions = async (userId: string, items: TransacaoFinanceir
   await deleteOfflineRecords(existing.filter((record) => !ids.has(record.entityId) && !pendingIds.has(record.entityId)).map((record) => record.key));
 };
 
+const validateFinanceiroFilters = (filters?: FinanceiroFilters) => {
+  if (!filters) return;
+  validateDateRange(filters.startDate, filters.endDate);
+  sanitizeReportSearch(filters.search);
+  if (filters.tipo !== undefined && !['all', ...allowedTipo].includes(filters.tipo)) throw new Error('Tipo financeiro inválido.');
+  if (filters.categoria !== undefined && !['all', ...allowedCategoria].includes(filters.categoria)) throw new Error('Categoria financeira inválida.');
+  if (filters.status !== undefined && !['all', ...allowedStatus].includes(filters.status)) throw new Error('Status financeiro inválido.');
+  if (filters.page !== undefined && (!Number.isInteger(filters.page) || filters.page < 1)) throw new Error('Página financeira inválida.');
+  if (filters.limit !== undefined && (!Number.isInteger(filters.limit) || filters.limit < 1 || filters.limit > 500)) throw new Error('O limite financeiro deve estar entre 1 e 500.');
+};
+
 const filterRemote = (filters?: FinanceiroFilters) => {
-  const search = filters?.search ? filters.search.replace(/[^\p{L}\p{N}\s-]/gu, '').trim() : '';
+  const search = sanitizeReportSearch(filters?.search);
   return { search, tipo: filters?.tipo, categoria: filters?.categoria, status: filters?.status };
 };
 
@@ -254,7 +273,7 @@ const pendingMatchesFilters = (item: LocalTransaction, filters?: FinanceiroFilte
   if (filters?.tipo && filters.tipo !== 'all' && item.tipo !== filters.tipo) return false;
   if (filters?.categoria && filters.categoria !== 'all' && item.categoria !== filters.categoria) return false;
   if (filters?.status && filters.status !== 'all' && item.status !== filters.status) return false;
-  const search = filters?.search ? filters.search.replace(/[^\p{L}\p{N}\s-]/gu, '').trim().toLocaleLowerCase() : '';
+  const search = sanitizeReportSearch(filters?.search).toLocaleLowerCase();
   return !search || `${item.descricao} ${item.categoria}`.toLocaleLowerCase().includes(search);
 };
 
@@ -309,7 +328,7 @@ export const financeiroService = {
     if (!userId) return { data: [], total: 0, source: 'local' };
     if (!(await isCurrentUser(userId)) || !(await isCurrentSuperadmin(userId))) throw new Error('Acesso não autorizado ao financeiro.');
     const { startDate, endDate } = filters ?? {};
-    validateDateRange(startDate, endDate);
+    validateFinanceiroFilters(filters);
     if (!isBrowserOnline()) {
       const local = await readLocalCurrentMonth(userId);
       return { ...filterLocalCurrentMonth(local.data), source: 'local', capturedAt: local.capturedAt };
@@ -408,6 +427,7 @@ export const financeiroService = {
 
   update: async (userId: string, id: string, updates: Partial<TransacaoFinanceira>): Promise<LocalTransaction> => {
     if (!userId || !(await isCurrentUser(userId)) || !(await isCurrentSuperadmin(userId))) throw new Error('Acesso não autorizado ao financeiro.');
+    if (typeof id !== 'string' || !id.trim()) throw new Error('Lançamento financeiro inválido.');
     const patch = buildPatch({ ...updates });
     if (!isBrowserOnline() && typeof patch.data === 'string' && !isCurrentMonthDate(patch.data)) throw new Error('Offline: lançamentos só podem usar o mês atual.');
     const current = await getOfflineRecord<LocalTransaction>(localRecordKey(userId, id));
@@ -420,6 +440,7 @@ export const financeiroService = {
 
   delete: async (userId: string, id: string): Promise<boolean> => {
     if (!userId || !(await isCurrentUser(userId)) || !(await isCurrentSuperadmin(userId))) throw new Error('Acesso não autorizado ao financeiro.');
+    if (typeof id !== 'string' || !id.trim()) throw new Error('Lançamento financeiro inválido.');
     const current = await getOfflineRecord<LocalTransaction>(localRecordKey(userId, id));
     if (!current || current.userId !== userId || current.entity !== ENTITY) throw new Error('Lançamento financeiro não encontrado no cache local.');
     if (!isBrowserOnline() && !isCurrentMonthDate(current.data.data)) throw new Error('Offline: lançamentos só podem usar o mês atual.');

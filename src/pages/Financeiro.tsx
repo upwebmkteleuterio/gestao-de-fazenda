@@ -17,6 +17,7 @@ import { Pagination } from '../components/Pagination';
 import { useUIStore } from '../store/useUIStore';
 import { useConnectivityStore } from '../store/useConnectivityStore';
 import { TransacaoFinanceira } from '../types/database';
+import { DomainValidationError, isValidDate, validateFinanceiroFields, validateDateRange } from '../services/domainValidation';
 
 const getCurrentMonth = () => {
   const now = new Date();
@@ -88,20 +89,21 @@ export const FinanceiroPage: React.FC = () => {
   };
 
   const handleConfirmarPeriodoPersonalizado = () => {
-    if (!dataInicioRascunho || !dataFimRascunho) {
-      showToast('Informe a data inicial e a data final.', 'error');
-      return;
+    if (isApplyingPeriod || isOffline) return;
+    setIsApplyingPeriod(true);
+    try {
+      if (!dataInicioRascunho || !dataFimRascunho) throw new DomainValidationError('Informe a data inicial e a data final.');
+      if (!isValidDate(dataInicioRascunho) || !isValidDate(dataFimRascunho)) throw new DomainValidationError('Informe datas válidas para o período.');
+      validateDateRange(dataInicioRascunho, dataFimRascunho);
+      setDataInicioPersonalizada(dataInicioRascunho);
+      setDataFimPersonalizada(dataFimRascunho);
+      setPeriodoSelecionado('personalizado');
+      setPeriodoPersonalizadoModalOpen(false);
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : 'Informe um período válido.', 'error');
+    } finally {
+      setIsApplyingPeriod(false);
     }
-
-    if (dataInicioRascunho > dataFimRascunho) {
-      showToast('A data inicial deve ser anterior à data final.', 'error');
-      return;
-    }
-
-    setDataInicioPersonalizada(dataInicioRascunho);
-    setDataFimPersonalizada(dataFimRascunho);
-    setPeriodoSelecionado('personalizado');
-    setPeriodoPersonalizadoModalOpen(false);
   };
 
   useEffect(() => {
@@ -137,6 +139,8 @@ export const FinanceiroPage: React.FC = () => {
   const [itemToDelete, setItemToDelete] = useState<TransacaoFinanceira | null>(null);
 
   const [isSaving, setIsSaving] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [isApplyingPeriod, setIsApplyingPeriod] = useState(false);
 
   // Selection state para seleção em lote de lançamentos financeiro
   const [selectedFinIds, setSelectedFinIds] = useState<string[]>([]);
@@ -181,8 +185,10 @@ export const FinanceiroPage: React.FC = () => {
     e.preventDefault();
     if (isSaving) return;
 
-    if (!formData.descricao?.trim() || formData.valor === undefined || formData.valor === null) {
-      showToast('Preencha os campos obrigatórios.', 'error');
+    try {
+      validateFinanceiroFields(formData);
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : 'Corrija os campos do lançamento.', 'error');
       return;
     }
 
@@ -196,21 +202,24 @@ export const FinanceiroPage: React.FC = () => {
         showToast('Novo lançamento registrado no fluxo de caixa!');
       }
       setSlideOpen(false);
-    } catch (err) {
-      showToast('Erro ao salvar lançamento.', 'error');
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : 'Erro ao salvar lançamento.', 'error');
     } finally {
       setIsSaving(false);
     }
   };
 
   const handleDelete = async () => {
-    if (!itemToDelete) return;
+    if (!itemToDelete || isDeleting) return;
+    setIsDeleting(true);
     try {
       await deleteTransacao(itemToDelete.id);
       showToast('Lançamento removido.');
       setModalOpen(false);
-    } catch (err) {
-      showToast('Erro ao remover lançamento.', 'error');
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : 'Erro ao remover lançamento.', 'error');
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -337,6 +346,7 @@ export const FinanceiroPage: React.FC = () => {
               noMargin
               placeholder="Buscar por descrição ou categoria..."
               value={search}
+              maxLength={200}
               onChange={(e) => setSearch(e.target.value)}
               icon={Search}
               disabled={isOffline}
@@ -486,15 +496,15 @@ export const FinanceiroPage: React.FC = () => {
 
       <Modal
         isOpen={periodoPersonalizadoModalOpen}
-        onClose={() => setPeriodoPersonalizadoModalOpen(false)}
+        onClose={() => { if (!isApplyingPeriod) setPeriodoPersonalizadoModalOpen(false); }}
         title="Personalizar período"
         actions={
           <>
-            <Button variant="secondary" onClick={() => setPeriodoPersonalizadoModalOpen(false)}>
+            <Button variant="secondary" onClick={() => { if (!isApplyingPeriod) setPeriodoPersonalizadoModalOpen(false); }} disabled={isApplyingPeriod}>
               Cancelar
             </Button>
-            <Button onClick={handleConfirmarPeriodoPersonalizado} disabled={isOffline}>
-              Aplicar período
+            <Button onClick={handleConfirmarPeriodoPersonalizado} disabled={isOffline || isApplyingPeriod}>
+              {isApplyingPeriod ? 'Aplicando...' : 'Aplicar período'}
             </Button>
           </>
         }
@@ -542,6 +552,7 @@ export const FinanceiroPage: React.FC = () => {
         modalOpen={modalOpen}
         setModalOpen={setModalOpen}
         handleDelete={handleDelete}
+        isDeleting={isDeleting}
       />
     </div>
   );
