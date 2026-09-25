@@ -5,11 +5,12 @@ import { Button } from '../../components/Button';
 import { Modal } from '../../components/Modal';
 import { Input } from '../../components/Input';
 import { Select } from '../../components/Select';
-import { Users, Trash2, Search, MapPin, ArrowRightLeft, Plus, CheckCircle2, Info } from 'lucide-react';
+import { Users, Trash2, Search, MapPin, ArrowRightLeft, Plus, CheckCircle2, Info, WifiOff } from 'lucide-react';
 import { EmptyState } from '../../components/EmptyState';
 import { ErrorState } from '../../components/ErrorState';
 import { useNavigate } from 'react-router-dom';
 import { useLotes } from '../../hooks/useLotes';
+import { useConnectivityStore } from '../../store/useConnectivityStore';
 import { usePastagens } from '../../hooks/usePastagens';
 import { useAnimais } from '../../hooks/useAnimais';
 import { useUIStore } from '../../store/useUIStore';
@@ -19,15 +20,25 @@ import { Lote } from '../../services/lotesService';
 export const Lotes: React.FC = () => {
   const navigate = useNavigate();
   const { showToast } = useUIStore();
+  const connectivityStatus = useConnectivityStore((state) => state.status);
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
   const limit = 10;
+  const isOffline = connectivityStatus === 'offline' || (typeof navigator !== 'undefined' && !navigator.onLine);
 
   useEffect(() => {
     setPage(1);
   }, [search]);
 
-  const { lotes, totalLotes, isLoading, isError, refetch, createLote, moverPasto, deleteLote } = useLotes({ search, page, limit });
+  useEffect(() => {
+    if (isOffline) {
+      setPage(1);
+      setSearch('');
+    }
+  }, [isOffline]);
+
+  const { lotes, totalLotes, source, capturedAt, isLoading, isError, refetch, createLote, moverPasto, deleteLote } = useLotes({ search, page, limit });
+  const showingOfflineCache = isOffline || source === 'local';
   const { pastagens } = usePastagens();
   const { animais = [] } = useAnimais();
 
@@ -175,6 +186,16 @@ export const Lotes: React.FC = () => {
 
       <Card>
         <div className="p-4 space-y-4">
+          {showingOfflineCache && (
+            <div className="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50/80 p-3.5 text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-200">
+              <WifiOff className="mt-0.5 h-4 w-4 shrink-0" />
+              <div>
+                <p className="text-sm font-semibold">Modo offline: mostrando os lotes mais recentes em cache.</p>
+                <p className="mt-0.5 text-xs">A busca e a paginação ficam disponíveis novamente quando a conexão for restaurada. As alterações feitas agora serão sincronizadas depois.</p>
+                {capturedAt && <p className="mt-1 text-[11px] opacity-80">Cache atualizado em {new Date(capturedAt).toLocaleString('pt-BR')}</p>}
+              </div>
+            </div>
+          )}
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 bg-emerald-50/60 dark:bg-emerald-950/30 p-3.5 rounded-xl border border-emerald-100 dark:border-emerald-900/40">
             <div>
               <h3 className="text-sm font-bold text-emerald-900 dark:text-emerald-200">
@@ -190,10 +211,11 @@ export const Lotes: React.FC = () => {
             <Input
               id="search-lotes"
               noMargin
-              placeholder="Buscar lote por nome..."
+              placeholder={showingOfflineCache ? 'Busca indisponível offline' : 'Buscar lote por nome...'}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               icon={Search}
+              disabled={showingOfflineCache}
             />
           </div>
 
@@ -297,13 +319,15 @@ export const Lotes: React.FC = () => {
               onRowClick={(row) => handleOpenLoteView(row)}
             />
           )}
-          <Pagination
-            currentPage={page}
-            totalPages={Math.ceil((totalLotes || 0) / limit)}
-            onPageChange={setPage}
-            totalItems={totalLotes}
-            itemsPerPage={limit}
-          />
+          {!showingOfflineCache && (
+            <Pagination
+              currentPage={page}
+              totalPages={Math.ceil((totalLotes || 0) / limit)}
+              onPageChange={setPage}
+              totalItems={totalLotes}
+              itemsPerPage={limit}
+            />
+          )}
         </div>
       </Card>
 

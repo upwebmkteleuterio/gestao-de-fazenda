@@ -6,6 +6,7 @@ import { appSettingsService } from '@/services/appSettingsService';
 import { dashboardService } from '@/services/dashboardService';
 import { financeiroService, syncFinanceiro } from '@/services/financeiroService';
 import { pesagensService, syncPesagens } from '@/services/pesagensService';
+import { lotesService, syncLotes } from '@/services/lotesService';
 import { useConnectivityStore } from '@/store/useConnectivityStore';
 
 const DASHBOARD_SNAPSHOT_KEY = 'dashboard-summary';
@@ -56,6 +57,14 @@ const runPrefetch = async (userId: string): Promise<void> => {
       await syncAnimais(userId);
       if (!(await canContinue(userId))) return;
       await animaisService.getAll({ includeHistorico: true });
+    });
+
+    if (!(await canContinue(userId))) return;
+    useConnectivityStore.getState().setSyncing();
+    await runSource(userId, async () => {
+      await syncLotes(userId);
+      if (!(await canContinue(userId))) return;
+      await lotesService.getAll(userId, { page: 1, limit: 10 });
     });
 
     if (!(await canContinue(userId))) return;
