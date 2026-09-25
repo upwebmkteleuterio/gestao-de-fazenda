@@ -4,20 +4,20 @@ import { Button } from '../../../components/Button';
 import { Pastagem } from '../../../types/database';
 
 export const PastagensModals = ({
-  modalOpen, setModalOpen, pastoToDelete, handleDeletePasto
+  modalOpen, setModalOpen, pastoToDelete, handleDeletePasto, isDeleting
 }: any) => (
   <>
     {/* MODAL EXCLUSÃO */}
       <Modal
         isOpen={modalOpen}
-        onClose={() => setModalOpen(false)}
+        onClose={() => { if (!isDeleting) setModalOpen(false); }}
         title="Excluir Piquete / Pasto"
         actions={
           <>
-            <Button variant="danger" onClick={handleDeletePasto}>
+            <Button variant="danger" onClick={handleDeletePasto} loading={isDeleting}>
               Sim, Excluir
             </Button>
-            <Button variant="secondary" onClick={() => setModalOpen(false)}>
+            <Button variant="secondary" onClick={() => setModalOpen(false)} disabled={isDeleting}>
               Cancelar
             </Button>
           </>

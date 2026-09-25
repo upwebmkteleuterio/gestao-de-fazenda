@@ -40,6 +40,7 @@ export const PastagensPage: React.FC = () => {
     updatePastagem,
     deletePastagem,
     addServico,
+    syncLocalMutation,
   } = usePastagensTable();
 
   // Hook de Formulário, Configuração da Área, Rebanho Alocado e Serviços de Solo
@@ -47,6 +48,8 @@ export const PastagensPage: React.FC = () => {
     slideOpen,
     setSlideOpen,
     isEditing,
+    isSaving,
+    isDeleting,
     activeTab,
     setActiveTab,
     selectedPasto,
@@ -72,6 +75,7 @@ export const PastagensPage: React.FC = () => {
     deletePastagem,
     addServico,
     servicos,
+    syncLocalMutation,
   });
 
   const handleRegistrarServicoLote = () => {
@@ -127,6 +131,7 @@ export const PastagensPage: React.FC = () => {
         slideOpen={slideOpen}
         setSlideOpen={setSlideOpen}
         isEditing={isEditing}
+        isSaving={isSaving}
         activeTab={activeTab}
         setActiveTab={setActiveTab}
         selectedPasto={selectedPasto}
@@ -150,6 +155,7 @@ export const PastagensPage: React.FC = () => {
         setModalOpen={setModalOpen}
         pastoToDelete={pastoToDelete}
         handleDeletePasto={handleDeletePasto}
+        isDeleting={isDeleting}
       />
     </div>
   );

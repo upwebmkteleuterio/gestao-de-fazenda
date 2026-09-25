@@ -25,6 +25,7 @@ interface UsePastagemFormParams {
   deletePastagem: (id: string) => Promise<any>;
   addServico: (data: Omit<ServicoPastagem, 'id' | 'createdAt'>) => Promise<any>;
   servicos: ServicoPastagem[];
+  syncLocalMutation: () => void;
 }
 
 export const usePastagemForm = ({
@@ -33,6 +34,7 @@ export const usePastagemForm = ({
   deletePastagem,
   addServico,
   servicos,
+  syncLocalMutation,
 }: UsePastagemFormParams) => {
   const { showToast } = useUIStore();
   const { animais } = useAnimais();
@@ -41,6 +43,8 @@ export const usePastagemForm = ({
   const [isEditing, setIsEditing] = useState(false);
   const [activeTab, setActiveTab] = useState<'dados' | 'servicos'>('dados');
   const [selectedPasto, setSelectedPasto] = useState<Pastagem | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   // Form Pastagem
   const [pastoForm, setPastoForm] = useState<Partial<Pastagem>>(INITIAL_PASTO_FORM);
@@ -80,11 +84,12 @@ export const usePastagemForm = ({
   // Salvar Pastagem (Criar ou Atualizar)
   const handleSavePasto = async (e?: FormEvent) => {
     if (e) e.preventDefault();
-    if (!pastoForm.nome_pasto?.trim()) {
-      showToast('Informe o nome da área/pasto.', 'error');
+    if (isSaving || !pastoForm.nome_pasto?.trim()) {
+      if (!pastoForm.nome_pasto?.trim()) showToast('Informe o nome da área/pasto.', 'error');
       return;
     }
 
+    setIsSaving(true);
     try {
       if (isEditing && selectedPasto) {
         await updatePastagem({ id: selectedPasto.id, updates: pastoForm });
@@ -95,8 +100,11 @@ export const usePastagemForm = ({
         setSelectedPasto(created);
       }
       setSlideOpen(false);
+      syncLocalMutation();
     } catch {
       showToast('Erro ao salvar pastagem.', 'error');
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -128,14 +136,18 @@ export const usePastagemForm = ({
   };
 
   const handleDeletePasto = async () => {
-    if (!pastoToDelete) return;
+    if (!pastoToDelete || isDeleting) return;
+    setIsDeleting(true);
     try {
       await deletePastagem(pastoToDelete.id);
-      showToast('Pasto excluído com sucesso.', 'info');
       setModalOpen(false);
       setSlideOpen(false);
+      showToast('Pasto excluído com sucesso.', 'info');
+      syncLocalMutation();
     } catch {
       showToast('Erro ao excluir pasto.', 'error');
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -180,6 +192,8 @@ export const usePastagemForm = ({
     setSlideOpen,
     isEditing,
     setIsEditing,
+    isSaving,
+    isDeleting,
     activeTab,
     setActiveTab,
     selectedPasto,

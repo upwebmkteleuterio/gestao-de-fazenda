@@ -11,7 +11,7 @@ import {
 import { Pastagem, ServicoPastagem } from '../../../types/database';
 
 export const PastagensSlidePanel = ({
-  slideOpen, setSlideOpen, isEditing, activeTab, setActiveTab,
+  slideOpen, setSlideOpen, isEditing, isSaving, activeTab, setActiveTab,
   selectedPasto, pastoForm, setPastoForm, servicoForm, setServicoForm,
   handleSavePasto, handleAddServico, setModalOpen, setPastoToDelete,
   animaisNoPasto, resumoRebanhoPasto, servicosDoPasto, checkSaidaVencida
@@ -40,10 +40,10 @@ export const PastagensSlidePanel = ({
             ) : <div />}
 
             <div className="flex space-x-3">
-              <Button variant="ghost" onClick={() => setSlideOpen(false)}>
+              <Button variant="ghost" onClick={() => setSlideOpen(false)} disabled={isSaving}>
                 Cancelar
               </Button>
-              <Button variant="primary" onClick={handleSavePasto}>
+              <Button variant="primary" onClick={handleSavePasto} loading={isSaving}>
                 Salvar Alterações
               </Button>
             </div>

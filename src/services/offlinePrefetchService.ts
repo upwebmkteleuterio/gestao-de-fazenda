@@ -1,6 +1,7 @@
 import { getCurrentUserId as readCurrentUserId } from '@/integrations/supabase/client';
 import { saveOfflineSnapshot } from '@/offline/database';
 import { animaisService, syncAnimais } from '@/services/animaisService';
+import { pastagensService, syncPastagens } from '@/services/pastagensService';
 import { appSettingsService } from '@/services/appSettingsService';
 import { dashboardService } from '@/services/dashboardService';
 import { pesagensService } from '@/services/pesagensService';
@@ -46,6 +47,14 @@ const runPrefetch = async (userId: string): Promise<void> => {
       await syncAnimais(userId);
       if (!(await canContinue(userId))) return;
       await animaisService.getAll({ includeHistorico: true });
+    });
+
+    if (!(await canContinue(userId))) return;
+    useConnectivityStore.getState().setSyncing();
+    await runSource(userId, async () => {
+      await syncPastagens(userId);
+      if (!(await canContinue(userId))) return;
+      await pastagensService.getAll(userId);
     });
 
     if (!(await canContinue(userId))) return;

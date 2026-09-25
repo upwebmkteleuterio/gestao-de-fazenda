@@ -25,6 +25,7 @@ export const usePastagensTable = (selectedPastoId?: string) => {
     updatePastagem,
     deletePastagem,
     addServico,
+    syncLocalMutation,
   } = usePastagens(
     { search: searchTerm, status: statusFiltro, page, limit: 10 },
     selectedPastoId
@@ -68,5 +69,6 @@ export const usePastagensTable = (selectedPastoId?: string) => {
     updatePastagem,
     deletePastagem,
     addServico,
+    syncLocalMutation,
   };
 };
