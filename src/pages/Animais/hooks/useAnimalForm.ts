@@ -142,14 +142,19 @@ export const useAnimalForm = () => {
     }
 
     setIsSaving(true);
+    console.log('>>> [1] CLICOU EM SALVAR - DADOS LOCAIS OBTIDOS');
     try {
       if (slideMode === 'create') {
         await createAnimal(formData as Omit<Animal, 'id' | 'createdAt' | 'status_sincronizacao'>);
+        console.log('>>> [2] GRAVOU NO INDEXEDDB');
+        console.log('>>> [3] FECHOU O PAINEL/MODAL');
         setSlideOpen(false);
         showToast(`Animal ${formData.brinco} cadastrado com sucesso!`);
         syncLocalMutation();
       } else if (slideMode === 'edit' && selectedAnimal) {
         await updateAnimal({ id: selectedAnimal.id, updates: formData });
+        console.log('>>> [2] GRAVOU NO INDEXEDDB');
+        console.log('>>> [3] FECHOU O PAINEL/MODAL');
         setSlideOpen(false);
         showToast(`Animal ${formData.brinco} atualizado com sucesso!`);
         syncLocalMutation();
@@ -163,8 +168,11 @@ export const useAnimalForm = () => {
 
   const handleDeleteConfirm = async () => {
     if (!animalToDelete || isDeleting) return;
+    console.log('>>> [1] CLICOU EM EXCLUIR - DADOS LOCAIS OBTIDOS');
     try {
       await deleteAnimal(animalToDelete.id);
+      console.log('>>> [2] GRAVOU NO INDEXEDDB - EXCLUSÃO');
+      console.log('>>> [3] FECHOU O PAINEL/MODAL - EXCLUSÃO');
       setModalOpen(false);
       showToast(`Animal ${animalToDelete.brinco} excluído com sucesso.`, 'info');
       syncLocalMutation();
