@@ -4,15 +4,22 @@ import { Eye, EyeOff, Leaf, ShieldCheck, Sprout } from 'lucide-react';
 import { Card } from '@/components/Card';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
+import { useAppSettings } from '@/hooks/useAppSettings';
 import { getAuthErrorMessage } from '@/utils/authError';
+
+const FALLBACK_FARM_NAME = 'Gestão de Fazenda';
 
 export function LoginPage() {
   const { authError, session, isLoading } = useAuth();
+  const { settings, isLoading: isLoadingFarmName, isError: hasFarmNameError } = useAppSettings();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [isSigningIn, setIsSigningIn] = useState(false);
   const [signInError, setSignInError] = useState<string | null>(null);
+  const displayedFarmName = hasFarmNameError || !settings?.farm_name?.trim()
+    ? FALLBACK_FARM_NAME
+    : settings.farm_name.trim();
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -41,7 +48,11 @@ export function LoginPage() {
           <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-emerald-400 text-emerald-950 shadow-lg shadow-emerald-950/30">
             <Sprout className="h-6 w-6" />
           </div>
-          <span className="text-xl font-bold tracking-tight">FarmNexus</span>
+          {isLoadingFarmName ? (
+            <span role="status" aria-label="Carregando nome da fazenda" className="block h-6 w-36 animate-pulse rounded-md bg-emerald-200/30" />
+          ) : (
+            <span className="text-xl font-bold tracking-tight">{displayedFarmName}</span>
+          )}
         </div>
 
         <div className="relative max-w-xl">
@@ -68,7 +79,11 @@ export function LoginPage() {
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-600 text-white">
               <Sprout className="h-5 w-5" />
             </div>
-            <span className="text-xl font-bold tracking-tight">FarmNexus</span>
+            {isLoadingFarmName ? (
+              <span role="status" aria-label="Carregando nome da fazenda" className="block h-6 w-36 animate-pulse rounded-md bg-slate-200 dark:bg-slate-700" />
+            ) : (
+              <span className="text-xl font-bold tracking-tight">{displayedFarmName}</span>
+            )}
           </div>
 
           <Card noPadding className="rounded-2xl border-slate-200/80 bg-white p-7 shadow-xl shadow-emerald-950/5 dark:border-slate-800 dark:bg-slate-900 sm:p-9">

@@ -65,7 +65,7 @@ export function useAppSettings() {
         throw error;
       }
     },
-    enabled: Boolean(session),
+    enabled: true,
   });
 
   useEffect(() => {
