@@ -19,6 +19,7 @@ import { BovinoSidebarIcon } from './BovinoSidebarIcon';
 import { useUIStore, PageRoute } from '../store/useUIStore';
 import { useAuth } from '@/contexts/AuthContext';
 import { useAppSettings } from '@/hooks/useAppSettings';
+import { useConnectivityStore } from '@/store/useConnectivityStore';
 import { ConnectionStatus } from '@/components/ConnectionStatus';
 import { PrefetchProgress } from '@/components/PrefetchProgress';
 
@@ -27,6 +28,7 @@ export const Sidebar: React.FC = () => {
   const { role } = useAuth();
   const { farmName, isLoading: isLoadingFarmName } = useAppSettings();
   const location = useLocation();
+  const isOffline = useConnectivityStore((state) => state.status === 'offline');
   const [hoveredItem, setHoveredItem] = useState<PageRoute | null>(null);
   const reduceMotion = useReducedMotion() ?? false;
   const highlightTransition = reduceMotion ? { duration: 0 } : { type: 'spring' as const, stiffness: 380, damping: 30 };
@@ -101,26 +103,36 @@ export const Sidebar: React.FC = () => {
           <nav className="space-y-1 px-3">
             {menuItems.filter((item) => item.path !== '/financeiro' || role === 'superadmin').map((item) => {
               const isActive = location.pathname === item.path || (item.path === '/dashboard' && location.pathname === '/');
+              const isReportsOffline = item.path === '/relatorios' && isOffline;
               const Icon = item.icon;
 
               return (
                 <Link
                   key={item.name}
                   to={item.path}
-                  onMouseEnter={() => setHoveredItem(item.name)}
+                  onMouseEnter={() => {
+                    if (!isReportsOffline) setHoveredItem(item.name);
+                  }}
                   onMouseLeave={() => setHoveredItem(null)}
-                  onClick={() => {
+                  onClick={(event) => {
+                    if (isReportsOffline) {
+                      event.preventDefault();
+                      return;
+                    }
                     setActivePage(item.name);
                     if (window.innerWidth < 768 && sidebarOpen) {
                       toggleSidebar();
                     }
                   }}
-                  className={`relative flex items-center w-full px-3.5 py-3 rounded-xl transition-all duration-200 group text-left cursor-pointer overflow-hidden ${
-                    isActive
-                      ? 'text-white font-semibold pl-4.5'
-                      : 'text-emerald-100/70 dark:text-gray-400 hover:text-white'
+                  aria-disabled={isReportsOffline || undefined}
+                  className={`relative flex items-center w-full px-3.5 py-3 rounded-xl transition-all duration-200 group text-left overflow-hidden ${
+                    isReportsOffline
+                      ? 'text-emerald-100/40 dark:text-gray-500 opacity-60 cursor-not-allowed'
+                      : isActive
+                        ? 'text-white font-semibold pl-4.5 cursor-pointer'
+                        : 'text-emerald-100/70 dark:text-gray-400 hover:text-white cursor-pointer'
                   }`}
-                  title={!sidebarOpen ? item.name : undefined}
+                  title={isReportsOffline ? 'Relatórios exigem conexão com a internet' : !sidebarOpen ? item.name : undefined}
                 >
                   {isActive && (
                     <motion.span
@@ -130,7 +142,7 @@ export const Sidebar: React.FC = () => {
                       aria-hidden="true"
                     />
                   )}
-                  {hoveredItem === item.name && !isActive && (
+                  {hoveredItem === item.name && !isActive && !isReportsOffline && (
                     <motion.span
                       layoutId="sidebar-hover-highlight"
                       transition={highlightTransition}

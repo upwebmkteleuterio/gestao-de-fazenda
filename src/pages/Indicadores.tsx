@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Activity, BarChart3, CheckCircle2, DollarSign, Download, Eye, FileText, HeartHandshake, Layers, Printer, ShieldAlert } from 'lucide-react';
+import { Activity, BarChart3, CheckCircle2, DollarSign, Download, Eye, FileText, HeartHandshake, Layers, Printer, ShieldAlert, WifiOff } from 'lucide-react';
 import { Card } from '@/components/Card';
 import { StatCard } from '@/components/StatCard';
 import { Badge } from '@/components/Badge';
@@ -13,6 +13,7 @@ import { ModalImpressaoZootecnicos } from './Indicadores/components/ModalImpress
 import { exportarZootecnicosXLSX, ZootecnicoKpis, formatarNumero } from './Indicadores/utils/zootecnicoReportUtils';
 import { RelatorioInseminacoes } from './Indicadores/components/RelatorioInseminacoes';
 import { Animal, Pesagem } from '@/types/database';
+import { useConnectivityStore } from '@/store/useConnectivityStore';
 
 const PESAGENS_PAGE_SIZE = 20;
 
@@ -20,12 +21,13 @@ export const IndicadoresPage: React.FC = () => {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const currentTab = searchParams.get('tab') || 'inseminacoes';
+  const isOffline = useConnectivityStore((state) => state.status === 'offline');
   const [pesagemPage, setPesagemPage] = useState(1);
   const [modalOpen, setModalOpen] = useState(false);
   const [modalAction, setModalAction] = useState<'print' | 'pdf' | 'view'>('view');
   const [completeData, setCompleteData] = useState<{ animais: Animal[]; pesagens: Pesagem[] } | null>(null);
   const [loadingComplete, setLoadingComplete] = useState(false);
-  const { summary, pastos, pesagens, totalPesagens, fetchAllData, isLoading, isError, refetch } = useZootecnico(pesagemPage, PESAGENS_PAGE_SIZE, currentTab === 'zootecnicos');
+  const { summary, pastos, pesagens, totalPesagens, fetchAllData, isLoading, isError, refetch } = useZootecnico(pesagemPage, PESAGENS_PAGE_SIZE, !isOffline && currentTab === 'zootecnicos');
 
   const kpis: ZootecnicoKpis = {
     taxaDescarte: summary && summary.total_animais > 0 ? formatarNumero((summary.descartes_count / summary.total_animais) * 100, 1) : '0,0',
@@ -59,6 +61,26 @@ export const IndicadoresPage: React.FC = () => {
       setLoadingComplete(false);
     }
   };
+
+  if (isOffline) {
+    return (
+      <div className="space-y-6 animate-fade-in pb-12">
+        <div className="border-b border-gray-200 dark:border-gray-800 pb-5">
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Relatórios & Indicadores Agropecuários</h1>
+          <p className="text-sm text-gray-500 mt-1">Métricas de desempenho zootécnico e relatórios reprodutivos.</p>
+        </div>
+        <Card className="border-amber-200 dark:border-amber-900/60">
+          <div className="flex flex-col items-center gap-4 py-8 text-center">
+            <WifiOff className="h-12 w-12 text-amber-500" aria-hidden="true" />
+            <div>
+              <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Relatórios e Indicadores exigem internet</h2>
+              <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">Conecte-se à internet para consultar, visualizar ou exportar os relatórios.</p>
+            </div>
+          </div>
+        </Card>
+      </div>
+    );
+  }
 
   if (currentTab === 'inseminacoes') {
     return <div className="space-y-6 animate-fade-in pb-12"><div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-gray-200 dark:border-gray-800 pb-5"><div><h1 className="text-2xl font-bold text-gray-900 dark:text-white">Relatórios & Indicadores Agropecuários</h1><p className="text-sm text-gray-500 mt-1">Métricas de desempenho zootécnico e relatórios reprodutivos.</p></div><TabButtons currentTab={currentTab} setSearchParams={setSearchParams} /></div><RelatorioInseminacoes /></div>;
