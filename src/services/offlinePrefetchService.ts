@@ -43,7 +43,7 @@ const runPrefetch = async (userId: string): Promise<void> => {
 
   try {
     await runSource(userId, async () => {
-      await syncAnimais();
+      await syncAnimais(userId);
       if (!(await canContinue(userId))) return;
       await animaisService.getAll({ includeHistorico: true });
     });
@@ -98,8 +98,8 @@ const runPrefetch = async (userId: string): Promise<void> => {
   }
 };
 
-export const prefetchOfflineData = async (): Promise<void> => {
-  const userId = await getCurrentUserId();
+export const prefetchOfflineData = async (requestedUserId?: string): Promise<void> => {
+  const userId = requestedUserId ?? await getCurrentUserId();
   if (!userId || !isBrowserOnline()) return;
 
   if (activePrefetch) {

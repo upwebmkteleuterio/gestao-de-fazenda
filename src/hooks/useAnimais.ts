@@ -120,7 +120,6 @@ export const useAnimais = (filters?: AnimalFilters) => {
     },
     onSuccess: (animal) => {
       updateLocalAnimalCache(animal);
-      syncLocalMutation();
     },
   });
 
@@ -131,7 +130,6 @@ export const useAnimais = (filters?: AnimalFilters) => {
     },
     onSuccess: (animal) => {
       updateLocalAnimalCache(animal);
-      syncLocalMutation();
     },
   });
 
@@ -142,7 +140,6 @@ export const useAnimais = (filters?: AnimalFilters) => {
     },
     onSuccess: (_, id) => {
       removeLocalAnimalFromCache(id);
-      syncLocalMutation();
     },
   });
 
@@ -173,5 +170,6 @@ export const useAnimais = (filters?: AnimalFilters) => {
     isUpdating: updateMutation.isPending,
     deleteAnimal: deleteMutation.mutateAsync,
     isDeleting: deleteMutation.isPending,
+    syncLocalMutation,
   };
 };

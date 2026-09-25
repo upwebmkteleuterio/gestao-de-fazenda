@@ -34,7 +34,7 @@ export const AppLayout: React.FC = () => {
 
     const userId = session.user.id;
     prefetchRequestedUserId.current = userId;
-    void prefetchOfflineData()
+    void prefetchOfflineData(userId)
       .then(() => {
         void queryClient.invalidateQueries({ queryKey: ['animais', userId] });
         void queryClient.invalidateQueries({ queryKey: ['lotes'] });

@@ -27,7 +27,7 @@ const INITIAL_FORM_DATA: Partial<Animal> = {
 export const useAnimalForm = () => {
   const { slidePanel, closeSlidePanel, showToast } = useUIStore();
   const { pastagens } = usePastagens();
-  const { createAnimal, updateAnimal, deleteAnimal, isDeleting } = useAnimais();
+  const { createAnimal, updateAnimal, deleteAnimal, isDeleting, syncLocalMutation } = useAnimais();
 
   const [slideOpen, setSlideOpen] = useState(false);
   const [slideMode, setSlideMode] = useState<'create' | 'edit' | 'view'>('create');
@@ -145,12 +145,15 @@ export const useAnimalForm = () => {
     try {
       if (slideMode === 'create') {
         await createAnimal(formData as Omit<Animal, 'id' | 'createdAt' | 'status_sincronizacao'>);
+        setSlideOpen(false);
         showToast(`Animal ${formData.brinco} cadastrado com sucesso!`);
+        syncLocalMutation();
       } else if (slideMode === 'edit' && selectedAnimal) {
         await updateAnimal({ id: selectedAnimal.id, updates: formData });
+        setSlideOpen(false);
         showToast(`Animal ${formData.brinco} atualizado com sucesso!`);
+        syncLocalMutation();
       }
-      setSlideOpen(false);
     } catch {
       showToast('Erro ao salvar animal.', 'error');
     } finally {
@@ -162,8 +165,9 @@ export const useAnimalForm = () => {
     if (!animalToDelete || isDeleting) return;
     try {
       await deleteAnimal(animalToDelete.id);
-      showToast(`Animal ${animalToDelete.brinco} excluído com sucesso.`, 'info');
       setModalOpen(false);
+      showToast(`Animal ${animalToDelete.brinco} excluído com sucesso.`, 'info');
+      syncLocalMutation();
     } catch {
       showToast('Erro ao excluir animal.', 'error');
     }

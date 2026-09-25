@@ -101,6 +101,7 @@ export const openOfflineDatabase = (): Promise<IDBDatabase> => {
     };
     request.onsuccess = () => resolve(request.result);
     request.onerror = () => reject(request.error ?? new Error('Unable to open IndexedDB'));
+    request.onblocked = () => reject(new Error('IndexedDB está bloqueado por outra conexão'));
   });
 };
 
@@ -201,12 +202,16 @@ export const saveOfflineRecordAndEnqueue = async <TPayload>(
     status: 'pending', createdAt: now, updatedAt: now, retryCount: 0, nextRetryAt: null, lastError: null,
   };
   const database = await openOfflineDatabase();
-  const transaction = database.transaction([STORE_NAMES.localRecords, STORE_NAMES.outbox], 'readwrite');
-  transaction.objectStore(STORE_NAMES.localRecords).put(record);
-  transaction.objectStore(STORE_NAMES.outbox).put(operation);
-  await transactionToPromise(transaction);
-  database.close();
-  return operation;
+  try {
+    const transaction = database.transaction([STORE_NAMES.localRecords, STORE_NAMES.outbox], 'readwrite');
+    const completion = transactionToPromise(transaction);
+    transaction.objectStore(STORE_NAMES.localRecords).put(record);
+    transaction.objectStore(STORE_NAMES.outbox).put(operation);
+    await completion;
+    return operation;
+  } finally {
+    database.close();
+  }
 };
 
 export const listOutboxOperations = async <TPayload = unknown>(options: OutboxListOptions = {}): Promise<Array<OutboxOperation<TPayload>>> => {
@@ -221,19 +226,22 @@ export const listOutboxOperations = async <TPayload = unknown>(options: OutboxLi
 
 const updateOutboxOperation = async (id: string, update: (operation: OutboxOperation) => OutboxOperation): Promise<OutboxOperation | undefined> => {
   const database = await openOfflineDatabase();
-  const transaction = database.transaction(STORE_NAMES.outbox, 'readwrite');
-  const store = transaction.objectStore(STORE_NAMES.outbox);
-  const current = await requestToPromise(store.get(id)) as OutboxOperation | undefined;
-  if (!current) {
-    transaction.abort();
+  try {
+    const transaction = database.transaction(STORE_NAMES.outbox, 'readwrite');
+    const completion = transactionToPromise(transaction);
+    const store = transaction.objectStore(STORE_NAMES.outbox);
+    const current = await requestToPromise(store.get(id)) as OutboxOperation | undefined;
+    if (!current) {
+      await completion;
+      return undefined;
+    }
+    const updated = update(current);
+    store.put(updated);
+    await completion;
+    return updated;
+  } finally {
     database.close();
-    return undefined;
   }
-  const updated = update(current);
-  store.put(updated);
-  await transactionToPromise(transaction);
-  database.close();
-  return updated;
 };
 
 export const markOutboxOperationProcessing = (id: string): Promise<OutboxOperation | undefined> => updateOutboxOperation(id, (operation) => ({ ...operation, status: 'processing', updatedAt: new Date().toISOString(), lastError: null }));
