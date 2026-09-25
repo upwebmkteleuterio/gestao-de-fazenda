@@ -1,5 +1,7 @@
+import Dexie, { type Table } from 'dexie';
+
 const DATABASE_NAME = 'farmnexus-offline';
-const DATABASE_VERSION = 2;
+const DATABASE_VERSION = 3;
 
 const STORE_NAMES = {
   localRecords: 'localRecords',
@@ -45,16 +47,22 @@ type OutboxOperationInput<TPayload> = Pick<OutboxOperation<TPayload>, 'userId' |
 export type OfflineRecordListOptions = { userId: string; entity?: string };
 export type OutboxListOptions = { userId?: string; entity?: string; status?: OutboxOperationStatus };
 
-const requestToPromise = <T>(request: IDBRequest<T>): Promise<T> => new Promise((resolve, reject) => {
-  request.onsuccess = () => resolve(request.result);
-  request.onerror = () => reject(request.error ?? new Error('IndexedDB request failed'));
-});
+class FarmNexusOfflineDatabase extends Dexie {
+  localRecords!: Table<OfflineRecord, string>;
+  snapshots!: Table<OfflineSnapshot, string>;
+  outbox!: Table<OutboxOperation, string>;
 
-const transactionToPromise = (transaction: IDBTransaction): Promise<void> => new Promise((resolve, reject) => {
-  transaction.oncomplete = () => resolve();
-  transaction.onerror = () => reject(transaction.error ?? new Error('IndexedDB transaction failed'));
-  transaction.onabort = () => reject(transaction.error ?? new Error('IndexedDB transaction aborted'));
-});
+  constructor() {
+    super(DATABASE_NAME);
+    this.version(DATABASE_VERSION).stores({
+      localRecords: 'key,userId,entity,entityId',
+      snapshots: 'key,scope',
+      outbox: 'id,userId,entity,status,createdAt',
+    });
+  }
+}
+
+export const offlineDb = new FarmNexusOfflineDatabase();
 
 const createOperationId = (): string => {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') return crypto.randomUUID();
@@ -68,127 +76,74 @@ const createOperationTimestamp = (): string => {
   return new Date(timestamp).toISOString();
 };
 
-export const openOfflineDatabase = (): Promise<IDBDatabase> => {
-  if (typeof indexedDB === 'undefined') return Promise.reject(new Error('IndexedDB is not available in this browser'));
-
-  return new Promise((resolve, reject) => {
-    const request = indexedDB.open(DATABASE_NAME, DATABASE_VERSION);
-    request.onupgradeneeded = () => {
-      const database = request.result;
-      if (!database.objectStoreNames.contains(STORE_NAMES.localRecords)) {
-        const recordsStore = database.createObjectStore(STORE_NAMES.localRecords, { keyPath: 'key' });
-        recordsStore.createIndex('entity', 'entity', { unique: false });
-        recordsStore.createIndex('entityId', 'entityId', { unique: false });
-        recordsStore.createIndex('userId', 'userId', { unique: false });
-      } else if (!request.transaction?.objectStore(STORE_NAMES.localRecords).indexNames.contains('userId')) {
-        request.transaction?.objectStore(STORE_NAMES.localRecords).createIndex('userId', 'userId', { unique: false });
-      }
-      if (!database.objectStoreNames.contains(STORE_NAMES.snapshots)) {
-        const snapshotsStore = database.createObjectStore(STORE_NAMES.snapshots, { keyPath: 'key' });
-        snapshotsStore.createIndex('scope', 'scope', { unique: false });
-      }
-      if (!database.objectStoreNames.contains(STORE_NAMES.outbox)) {
-        const outboxStore = database.createObjectStore(STORE_NAMES.outbox, { keyPath: 'id' });
-        outboxStore.createIndex('status', 'status', { unique: false });
-        outboxStore.createIndex('createdAt', 'createdAt', { unique: false });
-        outboxStore.createIndex('userId', 'userId', { unique: false });
-        outboxStore.createIndex('entity', 'entity', { unique: false });
-      } else {
-        const outboxStore = request.transaction!.objectStore(STORE_NAMES.outbox);
-        if (!outboxStore.indexNames.contains('userId')) outboxStore.createIndex('userId', 'userId', { unique: false });
-        if (!outboxStore.indexNames.contains('entity')) outboxStore.createIndex('entity', 'entity', { unique: false });
-      }
-    };
-    request.onsuccess = () => resolve(request.result);
-    request.onerror = () => reject(request.error ?? new Error('Unable to open IndexedDB'));
-    request.onblocked = () => reject(new Error('IndexedDB está bloqueado por outra conexão'));
-  });
-};
-
 export const saveOfflineRecord = async (record: OfflineRecord): Promise<void> => {
-  const database = await openOfflineDatabase();
-  const transaction = database.transaction(STORE_NAMES.localRecords, 'readwrite');
-  transaction.objectStore(STORE_NAMES.localRecords).put(record);
-  await transactionToPromise(transaction);
-  database.close();
+  await offlineDb.localRecords.put(record);
 };
 
 export const saveOfflineRecords = async (records: OfflineRecord[]): Promise<void> => {
   if (records.length === 0) return;
-  const database = await openOfflineDatabase();
-  const transaction = database.transaction(STORE_NAMES.localRecords, 'readwrite');
-  const store = transaction.objectStore(STORE_NAMES.localRecords);
-  records.forEach((record) => store.put(record));
-  await transactionToPromise(transaction);
-  database.close();
+  await offlineDb.localRecords.bulkPut(records);
 };
 
-export const listOfflineRecords = async <TData = unknown>(options: OfflineRecordListOptions): Promise<Array<OfflineRecord & { data: TData }>> => {
-  const database = await openOfflineDatabase();
-  const records = await requestToPromise(database.transaction(STORE_NAMES.localRecords, 'readonly').objectStore(STORE_NAMES.localRecords).getAll()) as Array<OfflineRecord & { data: TData }>;
-  database.close();
-  return records.filter((record) => record.userId === options.userId && (!options.entity || record.entity === options.entity));
+export const listOfflineRecords = async <TData = unknown>(
+  options: OfflineRecordListOptions,
+): Promise<Array<OfflineRecord & { data: TData }>> => {
+  const records = await offlineDb.localRecords
+    .where('userId')
+    .equals(options.userId)
+    .toArray() as Array<OfflineRecord & { data: TData }>;
+  return options.entity
+    ? records.filter((record) => record.entity === options.entity)
+    : records;
 };
 
-export const getOfflineRecord = async <TData = unknown>(key: string): Promise<OfflineRecord & { data: TData } | undefined> => {
-  const database = await openOfflineDatabase();
-  const record = await requestToPromise(database.transaction(STORE_NAMES.localRecords, 'readonly').objectStore(STORE_NAMES.localRecords).get(key)) as (OfflineRecord & { data: TData }) | undefined;
-  database.close();
-  return record;
-};
+export const getOfflineRecord = async <TData = unknown>(
+  key: string,
+): Promise<(OfflineRecord & { data: TData }) | undefined> => (
+  await offlineDb.localRecords.get(key) as (OfflineRecord & { data: TData }) | undefined
+);
 
 export const deleteOfflineRecord = async (key: string): Promise<void> => {
-  const database = await openOfflineDatabase();
-  const transaction = database.transaction(STORE_NAMES.localRecords, 'readwrite');
-  transaction.objectStore(STORE_NAMES.localRecords).delete(key);
-  await transactionToPromise(transaction);
-  database.close();
+  await offlineDb.localRecords.delete(key);
 };
 
 export const deleteOfflineRecords = async (keys: string[]): Promise<void> => {
   if (keys.length === 0) return;
-  const database = await openOfflineDatabase();
-  const transaction = database.transaction(STORE_NAMES.localRecords, 'readwrite');
-  const store = transaction.objectStore(STORE_NAMES.localRecords);
-  keys.forEach((key) => store.delete(key));
-  await transactionToPromise(transaction);
-  database.close();
+  await offlineDb.localRecords.bulkDelete(keys);
 };
 
 export const saveOfflineSnapshot = async (snapshot: OfflineSnapshot): Promise<void> => {
-  const database = await openOfflineDatabase();
-  const transaction = database.transaction(STORE_NAMES.snapshots, 'readwrite');
-  transaction.objectStore(STORE_NAMES.snapshots).put(snapshot);
-  await transactionToPromise(transaction);
-  database.close();
+  await offlineDb.snapshots.put(snapshot);
 };
 
-export const getOfflineSnapshot = async <TData = unknown>(key: string): Promise<OfflineSnapshot & { data: TData } | undefined> => {
-  const database = await openOfflineDatabase();
-  const snapshot = await requestToPromise(database.transaction(STORE_NAMES.snapshots, 'readonly').objectStore(STORE_NAMES.snapshots).get(key)) as (OfflineSnapshot & { data: TData }) | undefined;
-  database.close();
-  return snapshot;
-};
+export const getOfflineSnapshot = async <TData = unknown>(
+  key: string,
+): Promise<(OfflineSnapshot & { data: TData }) | undefined> => (
+  await offlineDb.snapshots.get(key) as (OfflineSnapshot & { data: TData }) | undefined
+);
 
 export const deleteOfflineSnapshot = async (key: string): Promise<void> => {
-  const database = await openOfflineDatabase();
-  const transaction = database.transaction(STORE_NAMES.snapshots, 'readwrite');
-  transaction.objectStore(STORE_NAMES.snapshots).delete(key);
-  await transactionToPromise(transaction);
-  database.close();
+  await offlineDb.snapshots.delete(key);
 };
 
-export const enqueueOutboxOperation = async <TPayload>(input: OutboxOperationInput<TPayload>): Promise<OutboxOperation<TPayload>> => {
+export const enqueueOutboxOperation = async <TPayload>(
+  input: OutboxOperationInput<TPayload>,
+): Promise<OutboxOperation<TPayload>> => {
   const now = createOperationTimestamp();
   const operation: OutboxOperation<TPayload> = {
-    id: input.id ?? createOperationId(), userId: input.userId, entity: input.entity, operation: input.operation, payload: input.payload,
-    status: 'pending', createdAt: now, updatedAt: now, retryCount: 0, nextRetryAt: null, lastError: null,
+    id: input.id ?? createOperationId(),
+    userId: input.userId,
+    entity: input.entity,
+    operation: input.operation,
+    payload: input.payload,
+    status: 'pending',
+    createdAt: now,
+    updatedAt: now,
+    retryCount: 0,
+    nextRetryAt: null,
+    lastError: null,
   };
-  const database = await openOfflineDatabase();
-  const transaction = database.transaction(STORE_NAMES.outbox, 'readwrite');
-  transaction.objectStore(STORE_NAMES.outbox).put(operation);
-  await transactionToPromise(transaction);
-  database.close();
+  await offlineDb.outbox.put(operation);
   return operation;
 };
 
@@ -198,62 +153,107 @@ export const saveOfflineRecordAndEnqueue = async <TPayload>(
 ): Promise<OutboxOperation<TPayload>> => {
   const now = createOperationTimestamp();
   const operation: OutboxOperation<TPayload> = {
-    id: input.id ?? createOperationId(), userId: input.userId, entity: input.entity, operation: input.operation, payload: input.payload,
-    status: 'pending', createdAt: now, updatedAt: now, retryCount: 0, nextRetryAt: null, lastError: null,
+    id: input.id ?? createOperationId(),
+    userId: input.userId,
+    entity: input.entity,
+    operation: input.operation,
+    payload: input.payload,
+    status: 'pending',
+    createdAt: now,
+    updatedAt: now,
+    retryCount: 0,
+    nextRetryAt: null,
+    lastError: null,
   };
-  const database = await openOfflineDatabase();
-  try {
-    const transaction = database.transaction([STORE_NAMES.localRecords, STORE_NAMES.outbox], 'readwrite');
-    const completion = transactionToPromise(transaction);
-    transaction.objectStore(STORE_NAMES.localRecords).put(record);
-    transaction.objectStore(STORE_NAMES.outbox).put(operation);
-    await completion;
-    return operation;
-  } finally {
-    database.close();
-  }
+
+  await offlineDb.transaction(
+    'rw',
+    offlineDb.localRecords,
+    offlineDb.outbox,
+    async () => {
+      await offlineDb.localRecords.put(record);
+      await offlineDb.outbox.put(operation);
+    },
+  );
+
+  return operation;
 };
 
-export const listOutboxOperations = async <TPayload = unknown>(options: OutboxListOptions = {}): Promise<Array<OutboxOperation<TPayload>>> => {
-  const database = await openOfflineDatabase();
-  const store = database.transaction(STORE_NAMES.outbox, 'readonly').objectStore(STORE_NAMES.outbox);
-  const operations = await requestToPromise(store.getAll()) as Array<OutboxOperation<TPayload>>;
-  database.close();
+export const listOutboxOperations = async <TPayload = unknown>(
+  options: OutboxListOptions = {},
+): Promise<Array<OutboxOperation<TPayload>>> => {
+  const operations = await offlineDb.outbox.toArray() as Array<OutboxOperation<TPayload>>;
   return operations
-    .filter((operation) => (!options.userId || operation.userId === options.userId) && (!options.entity || operation.entity === options.entity) && (!options.status || operation.status === options.status))
+    .filter((operation) => (
+      (!options.userId || operation.userId === options.userId)
+      && (!options.entity || operation.entity === options.entity)
+      && (!options.status || operation.status === options.status)
+    ))
     .sort((left, right) => left.createdAt.localeCompare(right.createdAt));
 };
 
-const updateOutboxOperation = async (id: string, update: (operation: OutboxOperation) => OutboxOperation): Promise<OutboxOperation | undefined> => {
-  const database = await openOfflineDatabase();
-  try {
-    const transaction = database.transaction(STORE_NAMES.outbox, 'readwrite');
-    const completion = transactionToPromise(transaction);
-    const store = transaction.objectStore(STORE_NAMES.outbox);
-    const current = await requestToPromise(store.get(id)) as OutboxOperation | undefined;
-    if (!current) {
-      await completion;
-      return undefined;
-    }
-    const updated = update(current);
-    store.put(updated);
-    await completion;
-    return updated;
-  } finally {
-    database.close();
-  }
-};
+const updateOutboxOperation = async (
+  id: string,
+  update: (operation: OutboxOperation) => OutboxOperation,
+): Promise<OutboxOperation | undefined> => (
+  offlineDb.transaction(
+    'rw',
+    offlineDb.outbox,
+    async (): Promise<OutboxOperation | undefined> => {
+      const current = await offlineDb.outbox.get(id);
+      if (!current) return undefined;
+      const updated = update(current);
+      await offlineDb.outbox.put(updated);
+      return updated;
+    },
+  )
+);
 
-export const markOutboxOperationProcessing = (id: string): Promise<OutboxOperation | undefined> => updateOutboxOperation(id, (operation) => ({ ...operation, status: 'processing', updatedAt: new Date().toISOString(), lastError: null }));
-export const markOutboxOperationFailed = (id: string, error: string, nextRetryAt: string | null = null): Promise<OutboxOperation | undefined> => updateOutboxOperation(id, (operation) => ({ ...operation, status: 'failed', updatedAt: new Date().toISOString(), retryCount: operation.retryCount + 1, nextRetryAt, lastError: error }));
-export const markOutboxOperationPending = (id: string): Promise<OutboxOperation | undefined> => updateOutboxOperation(id, (operation) => ({ ...operation, status: 'pending', updatedAt: new Date().toISOString() }));
+export const markOutboxOperationProcessing = (
+  id: string,
+): Promise<OutboxOperation | undefined> => updateOutboxOperation(
+  id,
+  (operation) => ({
+    ...operation,
+    status: 'processing',
+    updatedAt: new Date().toISOString(),
+    lastError: null,
+  }),
+);
+
+export const markOutboxOperationFailed = (
+  id: string,
+  error: string,
+  nextRetryAt: string | null = null,
+): Promise<OutboxOperation | undefined> => updateOutboxOperation(
+  id,
+  (operation) => ({
+    ...operation,
+    status: 'failed',
+    updatedAt: new Date().toISOString(),
+    retryCount: operation.retryCount + 1,
+    nextRetryAt,
+    lastError: error,
+  }),
+);
+
+export const markOutboxOperationPending = (
+  id: string,
+): Promise<OutboxOperation | undefined> => updateOutboxOperation(
+  id,
+  (operation) => ({
+    ...operation,
+    status: 'pending',
+    updatedAt: new Date().toISOString(),
+  }),
+);
 
 export const deleteOutboxOperation = async (id: string): Promise<void> => {
-  const database = await openOfflineDatabase();
-  const transaction = database.transaction(STORE_NAMES.outbox, 'readwrite');
-  transaction.objectStore(STORE_NAMES.outbox).delete(id);
-  await transactionToPromise(transaction);
-  database.close();
+  await offlineDb.outbox.delete(id);
 };
 
-export const OFFLINE_DATABASE = { name: DATABASE_NAME, version: DATABASE_VERSION, stores: STORE_NAMES } as const;
+export const OFFLINE_DATABASE = {
+  name: DATABASE_NAME,
+  version: DATABASE_VERSION,
+  stores: STORE_NAMES,
+} as const;
