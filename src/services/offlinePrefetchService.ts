@@ -4,6 +4,7 @@ import { animaisService, syncAnimais } from '@/services/animaisService';
 import { pastagensService, syncPastagens } from '@/services/pastagensService';
 import { appSettingsService } from '@/services/appSettingsService';
 import { dashboardService } from '@/services/dashboardService';
+import { financeiroService, syncFinanceiro } from '@/services/financeiroService';
 import { pesagensService } from '@/services/pesagensService';
 import { useConnectivityStore } from '@/store/useConnectivityStore';
 
@@ -97,6 +98,14 @@ const runPrefetch = async (userId: string): Promise<void> => {
         data: settings,
         capturedAt,
       });
+    });
+
+    if (!(await canContinue(userId))) return;
+    useConnectivityStore.getState().setSyncing();
+    await runSource(userId, async () => {
+      await syncFinanceiro(userId);
+      if (!(await canContinue(userId))) return;
+      await financeiroService.prefetchCurrentMonth(userId);
     });
   } finally {
     if (isBrowserOnline() && (await getCurrentUserId()) === userId) {

@@ -15,6 +15,7 @@ import { ErrorState } from '../components/ErrorState';
 import { useFinanceiro } from '../hooks/useFinanceiro';
 import { Pagination } from '../components/Pagination';
 import { useUIStore } from '../store/useUIStore';
+import { useConnectivityStore } from '../store/useConnectivityStore';
 import { TransacaoFinanceira } from '../types/database';
 
 const getCurrentMonth = () => {
@@ -37,8 +38,15 @@ const addOneDay = (date: string) => {
   return new Date(Date.UTC(year, month - 1, day + 1)).toISOString().split('T')[0];
 };
 
+const firstDayOfNextMonth = (periodo: string) => {
+  const [year, month] = periodo.split('-').map(Number);
+  return new Date(Date.UTC(year, month, 1)).toISOString().split('T')[0];
+};
+
 export const FinanceiroPage: React.FC = () => {
   const { showToast } = useUIStore();
+  const connectivityStatus = useConnectivityStore((state) => state.status);
+  const isOffline = connectivityStatus === 'offline';
   const [search, setSearch] = useState('');
   const [tipo, setTipo] = useState('all');
   const [categoria, setCategoria] = useState('all');
@@ -61,7 +69,7 @@ export const FinanceiroPage: React.FC = () => {
     : periodoAno ? `${year}-01-01` : `${periodoSelecionado}-01`;
   const fimMes = periodoPersonalizado
     ? dataFimPersonalizada ? addOneDay(dataFimPersonalizada) : undefined
-    : periodoAno ? `${year + 1}-01-01` : addOneDay(`${periodoSelecionado}-01`);
+    : periodoAno ? `${year + 1}-01-01` : firstDayOfNextMonth(periodoSelecionado);
   const periodoOptions = [
     { value: `ano-${year}`, label: `Todos os meses de ${year}` },
     ...getMonthOptions(year),
@@ -100,7 +108,18 @@ export const FinanceiroPage: React.FC = () => {
     setPage(1);
   }, [search, tipo, categoria, status, periodoSelecionado, dataInicioPersonalizada, dataFimPersonalizada]);
 
-  const { transacoes, totalTransacoes, resumo, isLoadingTransacoes, isErrorTransacoes, refetchTransacoes, createTransacao, updateTransacao, deleteTransacao } = useFinanceiro({
+  useEffect(() => {
+    if (!isOffline) return;
+    setSearch('');
+    setTipo('all');
+    setCategoria('all');
+    setStatus('all');
+    setPeriodoSelecionado(getCurrentMonth());
+    setDataInicioPersonalizada('');
+    setDataFimPersonalizada('');
+  }, [isOffline]);
+
+  const { transacoes, totalTransacoes, resumo, source, resumoSource, capturedAt, isLoadingTransacoes, isErrorTransacoes, refetchTransacoes, createTransacao, updateTransacao, deleteTransacao } = useFinanceiro({
     search,
     tipo,
     categoria,
@@ -162,7 +181,7 @@ export const FinanceiroPage: React.FC = () => {
     e.preventDefault();
     if (isSaving) return;
 
-    if (!formData.descricao || !formData.valor) {
+    if (!formData.descricao?.trim() || formData.valor === undefined || formData.valor === null) {
       showToast('Preencha os campos obrigatórios.', 'error');
       return;
     }
@@ -257,6 +276,15 @@ export const FinanceiroPage: React.FC = () => {
         </div>
       </div>
 
+      {(isOffline || source === 'local' || resumoSource === 'local' || capturedAt) && (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-200" role="status">
+          <strong>{isOffline ? 'Modo offline:' : source === 'local' || resumoSource === 'local' ? 'Dados locais:' : 'Cache offline disponível:'}</strong>{' '}
+          {source === 'local' || resumoSource === 'local' || isOffline ? 'Exibindo dados locais do mês atual. ' : 'O mês atual está pré-carregado para uso offline. '}
+          Períodos históricos, busca, filtros e paginação ficam disponíveis somente online.
+          {capturedAt && <span className="ml-1 text-xs opacity-80">Atualizado em {new Date(capturedAt).toLocaleString('pt-BR')}</span>}
+        </div>
+      )}
+
       {/* DRE Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
         <StatCard
@@ -300,6 +328,7 @@ export const FinanceiroPage: React.FC = () => {
               value={periodoSelecionado}
               onChange={(e) => handlePeriodoChange(e.target.value)}
               options={periodoOptions}
+              disabled={isOffline}
             />
           </div>
           <div className="md:pt-5">
@@ -310,6 +339,7 @@ export const FinanceiroPage: React.FC = () => {
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               icon={Search}
+              disabled={isOffline}
             />
           </div>
 
@@ -319,6 +349,7 @@ export const FinanceiroPage: React.FC = () => {
               noMargin
               value={tipo}
               onChange={(e) => { setTipo(e.target.value); setPage(1); }}
+              disabled={isOffline}
               options={[
                 { label: 'Todos os Tipos', value: 'all' },
                 { label: 'Receitas', value: 'receita' },
@@ -333,6 +364,7 @@ export const FinanceiroPage: React.FC = () => {
               noMargin
               value={categoria}
               onChange={(e) => { setCategoria(e.target.value); setPage(1); }}
+              disabled={isOffline}
               options={[
                 { label: 'Todas as Categorias', value: 'all' },
                 { label: 'Venda de Gado', value: 'venda_gado' },
@@ -352,6 +384,7 @@ export const FinanceiroPage: React.FC = () => {
               noMargin
               value={status}
               onChange={(e) => { setStatus(e.target.value); setPage(1); }}
+              disabled={isOffline}
               options={[
                 { label: 'Todos os Status', value: 'all' },
                 { label: 'Pago / Recebido', value: 'pago' },
@@ -404,13 +437,15 @@ export const FinanceiroPage: React.FC = () => {
               }
             }}
           />
-          <Pagination
-            currentPage={page}
-            totalPages={Math.ceil((totalTransacoes || 0) / limit)}
-            onPageChange={setPage}
-            totalItems={totalTransacoes}
-            itemsPerPage={limit}
-          />
+          {!isOffline && (
+            <Pagination
+              currentPage={page}
+              totalPages={Math.ceil((totalTransacoes || 0) / limit)}
+              onPageChange={setPage}
+              totalItems={totalTransacoes}
+              itemsPerPage={limit}
+            />
+          )}
           </>
         )}
       </Card>
@@ -458,7 +493,7 @@ export const FinanceiroPage: React.FC = () => {
             <Button variant="secondary" onClick={() => setPeriodoPersonalizadoModalOpen(false)}>
               Cancelar
             </Button>
-            <Button onClick={handleConfirmarPeriodoPersonalizado}>
+            <Button onClick={handleConfirmarPeriodoPersonalizado} disabled={isOffline}>
               Aplicar período
             </Button>
           </>
@@ -476,6 +511,7 @@ export const FinanceiroPage: React.FC = () => {
             value={dataInicioRascunho}
             max={dataFimRascunho || undefined}
             onChange={(e) => setDataInicioRascunho(e.target.value)}
+            disabled={isOffline}
           />
           <Input
             id="filter-data-fim-fin"
@@ -485,6 +521,7 @@ export const FinanceiroPage: React.FC = () => {
             value={dataFimRascunho}
             min={dataInicioRascunho || undefined}
             onChange={(e) => setDataFimRascunho(e.target.value)}
+            disabled={isOffline}
           />
         </div>
       </Modal>
