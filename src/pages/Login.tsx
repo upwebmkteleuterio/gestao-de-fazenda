@@ -26,7 +26,7 @@ export function LoginPage() {
     setSignInError(null);
     setIsSigningIn(true);
     try {
-      const { error } = await supabase.auth.signInWithPassword({ email, password });
+      const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
       if (error) throw error;
     } catch (error) {
       setSignInError(getAuthErrorMessage(error));
