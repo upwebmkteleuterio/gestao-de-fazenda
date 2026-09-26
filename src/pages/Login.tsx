@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from 'react';
 import { Navigate } from 'react-router-dom';
-import { Eye, EyeOff, Leaf, ShieldCheck, Sprout } from 'lucide-react';
+import { Eye, EyeOff, Leaf, ShieldCheck } from 'lucide-react';
 import { Card } from '@/components/Card';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
@@ -45,8 +45,8 @@ export function LoginPage() {
         <div className="absolute -right-24 -top-32 h-96 w-96 rounded-full bg-emerald-500/20 blur-3xl" />
         <div className="absolute -bottom-32 -left-20 h-96 w-96 rounded-full bg-lime-300/10 blur-3xl" />
         <div className="relative flex items-center gap-3">
-          <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-emerald-400 text-emerald-950 shadow-lg shadow-emerald-950/30">
-            <Sprout className="h-6 w-6" />
+          <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-emerald-400 p-1 text-emerald-950 shadow-lg shadow-emerald-950/30">
+            <img src="/assets/logo-faz-carapana.png" alt="Logo da fazenda" className="h-full w-full rounded-lg object-contain" />
           </div>
           {isLoadingFarmName ? (
             <span role="status" aria-label="Carregando nome da fazenda" className="block h-6 w-36 animate-pulse rounded-md bg-emerald-200/30" />
@@ -76,8 +76,8 @@ export function LoginPage() {
       <section className="flex min-h-screen items-center justify-center px-5 py-10 sm:px-8">
         <div className="w-full max-w-md">
           <div className="mb-8 flex items-center gap-3 lg:hidden">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-600 text-white">
-              <Sprout className="h-5 w-5" />
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-600 p-1 text-white">
+              <img src="/assets/logo-faz-carapana.png" alt="Logo da fazenda" className="h-full w-full rounded-lg object-contain" />
             </div>
             {isLoadingFarmName ? (
               <span role="status" aria-label="Carregando nome da fazenda" className="block h-6 w-36 animate-pulse rounded-md bg-slate-200 dark:bg-slate-700" />

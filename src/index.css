@@ -74,6 +74,24 @@
 }
 
 /* Animations */
+@keyframes appSplashProgress {
+  from { transform: scaleX(0); }
+  to { transform: scaleX(1); }
+}
+
+.app-splash-progress {
+  transform: scaleX(0);
+  transform-origin: left center;
+  animation: appSplashProgress 3s linear forwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app-splash-progress {
+    transform: scaleX(1);
+    animation: none;
+  }
+}
+
 @keyframes fadeIn {
   from { opacity: 0; transform: translateY(4px); }
   to { opacity: 1; transform: translateY(0); }

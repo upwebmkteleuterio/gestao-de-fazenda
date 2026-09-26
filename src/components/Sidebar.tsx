@@ -12,8 +12,7 @@ import {
   DollarSign,
   BarChart3,
   ChevronLeft,
-  ChevronRight,
-  Sprout
+  ChevronRight
 } from 'lucide-react';
 import { BovinoSidebarIcon } from './BovinoSidebarIcon';
 import { useUIStore, PageRoute } from '../store/useUIStore';
@@ -73,8 +72,8 @@ export const Sidebar: React.FC = () => {
             }
           }}
         >
-          <div className={`w-9 h-9 bg-emerald-500 dark:bg-emerald-600 rounded-xl flex items-center justify-center ${sidebarOpen ? 'mr-3' : 'mr-1'} shadow-md shrink-0`}>
-            <Sprout className="w-5 h-5 text-white" />
+          <div className={`w-9 h-9 bg-emerald-500 dark:bg-emerald-600 rounded-xl flex items-center justify-center p-1 ${sidebarOpen ? 'mr-3' : 'mr-1'} shadow-md shrink-0`}>
+            <img src="/assets/logo-faz-carapana.png" alt="Logo da fazenda" className="h-full w-full rounded-lg object-contain" />
           </div>
           {sidebarOpen && (
             <span className="font-bold text-xl tracking-tight text-white/95">
