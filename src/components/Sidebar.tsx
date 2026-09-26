@@ -72,8 +72,8 @@ export const Sidebar: React.FC = () => {
             }
           }}
         >
-          <div className={`w-9 h-9 bg-emerald-500 dark:bg-emerald-600 rounded-xl flex items-center justify-center p-1 ${sidebarOpen ? 'mr-3' : 'mr-1'} shadow-md shrink-0`}>
-            <img src="/assets/logo-faz-carapana.png" alt="Logo da fazenda" className="h-full w-full rounded-lg object-contain" />
+          <div className={`flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-xl ${sidebarOpen ? 'mr-3' : 'mr-1'}`}>
+            <img src="/assets/logo-faz-carapana.png" alt="Logo da fazenda" className="h-full w-full rounded-xl object-contain" />
           </div>
           {sidebarOpen && (
             <span className="font-bold text-xl tracking-tight text-white/95">

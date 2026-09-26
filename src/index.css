@@ -79,15 +79,29 @@
   to { transform: scaleX(1); }
 }
 
+@keyframes appSplashShine {
+  from { transform: translateX(-140%); }
+  to { transform: translateX(420%); }
+}
+
 .app-splash-progress {
   transform: scaleX(0);
   transform-origin: left center;
   animation: appSplashProgress 3s linear forwards;
 }
 
+.app-splash-shine {
+  animation: appSplashShine 2.4s ease-in-out infinite;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .app-splash-progress {
     transform: scaleX(1);
+    animation: none;
+  }
+
+  .app-splash-shine {
+    display: none;
     animation: none;
   }
 }
