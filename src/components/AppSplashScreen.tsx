@@ -18,11 +18,11 @@ export function AppSplashScreen({ onComplete }: AppSplashScreenProps) {
     >
       <div className="absolute -right-24 -top-32 h-96 w-96 rounded-full bg-emerald-500/20 blur-3xl" />
       <div className="absolute -bottom-32 -left-20 h-96 w-96 rounded-full bg-lime-300/10 blur-3xl" />
-      <div className="relative z-10 mb-12 h-56 w-[min(24rem,80vw)] overflow-hidden rounded-2xl">
+      <div className="relative z-10 mb-12 flex h-56 w-56 shrink-0 items-center justify-center overflow-hidden rounded-xl">
         <img
           src="/assets/logo-faz-carapana.png"
           alt="Logo da fazenda"
-          className="h-full w-full object-contain"
+          className="h-full w-full rounded-xl object-contain"
         />
       </div>
       <div className="relative z-10 h-2 w-[min(20rem,72vw)] overflow-hidden rounded-full bg-emerald-900/80 shadow-inner shadow-black/20" role="progressbar" aria-label="Carregando" aria-valuemin={0} aria-valuemax={100}>
