@@ -27,7 +27,7 @@ export const useAnimaisTable = () => {
   const [categoria, setCategoria] = useState('all');
   const [tipo, setTipo] = useState('all');
   const [page, setPage] = useState(1);
-  const limit = 10;
+  const limit = 30;
 
   const [mainTab, setMainTab] = useState<'rebanho' | 'descartadas' | 'lotes'>('rebanho');
 

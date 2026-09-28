@@ -52,7 +52,7 @@ export const Pagination: React.FC<PaginationProps> = ({
             <button
               onClick={() => onPageChange(currentPage - 1)}
               disabled={currentPage <= 1}
-              className="relative inline-flex items-center rounded-l-md px-2 py-2 text-gray-400 dark:text-gray-500 ring-1 ring-inset ring-gray-300 dark:ring-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 focus:z-20 focus:outline-offset-0 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              className="relative inline-flex items-center rounded-l-md px-2 py-2 text-gray-400 dark:text-gray-500 ring-1 ring-inset ring-gray-300 dark:ring-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer focus:z-20 focus:outline-offset-0 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
               <span className="sr-only">Anterior</span>
               <ChevronLeft className="h-5 w-5" aria-hidden="true" />
@@ -61,7 +61,7 @@ export const Pagination: React.FC<PaginationProps> = ({
               <button
                 key={page}
                 onClick={() => onPageChange(page)}
-                className={`relative inline-flex items-center px-4 py-2 text-sm font-semibold focus:z-20 focus:outline-offset-0 transition-colors ${
+                className={`relative inline-flex items-center px-4 py-2 text-sm font-semibold cursor-pointer focus:z-20 focus:outline-offset-0 transition-colors ${
                   page === currentPage
                     ? 'z-10 bg-emerald-600 text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-600'
                     : 'text-gray-900 dark:text-gray-200 ring-1 ring-inset ring-gray-300 dark:ring-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700'
@@ -73,7 +73,7 @@ export const Pagination: React.FC<PaginationProps> = ({
             <button
               onClick={() => onPageChange(currentPage + 1)}
               disabled={currentPage >= safeTotalPages}
-              className="relative inline-flex items-center rounded-r-md px-2 py-2 text-gray-400 dark:text-gray-500 ring-1 ring-inset ring-gray-300 dark:ring-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 focus:z-20 focus:outline-offset-0 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              className="relative inline-flex items-center rounded-r-md px-2 py-2 text-gray-400 dark:text-gray-500 ring-1 ring-inset ring-gray-300 dark:ring-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer focus:z-20 focus:outline-offset-0 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
               <span className="sr-only">Próxima</span>
               <ChevronRight className="h-5 w-5" aria-hidden="true" />

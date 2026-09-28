@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from 'react';
-import { MoreVertical, Edit, Trash2, Eye } from 'lucide-react';
+import React, { useState } from 'react';
+import { Edit, Trash2 } from 'lucide-react';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import {
   TABLE_ROW_EXIT_DURATION_MS,
@@ -38,16 +38,9 @@ export function Table<T extends Record<string, any>>({
   getRowId = defaultGetRowId,
   emptyMessage = 'Nenhum registro encontrado.',
 }: TableProps<T>) {
-  const [openDropdown, setOpenDropdown] = useState<string | null>(null);
   const [deleteIntentId, setDeleteIntentId] = useState<string | null>(null);
   const reduceMotion = useReducedMotion() ?? false;
   const { rows: animatedRows } = useAnimatedTableRows(data, getRowId, deleteIntentId, reduceMotion);
-
-  useEffect(() => {
-    const handleClickOutside = () => setOpenDropdown(null);
-    document.addEventListener('click', handleClickOutside);
-    return () => document.removeEventListener('click', handleClickOutside);
-  }, []);
 
   const allSelected = data.length > 0 && selectedIds.length === data.length;
   const rowTransition = { duration: reduceMotion ? 0 : TABLE_ROW_EXIT_DURATION_MS / 1000 };
@@ -89,10 +82,8 @@ export function Table<T extends Record<string, any>>({
             </tr>
           ) : (
             <AnimatePresence initial={false}>
-              {animatedRows.map(({ row, id: rowId }, rowIndex) => {
+              {animatedRows.map(({ row, id: rowId }) => {
                 const isSelected = selectedIds.includes(rowId);
-                const isOpen = openDropdown === rowId;
-                const openUpward = animatedRows.length > 1 && rowIndex >= Math.max(1, animatedRows.length - 2);
 
                 return (
                     <motion.tr
@@ -102,13 +93,10 @@ export function Table<T extends Record<string, any>>({
                       animate={{ opacity: 1, x: 0 }}
                       exit={reduceMotion ? { opacity: 0 } : { opacity: 0, x: -16 }}
                       transition={rowTransition}
-                      style={{
-                    position: 'relative',
-                    zIndex: isOpen ? 50 : 'auto',
-                  }}
+                      style={{ position: 'relative' }}
                   className={`bg-white dark:bg-gray-800 hover:bg-emerald-50/60 dark:hover:bg-emerald-950/40 transition-colors group cursor-pointer ${
                     isSelected ? 'bg-emerald-50/90 dark:bg-emerald-950/60' : ''
-                  } ${isOpen ? '[isolation:isolate]' : ''}`}
+                  }`}
                   onClick={(e) => {
                     const target = e.target as HTMLElement;
                     if (target.closest('.actions-menu') || target.closest('input[type="checkbox"]')) return;
@@ -136,68 +124,32 @@ export function Table<T extends Record<string, any>>({
                     </td>
                   ))}
                   {onAction && (
-                    <td
-                      className="px-6 py-4 text-right relative actions-menu"
-                      style={{ zIndex: isOpen ? 60 : 'auto' }}
-                    >
+                    <td className="px-3 sm:px-6 py-3 text-right whitespace-nowrap actions-menu">
                       <button
                         type="button"
-                        className="p-2 rounded-full text-gray-500 dark:text-gray-400 hover:text-emerald-600 dark:hover:text-emerald-400 hover:bg-emerald-100/60 dark:hover:bg-gray-700 transition-colors focus:outline-none"
+                        title="Editar"
+                        aria-label="Editar"
+                        className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-full text-gray-500 dark:text-gray-400 hover:text-emerald-600 dark:hover:text-emerald-400 hover:bg-emerald-100/60 dark:hover:bg-gray-700 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-gray-800"
                         onClick={(e) => {
                           e.stopPropagation();
-                          setOpenDropdown(isOpen ? null : rowId);
+                          onAction('edit', row);
                         }}
                       >
-                        <MoreVertical className="w-4 h-4" />
+                        <Edit className="w-4 h-4" aria-hidden="true" />
                       </button>
-
-                      {/* Dropdown Menu */}
-                      {isOpen && (
-                        <div
-                          className={`absolute right-8 w-40 bg-white dark:bg-gray-800 rounded-lg shadow-2xl py-1.5 border border-gray-100 dark:border-gray-700 transform transition-all ${
-                            openUpward ? 'bottom-10 origin-bottom-right' : 'top-10 origin-top-right'
-                          }`}
-                          style={{ zIndex: 999 }}
-                        >
-                          <button
-                            type="button"
-                            className="flex w-full items-center justify-start px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 hover:text-emerald-600 dark:hover:text-emerald-400 transition-colors"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              onAction('view', row);
-                              setOpenDropdown(null);
-                            }}
-                          >
-                            <Eye className="w-4 h-4 mr-2 text-gray-500 dark:text-gray-400" />
-                            <span className="font-medium">Visualizar</span>
-                          </button>
-                          <button
-                            type="button"
-                            className="flex w-full items-center justify-start px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 hover:text-emerald-600 dark:hover:text-emerald-400 transition-colors"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              onAction('edit', row);
-                              setOpenDropdown(null);
-                            }}
-                          >
-                            <Edit className="w-4 h-4 mr-2 text-gray-500 dark:text-gray-400" />
-                            <span className="font-medium">Editar</span>
-                          </button>
-                          <button
-                            type="button"
-                            className="flex w-full items-center justify-start px-4 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/50 transition-colors"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setDeleteIntentId(rowId);
-                              onAction('delete', row);
-                              setOpenDropdown(null);
-                            }}
-                          >
-                            <Trash2 className="w-4 h-4 mr-2" />
-                            <span className="font-medium">Excluir</span>
-                          </button>
-                        </div>
-                      )}
+                      <button
+                        type="button"
+                        title="Excluir"
+                        aria-label="Excluir"
+                        className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-full text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/50 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-gray-800"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setDeleteIntentId(rowId);
+                          onAction('delete', row);
+                        }}
+                      >
+                        <Trash2 className="w-4 h-4" aria-hidden="true" />
+                      </button>
                     </td>
                   )}
                   </motion.tr>
