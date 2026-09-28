@@ -38,13 +38,16 @@ const canContinue = async (userId: string): Promise<boolean> => (
 const runSource = async (userId: string, stage: PrefetchStage, source: () => Promise<void>): Promise<boolean> => {
   const progress = usePrefetchProgressStore.getState();
   progress.beginStage(stage);
-  if (!(await canContinue(userId))) return false;
+  if (!(await canContinue(userId))) {
+    progress.failStage(stage, 'Sincronização interrompida antes da conclusão.');
+    return false;
+  }
   try {
     await source();
     progress.completeStage(stage);
     return await canContinue(userId);
   } catch (error) {
-    if (await canContinue(userId)) {
+    if (usePrefetchProgressStore.getState().userId === userId) {
       progress.failStage(stage, error instanceof Error ? error.message : 'Não foi possível baixar esta etapa.');
     }
     return false;
@@ -60,7 +63,7 @@ const runPrefetch = async (userId: string): Promise<void> => {
       { name: 'Animais (cadastro completo)', source: async () => { await syncAnimais(userId); await animaisService.getAll({ includeHistorico: true }); } },
       { name: 'Lotes (primeira página)', source: async () => { await syncLotes(userId); await lotesService.getAll(userId, { page: 1, limit: 10 }); } },
       { name: 'Pesagens (histórico recente)', source: async () => { await syncPesagens(userId); await pesagensService.prefetchFirstPage(userId); } },
-      { name: 'Manejo Reprodutivo (primeira página)', source: async () => { await reproducaoService.prefetchFirstPage(userId); } },
+      { name: 'Manejo Reprodutivo (últimos 30 dias)', source: async () => { await reproducaoService.prefetchRecentWindow(userId); } },
       { name: 'Manejo Sanitário (duas abas, primeira página)', source: async () => { await sanitarioService.prefetchFirstPages(userId); } },
       { name: 'Pastagens (cadastro)', source: async () => { await syncPastagens(userId); await pastagensService.getAll(userId); } },
       { name: 'Financeiro (mês atual)', source: async () => { await syncFinanceiro(userId); await financeiroService.prefetchCurrentMonth(userId); } },

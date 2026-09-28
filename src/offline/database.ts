@@ -23,6 +23,8 @@ export type OfflineSnapshot = {
   scope: string;
   data: unknown;
   capturedAt: string;
+  coverageStart?: string;
+  coverageEnd?: string;
 };
 
 export type OutboxOperationStatus = 'pending' | 'processing' | 'failed';
@@ -121,6 +123,28 @@ export const getOfflineSnapshot = async <TData = unknown>(
 ): Promise<(OfflineSnapshot & { data: TData }) | undefined> => (
   await offlineDb.snapshots.get(key) as (OfflineSnapshot & { data: TData }) | undefined
 );
+
+export const replaceOfflineRecordsAndSnapshot = async (
+  options: {
+    userId: string;
+    entity: string;
+    records: OfflineRecord[];
+    snapshot: OfflineSnapshot;
+  },
+): Promise<void> => {
+  await offlineDb.transaction('rw', offlineDb.localRecords, offlineDb.snapshots, async () => {
+    const existingRecords = await offlineDb.localRecords
+      .where('userId')
+      .equals(options.userId)
+      .toArray();
+    const keysToDelete = existingRecords
+      .filter((record) => record.entity === options.entity)
+      .map((record) => record.key);
+    if (keysToDelete.length > 0) await offlineDb.localRecords.bulkDelete(keysToDelete);
+    if (options.records.length > 0) await offlineDb.localRecords.bulkPut(options.records);
+    await offlineDb.snapshots.put(options.snapshot);
+  });
+};
 
 export const deleteOfflineSnapshot = async (key: string): Promise<void> => {
   await offlineDb.snapshots.delete(key);

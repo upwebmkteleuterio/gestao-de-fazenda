@@ -26,6 +26,7 @@ interface ReprodutivoTableProps {
   isLoading: boolean;
   isOffline?: boolean;
   isError?: boolean;
+  error?: unknown;
   diagnostic?: ReproducaoDiagnostic;
   filterValidationMessage?: string;
   onRetry?: () => void;
@@ -47,6 +48,7 @@ export const ReprodutivoTable: React.FC<ReprodutivoTableProps> = ({
   isLoading,
   isOffline = false,
   isError,
+  error,
   diagnostic,
   filterValidationMessage,
   onRetry,
@@ -200,10 +202,12 @@ export const ReprodutivoTable: React.FC<ReprodutivoTableProps> = ({
       ) : isError ? (
         <div className="p-6">
           <ErrorState
-            title={isOffline ? 'Conexão necessária' : 'Erro ao carregar eventos reprodutivos'}
-            message={isOffline
-              ? 'O histórico reprodutivo exige uma conexão ativa. Verifique sua internet e tente novamente.'
-              : 'Não foi possível sincronizar os registros de IATF, monta ou diagnóstico. Tente novamente.'}
+            title={isOffline ? 'Cache offline indisponível para este período' : 'Erro ao carregar eventos reprodutivos'}
+            message={error instanceof Error && error.name === 'ReproducaoOfflineCoverageError'
+              ? error.message
+              : isOffline
+                ? 'Conecte-se para sincronizar o histórico reprodutivo e consultar este período.'
+                : 'Não foi possível sincronizar os registros de IATF, monta ou diagnóstico. Tente novamente.'}
             onRetry={onRetry}
           />
           {import.meta.env.DEV && diagnostic && (
@@ -241,15 +245,13 @@ export const ReprodutivoTable: React.FC<ReprodutivoTableProps> = ({
               else if (action === 'delete') onDelete(row);
             }}
           />
-          {!isOffline && (
-            <Pagination
-              currentPage={page}
-              totalPages={Math.ceil((total || 0) / limit) || 1}
-              onPageChange={onPageChange}
-              totalItems={total}
-              itemsPerPage={limit}
-            />
-          )}
+          <Pagination
+            currentPage={page}
+            totalPages={Math.ceil((total || 0) / limit) || 1}
+            onPageChange={onPageChange}
+            totalItems={total}
+            itemsPerPage={limit}
+          />
         </>
       )}
     </Card>

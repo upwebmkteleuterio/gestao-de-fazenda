@@ -82,6 +82,8 @@ export const useReproducaoTable = () => {
     totalEventos,
     source,
     capturedAt,
+    coverageStart,
+    coverageEnd,
     isOffline,
     isLoading,
     isError,
@@ -101,7 +103,7 @@ export const useReproducaoTable = () => {
     page,
     limit,
   }, {
-    onlineOnly: true,
+    useOfflineCache: true,
     enabled: !dateRangeError,
   });
 
@@ -162,6 +164,8 @@ export const useReproducaoTable = () => {
     totalEventos,
     source,
     capturedAt,
+    coverageStart,
+    coverageEnd,
     isOffline,
     isLoading,
     isError,

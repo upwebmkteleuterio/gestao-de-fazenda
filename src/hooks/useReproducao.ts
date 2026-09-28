@@ -55,6 +55,7 @@ export const useReproducao = (filters?: ReproducaoReportFilters, options?: UseRe
     queryKey: ['reproducao', userId, useOfflineCache, onlineOnly, filters],
     queryFn: () => reproducaoService.getAll(filters, { onlineOnly }),
     enabled: enabled && Boolean(userId) && (onlineOnly ? !offline : useOfflineCache || !offline),
+    networkMode: useOfflineCache ? 'always' : 'online',
   });
   const summaryQuery = useQuery({
     queryKey: ['reproducao-report-summary', userId, filters],
@@ -69,11 +70,13 @@ export const useReproducao = (filters?: ReproducaoReportFilters, options?: UseRe
   }, [includeSummary, query.refetch, summaryQuery.refetch]);
 
   useEffect(() => {
-    if (connectivityStatus === 'online' && wasOffline.current && userId) {
+    if (userId && wasOffline.current && !offline) {
       void refetch();
+    } else if (userId && !wasOffline.current && offline && useOfflineCache) {
+      void query.refetch();
     }
     wasOffline.current = offline;
-  }, [connectivityStatus, offline, userId, refetch]);
+  }, [connectivityStatus, offline, query.refetch, refetch, useOfflineCache, userId]);
 
   const fetchAllEventos = useCallback(async () => {
     if (offline && (onlineOnly || !useOfflineCache)) throw new Error('Relatório indisponível offline.');
@@ -132,6 +135,8 @@ export const useReproducao = (filters?: ReproducaoReportFilters, options?: UseRe
   });
 
   const showingLocalData = query.data?.source === 'local';
+  const errorCoverage = query.error as { capturedAt?: string; coverageStart?: string; coverageEnd?: string } | null;
+  const waitingForOfflineCache = offline && useOfflineCache && enabled && Boolean(userId) && !showingLocalData && !query.isError;
   const eventos = offline && (!useOfflineCache || !showingLocalData) ? [] : query.data?.data ?? [];
   const totalEventos = offline && (!useOfflineCache || !showingLocalData) ? 0 : query.data?.total ?? 0;
   const offlineError = onlineOnly && offline
@@ -159,10 +164,12 @@ export const useReproducao = (filters?: ReproducaoReportFilters, options?: UseRe
     eventos,
     totalEventos,
     source,
-    capturedAt: query.data?.capturedAt,
+    capturedAt: query.data?.capturedAt ?? errorCoverage?.capturedAt,
+    coverageStart: query.data?.coverageStart ?? errorCoverage?.coverageStart,
+    coverageEnd: query.data?.coverageEnd ?? errorCoverage?.coverageEnd,
     summary: summaryQuery.data,
     isOffline: offline,
-    isLoading: query.isLoading || (includeSummary && !offline && summaryQuery.isLoading),
+    isLoading: query.isLoading || waitingForOfflineCache || (includeSummary && !offline && summaryQuery.isLoading),
     isError: query.isError || (includeSummary && summaryQuery.isError) || Boolean(offlineError),
     error: query.error || (includeSummary ? summaryQuery.error : undefined) || offlineError,
     diagnostic,

@@ -36,10 +36,15 @@ export const ManejoReprodutivoPage: React.FC = () => {
     page,
     setPage,
     totalEventos,
+    source,
+    capturedAt,
+    coverageStart,
+    coverageEnd,
     isOffline,
     eventos,
     isLoading,
     isError,
+    error,
     diagnostic,
     refetch,
     selectedEventoIds,
@@ -54,7 +59,7 @@ export const ManejoReprodutivoPage: React.FC = () => {
     deleteEvento,
     isSaving: mutationIsSaving,
   } = useReproducaoTable();
-  const offline = isOffline || connectivityStatus === 'offline' || (typeof navigator !== 'undefined' && !navigator.onLine);
+  const offline = isOffline || source === 'local' || connectivityStatus === 'offline' || (typeof navigator !== 'undefined' && !navigator.onLine);
 
   // Hook de Formulário Reprodutivo (IATF, Monta, TETF, DG) e SlidePanel
   const {
@@ -115,8 +120,16 @@ export const ManejoReprodutivoPage: React.FC = () => {
         <div className="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-200" role="status">
           <WifiOff className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
           <div>
-            <p className="font-semibold">Conexão necessária para o histórico reprodutivo.</p>
-            <p className="mt-0.5 text-xs">Os registros são carregados somente enquanto houver conexão ativa. Verifique sua internet para consultar o histórico, usar filtros e paginação ou registrar eventos.</p>
+            <p className="font-semibold">
+              {source === 'local' && !isOffline ? 'Exibindo dados baixados (somente leitura).' : 'Histórico reprodutivo offline (somente leitura).'}
+            </p>
+            {coverageStart && coverageEnd ? (
+              <p className="mt-0.5 text-xs">
+                Cache sincronizado em {capturedAt ? new Date(capturedAt).toLocaleString('pt-BR') : 'data não informada'} · cobertura: {coverageStart} a {coverageEnd}.
+              </p>
+            ) : (
+              <p className="mt-0.5 text-xs">O cache dos últimos 30 dias ainda não está disponível. Conecte-se para sincronizar o histórico.</p>
+            )}
           </div>
         </div>
       )}
@@ -136,7 +149,6 @@ export const ManejoReprodutivoPage: React.FC = () => {
         dateRangeError={dateRangeError}
         onClearFilters={handleClearFilters}
         hasActiveFilters={hasActiveFilters}
-        disabled={offline}
       />
 
       {/* Tabela de Listagem de Eventos Reprodutivos */}
@@ -148,6 +160,7 @@ export const ManejoReprodutivoPage: React.FC = () => {
         isLoading={isLoading}
         isOffline={offline}
         isError={isError}
+        error={error}
         diagnostic={diagnostic}
         filterValidationMessage={dateRangeError}
         onRetry={refetch}
