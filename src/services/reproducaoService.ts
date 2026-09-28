@@ -64,6 +64,23 @@ const cacheFirstPage = async (userId: string, eventos: EventoReproducao[]): Prom
   });
 };
 
+const cacheFirstPageSafely = async (userId: string, eventos: EventoReproducao[]): Promise<void> => {
+  try {
+    await cacheFirstPage(userId, eventos);
+  } catch {
+    return;
+  }
+};
+
+const readCapturedAtSafely = async (userId: string): Promise<string | undefined> => {
+  try {
+    const snapshot = await getOfflineSnapshot<EventoReproducao[]>(firstPageSnapshotKey(userId));
+    return snapshot?.capturedAt;
+  } catch {
+    return undefined;
+  }
+};
+
 type ReproducaoDbRow = {
   id: string;
   animal_id: string;
@@ -421,9 +438,9 @@ export const reproducaoService = {
       const { data, count, error } = await query;
       if (error) throw error;
       const items = ((data ?? []) as unknown as ReproducaoDbRow[]).map(toEvento);
-      if (isFirstPage) await cacheFirstPage(userId, items);
-      const snapshot = await getOfflineSnapshot<EventoReproducao[]>(firstPageSnapshotKey(userId));
-      return { data: items, total: count ?? items.length, source: 'remote', capturedAt: snapshot?.capturedAt };
+      if (isFirstPage) await cacheFirstPageSafely(userId, items);
+      const capturedAt = await readCapturedAtSafely(userId);
+      return { data: items, total: count ?? items.length, source: 'remote', capturedAt };
     } catch (error) {
       if (!isNetworkError(error)) throw error;
       const local = await readLocalFirstPage(userId);
