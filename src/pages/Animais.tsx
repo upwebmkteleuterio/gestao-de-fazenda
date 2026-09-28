@@ -194,6 +194,7 @@ export const AnimaisPage: React.FC = () => {
       <AnimaisSlidePanel
         animais={todosAnimais}
         handleCreateFilho={handleCreateFilho}
+        handleOpenChild={handleOpenView}
         slideOpen={slideOpen}
         setSlideOpen={setSlideOpen}
         slideMode={slideMode}

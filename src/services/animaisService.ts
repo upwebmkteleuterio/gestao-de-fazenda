@@ -318,16 +318,29 @@ const findActiveBrincoConflict = async (userId: string, brinco: string, exceptId
   return ((data ?? []) as Array<{ id: string; brinco: string }>).some((animal) => animal.id !== exceptId && normalizeBrinco(animal.brinco) === normalizedBrinco);
 };
 
-const getParentCandidates = async (userId: string): Promise<Animal[]> => {
+const findParentCandidate = async (
+  userId: string,
+  reference: string,
+  kind: 'mae' | 'pai',
+  currentId?: string,
+): Promise<Animal | undefined> => {
   const local = await readLocalAnimals(userId);
-  if (!isBrowserOnline()) return local.data;
+  const localCandidate = local.data.find((animal) => animal.id === reference || animal.brinco === reference);
+  if (localCandidate && isValidParentRecord(reference, [localCandidate], kind, currentId)) return localCandidate;
+  if (!isBrowserOnline()) return undefined;
+
   try {
-    const { data, error } = await withRemoteTimeout(supabase.from('animais').select('*'));
-    if (error) throw error;
-    return [...local.data, ...((data ?? []) as unknown as AnimalDbRow[]).map(toAnimal)];
+    const byId = await withRemoteTimeout(supabase.from('animais').select('*').eq('id', reference).maybeSingle());
+    if (byId.error) throw byId.error;
+    const byIdAnimal = byId.data ? toAnimal(byId.data as unknown as AnimalDbRow) : undefined;
+    if (byIdAnimal && isValidParentRecord(reference, [byIdAnimal], kind, currentId)) return byIdAnimal;
+    const byBrinco = await withRemoteTimeout(supabase.from('animais').select('*').eq('brinco', reference).maybeSingle());
+    if (byBrinco.error) throw byBrinco.error;
+    const byBrincoAnimal = byBrinco.data ? toAnimal(byBrinco.data as unknown as AnimalDbRow) : undefined;
+    return byBrincoAnimal && isValidParentRecord(reference, [byBrincoAnimal], kind, currentId) ? byBrincoAnimal : undefined;
   } catch (error) {
     if (!isTransportError(error)) throw error;
-    return local.data;
+    return undefined;
   }
 };
 
@@ -344,11 +357,10 @@ const normalizeAndValidateAnimal = async (
   if ((!currentId || brinco !== originalBrinco?.trim()) && await findActiveBrincoConflict(userId, brinco, currentId)) {
     throw new DomainValidationError(`O ID/Brinco ${brinco} já está em uso por outro animal ativo. Os registros existentes foram preservados.`);
   }
-  const candidates = await getParentCandidates(userId);
-  const normalizeParent = (reference: string | undefined, kind: 'mae' | 'pai', originalReference?: string) => {
+  const normalizeParent = async (reference: string | undefined, kind: 'mae' | 'pai', originalReference?: string) => {
     if (!reference?.trim()) return undefined;
     if (currentId && reference.trim() === originalReference?.trim()) return reference.trim();
-    const parent = isValidParentRecord(reference.trim(), candidates, kind, currentId);
+    const parent = await findParentCandidate(userId, reference.trim(), kind, currentId);
     if (!parent) throw new DomainValidationError(kind === 'mae' ? 'Selecione uma mãe válida, sem usar o próprio animal.' : 'Selecione um pai válido, sem usar o próprio animal.');
     return parent.id;
   };
@@ -364,8 +376,8 @@ const normalizeAndValidateAnimal = async (
     motivo_descarte: input.motivo_descarte?.trim() || undefined,
     data_descarte: input.data_descarte || undefined,
     historico_toque: input.historico_toque?.map((toque) => ({ ...toque, brinco, observacoes: toque.observacoes?.trim() || undefined })),
-    mae_id: normalizeParent(input.mae_id, 'mae', originalMaeId),
-    pai_id: normalizeParent(input.pai_id, 'pai', originalPaiId),
+    mae_id: await normalizeParent(input.mae_id, 'mae', originalMaeId),
+    pai_id: await normalizeParent(input.pai_id, 'pai', originalPaiId),
   };
 };
 
@@ -395,15 +407,26 @@ const syncLegacyArray = async (table: 'lotes' | 'manejos_sanitarios', id: string
 };
 
 const syncLegacyChildren = async (animalId: string) => {
-  const { data, error } = await supabase.from('animais').select('id, filhos_ids');
-  if (error) throw error;
-  const rows = (data ?? []) as unknown as LegacyChildrenRow[];
-  for (const row of rows) {
-    const ids = row.filhos_ids ?? [];
-    if (row.id === animalId || !ids.includes(animalId)) continue;
-    const { error: updateError } = await supabase.from('animais').update({ filhos_ids: ids.filter((currentId) => currentId !== animalId), status_sincronizacao: false }).eq('id', row.id);
-    if (updateError) throw updateError;
-  }
+  const batchSize = 500;
+  let offset = 0;
+  let total = 0;
+  do {
+    const { data, count, error } = await supabase
+      .from('animais')
+      .select('id, filhos_ids', { count: 'exact' })
+      .range(offset, offset + batchSize - 1);
+    if (error) throw error;
+    const rows = (data ?? []) as unknown as LegacyChildrenRow[];
+    for (const row of rows) {
+      const ids = row.filhos_ids ?? [];
+      if (row.id === animalId || !ids.includes(animalId)) continue;
+      const { error: updateError } = await supabase.from('animais').update({ filhos_ids: ids.filter((currentId) => currentId !== animalId), status_sincronizacao: false }).eq('id', row.id);
+      if (updateError) throw updateError;
+    }
+    total = count ?? 0;
+    offset += rows.length;
+    if (rows.length === 0) break;
+  } while (offset < total);
 };
 
 const readLocalAnimals = async (userId: string): Promise<{ data: Animal[]; capturedAt?: string }> => {
@@ -535,13 +558,21 @@ const queueLocalCreate = async (userId: string, newAnimal: AnimalCreateInput, id
   return animal;
 };
 
-const queueLocalUpdate = async (userId: string, id: string, updates: Partial<Animal>): Promise<Animal> => {
+const queueLocalUpdate = async (userId: string, id: string, updates: Partial<Animal>, baseAnimal?: Animal): Promise<Animal> => {
   const currentRecord = await getOfflineRecord<Animal>(localRecordKey(userId, id));
-  if (!currentRecord || currentRecord.userId !== userId || currentRecord.entity !== ENTITY || currentRecord.data.localDeleted) throw new Error('Animal não encontrado');
-  const animal: Animal = { ...currentRecord.data, ...cleanAnimal(updates), id, syncStatus: 'pending', syncError: undefined, localDeleted: false };
+  const currentAnimal = currentRecord?.userId === userId && currentRecord.entity === ENTITY
+    ? currentRecord.data
+    : baseAnimal;
+  if (!currentAnimal || currentAnimal.localDeleted) throw new Error('Animal não encontrado');
+  const animal: Animal = { ...currentAnimal, ...cleanAnimal(updates), id, syncStatus: 'pending', syncError: undefined, localDeleted: false };
   await saveOfflineRecordAndEnqueue(
     {
-      ...currentRecord, data: animal, updatedAt: new Date().toISOString(),
+      key: localRecordKey(userId, id),
+      userId,
+      entity: ENTITY,
+      entityId: id,
+      data: animal,
+      updatedAt: new Date().toISOString(),
     },
     { userId, entity: ENTITY, operation: 'update', payload: { id, updates: toUpdatePayload(updates) } },
   );
@@ -628,6 +659,100 @@ const remoteDeleteAnimal = async (id: string): Promise<void> => {
   if (error) throw error;
 };
 
+const MOTHER_TYPES: Animal['tipo_animal'][] = ['vaca', 'matriz', 'novilha', 'bezerra'];
+const isMotherCandidate = (animal: Animal, excludeId?: string): boolean => (
+  animal.id !== excludeId
+  && MOTHER_TYPES.includes(animal.tipo_animal)
+  && !['morto', 'vendido'].includes(animal.status)
+);
+
+const mergeAnimalsById = (remote: Animal[], local: Animal[]): Animal[] => {
+  const merged = new Map(remote.map((animal) => [animal.id, animal]));
+  local.forEach((animal) => {
+    if (hasLocalPendingWork(animal)) merged.set(animal.id, animal);
+  });
+  return Array.from(merged.values()).sort((left, right) => (right.createdAt || '').localeCompare(left.createdAt || ''));
+};
+
+export type AnimalRelationshipResult = {
+  data: Animal[];
+  source: 'remote' | 'local';
+  capturedAt?: string;
+};
+
+const searchMaeCandidates = async (userId: string, value: string, excludeId?: string): Promise<AnimalRelationshipResult> => {
+  const local = await readLocalAnimals(userId);
+  const search = sanitizeSearch(value).toLocaleLowerCase();
+  const localMatches = local.data.filter((animal) => isMotherCandidate(animal, excludeId)
+    && (!search || animal.brinco.toLocaleLowerCase().includes(search)));
+  if (!search || !isBrowserOnline()) return { data: localMatches, source: 'local', capturedAt: local.capturedAt };
+
+  try {
+    const batchSize = 500;
+    const remoteAnimals: Animal[] = [];
+    let offset = 0;
+    let total = 0;
+    do {
+      let query = supabase
+        .from('animais')
+        .select('*', { count: 'exact' })
+        .in('tipo_animal', MOTHER_TYPES)
+        .not('status', 'in', '(morto,vendido)')
+        .order('brinco', { ascending: true })
+        .range(offset, offset + batchSize - 1);
+      if (search) query = query.ilike('brinco', `%${search}%`);
+      const { data, count, error } = await withRemoteTimeout(query);
+      if (error) throw error;
+      const rows = (data ?? []) as unknown as AnimalDbRow[];
+      remoteAnimals.push(...rows.map(toAnimal).filter((animal) => isMotherCandidate(animal, excludeId)));
+      total = count ?? 0;
+      offset += rows.length;
+      if (rows.length === 0) break;
+    } while (offset < total);
+    await cacheOnlineAnimals(userId, remoteAnimals, false);
+    return { data: mergeAnimalsById(remoteAnimals, localMatches), source: 'remote' };
+  } catch (error) {
+    if (!isTransportError(error)) throw error;
+    return { data: localMatches, source: 'local', capturedAt: local.capturedAt };
+  }
+};
+
+const getChildrenByMother = async (userId: string, motherId: string): Promise<AnimalRelationshipResult> => {
+  const local = await readLocalAnimals(userId);
+  const localRecords = await listOfflineRecords<Animal>({ userId, entity: ENTITY });
+  const localChildren = local.data.filter((animal) => animal.mae_id === motherId);
+  const pendingChildrenWithAnotherMother = new Set(
+    localRecords
+      .filter((record) => hasLocalPendingWork(record.data) && (record.data.localDeleted || record.data.mae_id !== motherId))
+      .map((record) => record.entityId),
+  );
+  if (!isBrowserOnline()) return { data: localChildren, source: 'local', capturedAt: local.capturedAt };
+
+  try {
+    const batchSize = 500;
+    const remoteChildren: Animal[] = [];
+    let offset = 0;
+    let total = 0;
+    do {
+      const { data, count, error } = await withRemoteTimeout(
+        supabase.from('animais').select('*', { count: 'exact' }).eq('mae_id', motherId).order('data_nascimento', { ascending: false }).range(offset, offset + batchSize - 1),
+      );
+      if (error) throw error;
+      const rows = (data ?? []) as unknown as AnimalDbRow[];
+      remoteChildren.push(...rows.map(toAnimal));
+      total = count ?? 0;
+      offset += rows.length;
+      if (rows.length === 0) break;
+    } while (offset < total);
+    await cacheOnlineAnimals(userId, remoteChildren, false);
+    const visibleRemoteChildren = remoteChildren.filter((animal) => !pendingChildrenWithAnotherMother.has(animal.id));
+    return { data: mergeAnimalsById(visibleRemoteChildren, localChildren), source: 'remote' };
+  } catch (error) {
+    if (!isTransportError(error)) throw error;
+    return { data: localChildren, source: 'local', capturedAt: local.capturedAt };
+  }
+};
+
 export const animaisService = {
   getAll: async (filters?: { search?: string; sexo?: string; status?: string; categoria?: string; tipo?: string; pasto_id?: string; includeHistorico?: boolean; page?: number; limit?: number }): Promise<{ data: Animal[]; total: number; source: 'remote' | 'local'; capturedAt?: string }> => {
     const userId = await getCurrentUserId();
@@ -682,6 +807,14 @@ export const animaisService = {
     }
   },
 
+  searchMaeCandidates: (userId: string, value: string, excludeId?: string): Promise<AnimalRelationshipResult> => (
+    searchMaeCandidates(userId, value, excludeId)
+  ),
+
+  getChildrenByMother: (userId: string, motherId: string): Promise<AnimalRelationshipResult> => (
+    getChildrenByMother(userId, motherId)
+  ),
+
   getById: async (id: string): Promise<Animal | null> => {
     const userId = await getCurrentUserId();
     if (!userId) return null;
@@ -720,7 +853,7 @@ export const animaisService = {
     if (!current) throw new DomainValidationError('Animal não encontrado para edição.');
     const normalized = await normalizeAndValidateAnimal(userId, { ...current, ...updates } as AnimalCreateInput, id, current.brinco, current.mae_id, current.pai_id);
     const { id: _id, createdAt: _createdAt, status_sincronizacao: _status, ...normalizedUpdates } = normalized as Animal & { id?: string; createdAt?: string };
-    return queueLocalUpdate(userId, id, normalizedUpdates);
+    return queueLocalUpdate(userId, id, normalizedUpdates, current);
   },
 
   delete: async (userId: string, id: string): Promise<boolean> => {

@@ -5,6 +5,35 @@ import { useConnectivityStore } from '@/store/useConnectivityStore';
 import { animaisService, AnimalCreateInput, syncAnimais } from '../services/animaisService';
 import { Animal } from '../types/database';
 
+export const useMaeCandidates = (search: string, excludeId?: string) => {
+  const { session } = useAuth();
+  const userId = session?.user.id;
+  return useQuery({
+    queryKey: ['animais-maes', userId, search.trim().toLocaleLowerCase(), excludeId],
+    queryFn: () => {
+      if (!userId) throw new Error('Sua sessão expirou. Entre novamente.');
+      return animaisService.searchMaeCandidates(userId, search, excludeId);
+    },
+    enabled: Boolean(userId && search.trim()),
+    staleTime: 30_000,
+    refetchOnReconnect: true,
+  });
+};
+
+export const useAnimalChildren = (motherId?: string) => {
+  const { session } = useAuth();
+  const userId = session?.user.id;
+  return useQuery({
+    queryKey: ['animais-filhos', userId, motherId],
+    queryFn: () => {
+      if (!userId || !motherId) throw new Error('Mãe não informada.');
+      return animaisService.getChildrenByMother(userId, motherId);
+    },
+    enabled: Boolean(userId && motherId),
+    refetchOnReconnect: true,
+  });
+};
+
 type AnimalFilters = {
   search?: string;
   sexo?: string;
@@ -54,6 +83,8 @@ export const useAnimais = (filters?: AnimalFilters) => {
 
   const invalidateAnimalQueries = () => {
     void queryClient.invalidateQueries({ queryKey: ['animais', userId] });
+    void queryClient.invalidateQueries({ queryKey: ['animais-filhos', userId] });
+    void queryClient.invalidateQueries({ queryKey: ['animais-maes', userId] });
     void queryClient.invalidateQueries({ queryKey: ['lotes'] });
     void queryClient.invalidateQueries({ queryKey: ['pastagens'] });
     void queryClient.invalidateQueries({ queryKey: ['dashboard-summary'] });
@@ -121,6 +152,7 @@ export const useAnimais = (filters?: AnimalFilters) => {
     },
     onSuccess: (animal) => {
       updateLocalAnimalCache(animal);
+      invalidateAnimalQueries();
     },
   });
 
@@ -132,6 +164,7 @@ export const useAnimais = (filters?: AnimalFilters) => {
     },
     onSuccess: (animal) => {
       updateLocalAnimalCache(animal);
+      invalidateAnimalQueries();
     },
   });
 
@@ -143,6 +176,7 @@ export const useAnimais = (filters?: AnimalFilters) => {
     },
     onSuccess: (_, id) => {
       removeLocalAnimalFromCache(id);
+      invalidateAnimalQueries();
     },
   });
 

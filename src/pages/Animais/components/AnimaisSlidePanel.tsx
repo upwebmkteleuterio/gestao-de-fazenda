@@ -10,6 +10,8 @@ import { InseminacaoIcon } from '../../../components/InseminacaoIcon';
 import { Animal, TipoAnimal, CategoriaAnimal, StatusAnimal, SexoAnimal, RegistroToqueAno, TipoCobertura } from '../../../types/database';
 import { Tabs } from '../../../components/Tabs';
 import { isPlausibleAnimalWeight } from '@/services/domainValidation';
+import { useAnimalChildren } from '@/hooks/useAnimais';
+import { MaeSearchInput } from './MaeSearchInput';
 
 type MatrizTab = 'cobertas' | 'paridas' | 'solteiras' | 'toque';
 type Toast = (message: string, type?: 'success' | 'error' | 'info') => void;
@@ -38,15 +40,21 @@ interface AnimaisSlidePanelProps {
   showToast: Toast;
   animais?: Animal[];
   handleCreateFilho?: (maeId: string) => void;
+  handleOpenChild?: (animal: Animal) => void;
 }
 
 export const AnimaisSlidePanel: React.FC<AnimaisSlidePanelProps> = ({
   slideOpen, setSlideOpen, slideMode, setSlideMode, selectedAnimal, formData, setFormData,
   handleSave, matrizTab, setMatrizTab, novoToqueData, setNovoToqueData,
   novoToqueResultado, setNovoToqueResultado, novoToqueObs, setNovoToqueObs,
-  handleAddToque, handleRemoveToque, isSaving, calcularIdadeFormatada, showToast, animais = [], handleCreateFilho
+  handleAddToque, handleRemoveToque, isSaving, calcularIdadeFormatada, showToast, animais = [], handleCreateFilho, handleOpenChild
 }) => {
   const [idadeMode, setIdadeMode] = React.useState<'data' | 'meses'>('data');
+  const childrenParentId = slideMode === 'view' && selectedAnimal && ['vaca', 'matriz', 'novilha'].includes(selectedAnimal.tipo_animal)
+    ? selectedAnimal.id
+    : undefined;
+  const childrenQuery = useAnimalChildren(childrenParentId);
+  const children = childrenQuery.data?.data ?? [];
   const parentLabel = (reference?: string) => {
     if (!reference) return '';
     const parent = animais.find((animal) => animal.id === reference || animal.brinco === reference);
@@ -54,12 +62,6 @@ export const AnimaisSlidePanel: React.FC<AnimaisSlidePanelProps> = ({
   };
   return (
   <>
-    
-    <datalist id="maes-list">
-      {animais.filter((a) => ['vaca', 'matriz', 'novilha', 'bezerra'].includes(a.tipo_animal)).map((a) => (
-        <option key={a.brinco} value={a.brinco}>{a.brinco} ({a.raca || 'Sem raça'})</option>
-      ))}
-    </datalist>
     <datalist id="pais-list">
       {animais.filter((a) => ['touro', 'garrote'].includes(a.tipo_animal)).map((a) => (
         <option key={a.brinco} value={a.brinco}>{a.brinco} ({a.raca || 'Sem raça'})</option>
@@ -207,6 +209,43 @@ export const AnimaisSlidePanel: React.FC<AnimaisSlidePanelProps> = ({
                     <p className="text-[10px] text-gray-500 dark:text-gray-400 mt-0.5">Registro de nascimento oficial ABCZ</p>
                   </div>
                 </div>
+              </div>
+            )}
+
+            {childrenParentId && (
+              <div className="space-y-3 rounded-xl border border-amber-100 bg-amber-50/50 p-4 dark:border-amber-800/40 dark:bg-amber-950/20">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <h4 className="text-xs font-bold uppercase tracking-wide text-amber-800 dark:text-amber-300">Filhos vinculados</h4>
+                    <p className="text-[11px] text-gray-500 dark:text-gray-400">Relacionamento calculado pelo ID interno em mae_id.</p>
+                  </div>
+                  {children.length > 0 && <Badge variant="neutral">{children.length}</Badge>}
+                </div>
+                {childrenQuery.isLoading && <p className="text-xs text-gray-500 dark:text-gray-400">Carregando filhos...</p>}
+                {childrenQuery.isError && <p className="text-xs text-red-600 dark:text-red-400">Não foi possível carregar os filhos. Tente novamente.</p>}
+                {!childrenQuery.isLoading && !childrenQuery.isError && children.length === 0 && (
+                  <p className="rounded-lg border border-dashed border-amber-200 px-3 py-3 text-xs text-gray-500 dark:border-amber-800 dark:text-gray-400">Nenhum filho vinculado a esta mãe.</p>
+                )}
+                <div className="space-y-2">
+                  {children.map((child) => (
+                    <button
+                      key={child.id}
+                      type="button"
+                      onClick={() => handleOpenChild?.(child)}
+                      className="flex w-full items-center justify-between gap-3 rounded-lg border border-white bg-white px-3 py-2 text-left shadow-sm transition-colors hover:border-emerald-300 hover:bg-emerald-50 dark:border-gray-700 dark:bg-gray-800 dark:hover:border-emerald-700 dark:hover:bg-emerald-950/30"
+                    >
+                      <span className="min-w-0">
+                        <span className="block truncate text-sm font-bold text-gray-900 dark:text-gray-100">{child.brinco}</span>
+                        <span className="block text-xs capitalize text-gray-500 dark:text-gray-400">{child.tipo_animal} · {child.sexo === 'F' ? 'Fêmea' : 'Macho'} · Nascimento {new Date(`${child.data_nascimento}T00:00:00`).toLocaleDateString('pt-BR')}</span>
+                      </span>
+                      <span className="shrink-0 text-right text-[11px] text-gray-500 dark:text-gray-400">
+                        <span className="block">{calcularIdadeFormatada(child.data_nascimento)}</span>
+                        <span className="block">{child.raca || 'Raça N/I'}{child.peso_atual ? ` · ${child.peso_atual} kg` : ''}</span>
+                      </span>
+                    </button>
+                  ))}
+                </div>
+                {childrenQuery.data?.source === 'local' && <p className="text-[11px] text-amber-700 dark:text-amber-300">Exibindo filhos do cache local/offline.</p>}
               </div>
             )}
 
@@ -516,12 +555,11 @@ export const AnimaisSlidePanel: React.FC<AnimaisSlidePanelProps> = ({
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <Select
-                    label="Mãe (animal de referência)"
-                    id="mae_id"
-                    value={formData.mae_id || ''}
-                    onChange={(e) => setFormData({ ...formData, mae_id: e.target.value || undefined })}
-                    options={[{ label: 'Sem mãe informada', value: '' }, ...animais.filter((a) => ['vaca', 'matriz', 'novilha', 'bezerra'].includes(a.tipo_animal) && a.id !== selectedAnimal?.id).map((a) => ({ label: `${a.brinco} - ${a.tipo_animal}`, value: a.id }))]}
+                  <MaeSearchInput
+                    value={formData.mae_id}
+                    onChange={(maeId) => setFormData({ ...formData, mae_id: maeId })}
+                    excludeId={selectedAnimal?.id}
+                    availableAnimals={animais}
                   />
                   <Select
                     label="Pai (animal de referência)"
@@ -633,7 +671,7 @@ export const AnimaisSlidePanel: React.FC<AnimaisSlidePanelProps> = ({
                           }
                           setSlideOpen(false);
                           setTimeout(() => {
-                            if (handleCreateFilho) handleCreateFilho(formData.brinco || '');
+                            if (handleCreateFilho && selectedAnimal) handleCreateFilho(selectedAnimal.id);
                           }, 300);
                         }}
                       >
