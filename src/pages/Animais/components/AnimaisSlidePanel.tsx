@@ -12,6 +12,7 @@ import { Tabs } from '../../../components/Tabs';
 import { isPlausibleAnimalWeight } from '@/services/domainValidation';
 import { useAnimalChildren } from '@/hooks/useAnimais';
 import { MaeSearchInput } from './MaeSearchInput';
+import { AnimalAvatar } from './AnimalAvatar';
 
 type MatrizTab = 'cobertas' | 'paridas' | 'solteiras' | 'toque';
 type Toast = (message: string, type?: 'success' | 'error' | 'info') => void;
@@ -103,6 +104,7 @@ export const AnimaisSlidePanel: React.FC<AnimaisSlidePanelProps> = ({
         {/* MODO VISUALIZAÇÃO SOMENTE LEITURA */}
         {slideMode === 'view' && selectedAnimal ? (
           <div className="space-y-6">
+            <AnimalAvatar tipo={selectedAnimal.tipo_animal} />
             <div className="bg-emerald-50/70 dark:bg-emerald-950/40 p-4 rounded-xl border border-emerald-100 dark:border-emerald-800/50 flex justify-between items-center">
               <div>
                 <span className="text-xs uppercase font-bold text-emerald-600 dark:text-emerald-400">Identificação</span>
@@ -290,8 +292,12 @@ export const AnimaisSlidePanel: React.FC<AnimaisSlidePanelProps> = ({
           </div>
         ) : (
           /* MODO CADASTRO / EDIÇÃO FORMULÁRIO DINÂMICO */
-          <form onSubmit={handleSave} className="space-y-5">
-            {/* ROW 1: Tipo e Brinco */}
+          <>
+            <div className="mb-5">
+              <AnimalAvatar tipo={formData.tipo_animal} />
+            </div>
+            <form onSubmit={handleSave} className="space-y-5">
+              {/* ROW 1: Tipo e Brinco */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <Select
                 label="Tipo de Animal *"
@@ -859,6 +865,7 @@ export const AnimaisSlidePanel: React.FC<AnimaisSlidePanelProps> = ({
               />
             </div>
           </form>
+          </>
         )}
       </SlidePanel>
 
