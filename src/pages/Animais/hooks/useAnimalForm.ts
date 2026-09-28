@@ -10,7 +10,7 @@ const INITIAL_FORM_DATA: Partial<Animal> = {
   tipo_animal: 'vaca',
   sexo: 'F',
   raca: 'Nelore',
-  cor: 'Branca',
+  cor: '',
   data_nascimento: new Date().toISOString().split('T')[0],
   status: 'ativo',
   categoria: 'PO',
@@ -22,7 +22,7 @@ const INITIAL_FORM_DATA: Partial<Animal> = {
   touro_cobertura: '',
   tipo_cobertura: 'Monta Natural',
   observacoes: '',
-  peso_atual: 420,
+  peso_atual: 0,
 };
 
 export const useAnimalForm = () => {

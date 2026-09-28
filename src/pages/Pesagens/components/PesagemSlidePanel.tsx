@@ -35,23 +35,93 @@ export const PesagemSlidePanel: React.FC<PesagemSlidePanelProps> = ({
 }) => {
   const [animalSearch, setAnimalSearch] = React.useState('');
   const [loteSearch, setLoteSearch] = React.useState('');
+  const [animalDropdownOpen, setAnimalDropdownOpen] = React.useState(false);
+  const [loteDropdownOpen, setLoteDropdownOpen] = React.useState(false);
+  const animalComboboxRef = React.useRef<HTMLDivElement>(null);
+  const loteComboboxRef = React.useRef<HTMLDivElement>(null);
+  const selectedAnimal = animais.find((animal) => animal.id === formData.animal_id);
+  const selectedLote = lotes.find((lote) => lote.id === selectedLoteId);
+  const animalLabel = (animal: Animal) => `${animal.brinco} - ${animal.tipo_animal} (${animal.raca || 'Nelore'})`;
+  const loteLabel = (lote: Lote) => `${lote.nome} (${new Set(lote.animais_ids).size} animais)`;
   const filteredAnimais = animais.filter((animal) => {
     const query = animalSearch.trim().toLocaleLowerCase();
-    if (!query) return true;
-    return animal.brinco.toLocaleLowerCase().includes(query) || animal.id.toLocaleLowerCase().includes(query);
+    return !query || animalLabel(animal).toLocaleLowerCase().includes(query) || animal.id.toLocaleLowerCase().includes(query);
   });
   const filteredLotes = lotes.filter((lote) => {
     const query = loteSearch.trim().toLocaleLowerCase();
     return !query || lote.nome.toLocaleLowerCase().includes(query);
   });
-  const selectedAnimal = animais.find((animal) => animal.id === formData.animal_id);
-  const animaisParaSelecao = selectedAnimal && !filteredAnimais.some((animal) => animal.id === selectedAnimal.id)
-    ? [selectedAnimal, ...filteredAnimais]
-    : filteredAnimais;
+
+  React.useEffect(() => {
+    if (!animalDropdownOpen) setAnimalSearch(selectedAnimal ? animalLabel(selectedAnimal) : '');
+  }, [formData.animal_id, animais, animalDropdownOpen]);
+
+  React.useEffect(() => {
+    if (!loteDropdownOpen) setLoteSearch(selectedLote ? loteLabel(selectedLote) : '');
+  }, [selectedLoteId, lotes, loteDropdownOpen]);
+
+  React.useEffect(() => {
+    const handleOutsideClick = (event: MouseEvent) => {
+      const target = event.target as Node;
+      if (animalComboboxRef.current && !animalComboboxRef.current.contains(target)) setAnimalDropdownOpen(false);
+      if (loteComboboxRef.current && !loteComboboxRef.current.contains(target)) setLoteDropdownOpen(false);
+    };
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+      setAnimalDropdownOpen(false);
+      setLoteDropdownOpen(false);
+    };
+    document.addEventListener('mousedown', handleOutsideClick);
+    document.addEventListener('keydown', handleEscape);
+    return () => {
+      document.removeEventListener('mousedown', handleOutsideClick);
+      document.removeEventListener('keydown', handleEscape);
+    };
+  }, []);
+
+  React.useEffect(() => {
+    if (!slideOpen) {
+      setAnimalDropdownOpen(false);
+      setLoteDropdownOpen(false);
+    }
+  }, [slideOpen]);
+
+  React.useEffect(() => {
+    if (activeTabPanel === 'individual') setLoteDropdownOpen(false);
+    if (activeTabPanel === 'grupo') setAnimalDropdownOpen(false);
+  }, [activeTabPanel]);
+
+  const handleAnimalSearchChange = (value: string) => {
+    setAnimalSearch(value);
+    setAnimalDropdownOpen(true);
+    if (selectedAnimal && value !== animalLabel(selectedAnimal)) {
+      setFormData({ ...formData, animal_id: '', brinco_animal: '', tipo_animal: 'vaca' });
+    }
+  };
+
+  const handleAnimalChange = (animal: Animal) => {
+    setAnimalSearch(animalLabel(animal));
+    setAnimalDropdownOpen(false);
+    setFormData({
+      ...formData,
+      animal_id: animal.id,
+      brinco_animal: animal.brinco,
+      tipo_animal: animal.tipo_animal,
+    });
+  };
+
+  const handleLoteSearchChange = (value: string) => {
+    setLoteSearch(value);
+    setLoteDropdownOpen(true);
+    if (selectedLote && value !== loteLabel(selectedLote)) setSelectedLoteId('');
+  };
 
   const handleLoteChange = (loteId: string) => {
-    setSelectedLoteId(loteId);
     const lote = lotes.find((item) => item.id === loteId);
+    setSelectedLoteId(loteId);
+    setLoteSearch(lote ? loteLabel(lote) : '');
+    setLoteDropdownOpen(false);
+
     if (!lote) {
       setGrupoRows([
         { animal_id: '', brinco_animal: '', peso_kg: 0 },
@@ -258,34 +328,46 @@ export const PesagemSlidePanel: React.FC<PesagemSlidePanelProps> = ({
 
             {activeTabPanel === 'individual' ? (
               <div className="space-y-4 pt-2">
-                <Input
-                  label="Buscar animal por Brinco ou ID"
-                  id="animal_search"
-                  type="search"
-                  icon={Search}
-                  value={animalSearch}
-                  onChange={(e) => setAnimalSearch(e.target.value)}
-                  placeholder="Digite o brinco ou identificação..."
-                />
-                <Select
-                  label="Selecione o Animal (Brinco/ID)"
-                  id="animal_select"
-                  value={formData.animal_id || ''}
-                  onChange={(e) => {
-                    const selId = e.target.value;
-                    const found = animais.find(a => a.id === selId);
-                    setFormData({
-                      ...formData,
-                      animal_id: selId,
-                      brinco_animal: found?.brinco || '',
-                      tipo_animal: found?.tipo_animal || 'vaca',
-                    });
-                  }}
-                  options={animaisParaSelecao.map((animal) => ({
-                    label: `${animal.brinco} - ${animal.tipo_animal} (${animal.raca || 'Nelore'})`,
-                    value: animal.id,
-                  }))}
-                />
+                <div ref={animalComboboxRef} className="relative">
+                  <Input
+                    label="Animal (Brinco ou ID)"
+                    id="animal_combobox"
+                    type="search"
+                    icon={Search}
+                    value={animalSearch}
+                    onFocus={(e) => {
+                      e.currentTarget.select();
+                      setAnimalDropdownOpen(true);
+                    }}
+                    onClick={() => setAnimalDropdownOpen(true)}
+                    onChange={(e) => handleAnimalSearchChange(e.target.value)}
+                    placeholder="Digite para buscar um animal..."
+                    autoComplete="off"
+                    role="combobox"
+                    aria-expanded={animalDropdownOpen}
+                    aria-controls="animal-combobox-options"
+                    required
+                  />
+                  {animalDropdownOpen && (
+                    <div id="animal-combobox-options" role="listbox" className="absolute z-20 -mt-3 max-h-56 w-full overflow-y-auto rounded-xl border border-gray-200 bg-white p-1 shadow-lg dark:border-gray-700 dark:bg-gray-800">
+                      {filteredAnimais.length > 0 ? filteredAnimais.map((animal) => (
+                        <button
+                          key={animal.id}
+                          type="button"
+                          role="option"
+                          aria-selected={animal.id === formData.animal_id}
+                          className="flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm text-gray-700 hover:bg-emerald-50 dark:text-gray-200 dark:hover:bg-emerald-950/40"
+                          onClick={() => handleAnimalChange(animal)}
+                        >
+                          <span className="font-medium">{animalLabel(animal)}</span>
+                          <span className="ml-3 text-xs text-gray-500 dark:text-gray-400">ID: {animal.id}</span>
+                        </button>
+                      )) : (
+                        <p className="px-3 py-2 text-sm text-gray-500 dark:text-gray-400">Nenhum animal encontrado.</p>
+                      )}
+                    </div>
+                  )}
+                </div>
 
                 <Input
                   label="Data da Pesagem *"
@@ -313,31 +395,44 @@ export const PesagemSlidePanel: React.FC<PesagemSlidePanelProps> = ({
             ) : (
               /* MODO GRUPO */
               <div className="space-y-4 pt-2">
-                <div className="space-y-2 rounded-xl border border-emerald-100 bg-emerald-50/50 p-3 dark:border-emerald-900/40 dark:bg-emerald-950/20">
+                <div ref={loteComboboxRef} className="relative">
                   <Input
-                    label="Buscar lote existente"
-                    id="lote_search"
+                    label="Lote para carregar os animais"
+                    id="lote_combobox"
                     type="search"
                     icon={Search}
                     value={loteSearch}
-                    onChange={(e) => setLoteSearch(e.target.value)}
-                    placeholder="Digite o nome do lote..."
-                    noMargin
+                    onFocus={(e) => {
+                      e.currentTarget.select();
+                      setLoteDropdownOpen(true);
+                    }}
+                    onClick={() => setLoteDropdownOpen(true)}
+                    onChange={(e) => handleLoteSearchChange(e.target.value)}
+                    placeholder="Digite para buscar um lote..."
+                    autoComplete="off"
+                    role="combobox"
+                    aria-expanded={loteDropdownOpen}
+                    aria-controls="lote-combobox-options"
                   />
-                  <Select
-                    label="Selecionar lote para carregar os animais"
-                    id="lote_select"
-                    value={selectedLoteId}
-                    onChange={(e) => handleLoteChange(e.target.value)}
-                    options={[
-                      { label: 'Selecione um lote existente...', value: '' },
-                      ...filteredLotes.map((lote) => ({
-                        label: `${lote.nome} (${new Set(lote.animais_ids).size} animais)`,
-                        value: lote.id,
-                      })),
-                    ]}
-                    noMargin
-                  />
+                  {loteDropdownOpen && (
+                    <div id="lote-combobox-options" role="listbox" className="absolute z-20 -mt-3 max-h-56 w-full overflow-y-auto rounded-xl border border-gray-200 bg-white p-1 shadow-lg dark:border-gray-700 dark:bg-gray-800">
+                      {filteredLotes.length > 0 ? filteredLotes.map((lote) => (
+                        <button
+                          key={lote.id}
+                          type="button"
+                          role="option"
+                          aria-selected={lote.id === selectedLoteId}
+                          className="flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm text-gray-700 hover:bg-emerald-50 dark:text-gray-200 dark:hover:bg-emerald-950/40"
+                          onClick={() => handleLoteChange(lote.id)}
+                        >
+                          <span className="font-medium">{lote.nome}</span>
+                          <span className="ml-3 text-xs text-gray-500 dark:text-gray-400">{new Set(lote.animais_ids).size} animais</span>
+                        </button>
+                      )) : (
+                        <p className="px-3 py-2 text-sm text-gray-500 dark:text-gray-400">Nenhum lote encontrado.</p>
+                      )}
+                    </div>
+                  )}
                   <p className="text-xs text-gray-500 dark:text-gray-400">
                     Os animais vinculados ao lote serão carregados sem duplicidade.
                   </p>
