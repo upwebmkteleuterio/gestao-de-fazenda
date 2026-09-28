@@ -27,6 +27,7 @@ interface ReprodutivoTableProps {
   isOffline?: boolean;
   isError?: boolean;
   diagnostic?: ReproducaoDiagnostic;
+  filterValidationMessage?: string;
   onRetry?: () => void;
   onNovoEvento?: () => void;
   selectedIds: string[];
@@ -47,6 +48,7 @@ export const ReprodutivoTable: React.FC<ReprodutivoTableProps> = ({
   isOffline = false,
   isError,
   diagnostic,
+  filterValidationMessage,
   onRetry,
   onNovoEvento,
   selectedIds,
@@ -179,7 +181,14 @@ export const ReprodutivoTable: React.FC<ReprodutivoTableProps> = ({
 
   return (
     <Card title="Registros e Histórico de Eventos Reprodutivos">
-      {isLoading ? (
+      {filterValidationMessage ? (
+        <div className="p-6">
+          <ErrorState
+            title="Período personalizado inválido"
+            message={filterValidationMessage}
+          />
+        </div>
+      ) : isLoading ? (
         <div className="p-6 space-y-4">
           {[1, 2, 3, 4, 5].map((i) => (
             <div

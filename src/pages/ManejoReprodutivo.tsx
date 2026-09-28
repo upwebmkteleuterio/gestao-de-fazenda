@@ -26,10 +26,13 @@ export const ManejoReprodutivoPage: React.FC = () => {
     setSearch,
     protocolo,
     setProtocolo,
+    periodo,
+    handlePeriodoChange,
     dataInicio,
     setDataInicio,
     dataFim,
     setDataFim,
+    dateRangeError,
     page,
     setPage,
     totalEventos,
@@ -89,16 +92,11 @@ export const ManejoReprodutivoPage: React.FC = () => {
 
   useEffect(() => {
     if (!offline) return;
-    setSearch('');
-    setProtocolo('all');
-    setDataInicio('');
-    setDataFim('');
-    setPage(1);
     setSelectedEventoIds([]);
     setSlideOpen(false);
     setModalOpen(false);
     setEventoToDelete(null);
-  }, [offline, setSearch, setProtocolo, setDataInicio, setDataFim, setPage, setSelectedEventoIds, setSlideOpen, setModalOpen, setEventoToDelete]);
+  }, [offline, setSelectedEventoIds, setSlideOpen, setModalOpen, setEventoToDelete]);
 
   const handleRegistrarLote = () => {
     showToast(
@@ -129,10 +127,13 @@ export const ManejoReprodutivoPage: React.FC = () => {
         onSearchChange={setSearch}
         protocolo={protocolo}
         onProtocoloChange={setProtocolo}
+        periodo={periodo}
+        onPeriodoChange={handlePeriodoChange}
         dataInicio={dataInicio}
         onDataInicioChange={setDataInicio}
         dataFim={dataFim}
         onDataFimChange={setDataFim}
+        dateRangeError={dateRangeError}
         onClearFilters={handleClearFilters}
         hasActiveFilters={hasActiveFilters}
         disabled={offline}
@@ -148,6 +149,7 @@ export const ManejoReprodutivoPage: React.FC = () => {
         isOffline={offline}
         isError={isError}
         diagnostic={diagnostic}
+        filterValidationMessage={dateRangeError}
         onRetry={refetch}
         onNovoEvento={offline ? undefined : handleOpenCreate}
         selectedIds={selectedEventoIds}

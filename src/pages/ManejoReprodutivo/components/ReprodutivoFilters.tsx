@@ -4,16 +4,21 @@ import { Card } from '@/components/Card';
 import { Input } from '@/components/Input';
 import { Select } from '@/components/Select';
 import { Button } from '@/components/Button';
+import type { ReprodutivoPeriod } from '../hooks/useReproducaoTable';
+import { formatarDataBR } from '../utils/reproducaoUtils';
 
 interface ReprodutivoFiltersProps {
   search: string;
   onSearchChange: (value: string) => void;
   protocolo: string;
   onProtocoloChange: (value: string) => void;
+  periodo: ReprodutivoPeriod;
+  onPeriodoChange: (value: ReprodutivoPeriod) => void;
   dataInicio: string;
   onDataInicioChange: (value: string) => void;
   dataFim: string;
   onDataFimChange: (value: string) => void;
+  dateRangeError?: string;
   onClearFilters: () => void;
   hasActiveFilters: boolean;
   disabled?: boolean;
@@ -24,20 +29,21 @@ export const ReprodutivoFilters: React.FC<ReprodutivoFiltersProps> = ({
   onSearchChange,
   protocolo,
   onProtocoloChange,
+  periodo,
+  onPeriodoChange,
   dataInicio,
   onDataInicioChange,
   dataFim,
   onDataFimChange,
+  dateRangeError,
   onClearFilters,
   hasActiveFilters,
   disabled = false,
 }) => {
-  const dateRangeInvalid = Boolean(dataInicio && dataFim && dataInicio > dataFim);
-
   return (
     <Card>
       <div className="space-y-3">
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
           {/* Busca por Brinco da Matriz */}
           <div>
             <Input
@@ -71,34 +77,68 @@ export const ReprodutivoFilters: React.FC<ReprodutivoFiltersProps> = ({
             />
           </div>
 
-          {/* Filtro Período: De */}
+          {/* Seletor de período */}
           <div>
-            <Input
+            <Select
               noMargin
-              id="filter_data_inicio"
-              type="date"
-              label="Período De"
-              value={dataInicio}
-              onChange={(e) => onDataInicioChange(e.target.value)}
+              id="filter_periodo"
+              label="Período"
+              value={periodo}
+              onChange={(e) => onPeriodoChange(e.target.value as ReprodutivoPeriod)}
               disabled={disabled}
+              options={[
+                { label: 'Últimos 7 dias', value: '7' },
+                { label: 'Últimos 15 dias', value: '15' },
+                { label: 'Últimos 30 dias', value: '30' },
+                { label: 'Últimos 2 meses (60 dias)', value: '60' },
+                { label: 'Últimos 3 meses (90 dias)', value: '90' },
+                { label: 'Período personalizado', value: 'custom' },
+                { label: 'Todo o histórico', value: 'all' },
+              ]}
             />
           </div>
 
-          {/* Filtro Período: Até */}
-          <div>
-            <Input
-              noMargin
-              id="filter_data_fim"
-              type="date"
-              label="Período Até"
-              value={dataFim}
-              onChange={(e) => onDataFimChange(e.target.value)}
-              disabled={disabled}
-              error={dateRangeInvalid ? 'A data final deve ser igual ou posterior à data inicial.' : undefined}
-            />
-          </div>
+          {periodo === 'custom' ? (
+            <>
+              {/* Filtro Período: De */}
+              <div>
+                <Input
+                  noMargin
+                  id="filter_data_inicio"
+                  type="date"
+                  label="Período De"
+                  value={dataInicio}
+                  onChange={(e) => onDataInicioChange(e.target.value)}
+                  disabled={disabled}
+                />
+              </div>
+
+              {/* Filtro Período: Até */}
+              <div>
+                <Input
+                  noMargin
+                  id="filter_data_fim"
+                  type="date"
+                  label="Período Até"
+                  value={dataFim}
+                  onChange={(e) => onDataFimChange(e.target.value)}
+                  disabled={disabled}
+                  error={dateRangeError}
+                />
+              </div>
+            </>
+          ) : (
+            <div className="flex min-h-[68px] flex-col justify-end rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 dark:border-gray-700 dark:bg-gray-800/50">
+              <span className="text-xs font-medium text-gray-500 dark:text-gray-400">Período selecionado</span>
+              <span className="text-sm font-semibold text-gray-800 dark:text-gray-200">
+                {periodo === 'all'
+                  ? 'Todo o histórico'
+                  : `${formatarDataBR(dataInicio)} a ${formatarDataBR(dataFim)}`}
+              </span>
+            </div>
+          )}
         </div>
-        {dateRangeInvalid && (
+        {dateRangeError && (
           <p className="text-xs font-medium text-red-600 dark:text-red-400" role="alert">
             Ajuste o período para realizar a busca.
           </p>

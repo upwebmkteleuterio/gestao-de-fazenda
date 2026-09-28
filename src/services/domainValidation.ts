@@ -214,9 +214,11 @@ export const validateReportFilters = (filters: {
   limit?: number;
 }): void => {
   if (filters.dataEspecifica !== undefined && filters.dataEspecifica !== '' && !isValidDate(filters.dataEspecifica)) throw new DomainValidationError('Informe uma data específica válida.');
-  if (filters.dataInicio !== undefined || filters.dataFim !== undefined) {
-    if (!filters.dataInicio || !filters.dataFim) throw new DomainValidationError('Informe a data inicial e a data final do intervalo.');
-    validateDateRange(filters.dataInicio, filters.dataFim);
+  const hasDataInicio = Boolean(filters.dataInicio);
+  const hasDataFim = Boolean(filters.dataFim);
+  if (hasDataInicio || hasDataFim) {
+    if (!hasDataInicio || !hasDataFim) throw new DomainValidationError('Informe a data inicial e a data final do intervalo.');
+    validateDateRange(filters.dataInicio as string, filters.dataFim as string);
   }
   if (filters.touro !== undefined && filters.touro !== '' && filters.touro !== 'all' && !sanitizeReportSearch(filters.touro)) throw new DomainValidationError('Selecione um touro válido.');
   if (filters.protocolo !== undefined && !['all', 'iatf', 'monta_natural', 'tetf', 'dg'].includes(filters.protocolo)) throw new DomainValidationError('Selecione um protocolo válido.');
