@@ -74,6 +74,23 @@ const isNetworkError = (error: unknown): boolean => {
 
 const toNumber = (value: number | string): number => Number(value);
 
+type SupabasePersistenceError = {
+  message?: unknown;
+  details?: unknown;
+  hint?: unknown;
+  code?: unknown;
+};
+
+const withPersistenceError = (operation: string, error: unknown): Error => {
+  if (!(error instanceof Error)) return new Error(`${operation}: ${String(error)}`);
+  const details = error as Error & SupabasePersistenceError;
+  const parts = [details.message ?? error.message];
+  if (details.code) parts.push(`código ${String(details.code)}`);
+  if (details.details) parts.push(`detalhes: ${String(details.details)}`);
+  if (details.hint) parts.push(`orientação: ${String(details.hint)}`);
+  return new Error(`${operation}: ${parts.join(' · ')}`);
+};
+
 const legacyMedicamentos = (value: unknown): MedicamentoAplicado[] => {
   if (!Array.isArray(value)) return [];
   return value.map((medicamento) => {
@@ -458,36 +475,47 @@ export const sanitarioService = {
 
   create: async (item: Omit<ManejoSanitario, 'id' | 'createdAt' | 'status_sincronizacao'>): Promise<ManejoSanitario> => {
     if (!isBrowserOnline()) throw new Error('Ação indisponível offline.');
-    const id = `man-${crypto.randomUUID()}`;
-    const manejo: ManejoSanitario = { ...item, id, status_sincronizacao: false, createdAt: '' };
-    await validatePersistence(manejo);
-    const { error } = await supabase.from('manejos_sanitarios').insert({
-      id,
-      nome_lote: manejo.nome_lote,
-      data_manejo: manejo.data_manejo,
-      responsavel_tecnico: manejo.responsavel_tecnico,
-      tipo_manejo: manejo.tipo_manejo,
-      observacoes: manejo.observacoes ?? null,
-      status: manejo.status,
-      medicamentos: manejo.medicamentos,
-      animais_ids: manejo.animais_ids,
-      criar_lembrete: manejo.criar_lembrete ?? false,
-      data_lembrete: manejo.data_lembrete ?? null,
-      status_sincronizacao: false,
-    });
-    if (error) throw error;
-
     try {
-      await syncRelations(manejo);
-      if (manejo.status === 'concluido') await generateMovimentacoes(manejo);
-    } catch (createError) {
-      await removerMovimentacoesPorOrigem(id);
-      await supabase.from('manejos_sanitarios').delete().eq('id', id);
-      throw createError;
+      const id = `man-${crypto.randomUUID()}`;
+      const manejo: ManejoSanitario = { ...item, id, status_sincronizacao: false, createdAt: '' };
+      await validatePersistence(manejo);
+      const payload = {
+        id,
+        nome_lote: manejo.nome_lote.trim(),
+        data_manejo: manejo.data_manejo,
+        responsavel_tecnico: manejo.responsavel_tecnico.trim(),
+        tipo_manejo: manejo.tipo_manejo.trim(),
+        observacoes: manejo.observacoes?.trim() || null,
+        status: manejo.status,
+        medicamentos: manejo.medicamentos.map((medicamento) => ({
+          insumo_id: medicamento.insumo_id,
+          nome_produto: medicamento.nome_produto.trim(),
+          dose: medicamento.dose.trim(),
+          quantidade_total: medicamento.quantidade_total,
+        })),
+        animais_ids: [...manejo.animais_ids],
+        criar_lembrete: manejo.criar_lembrete ?? false,
+        data_lembrete: manejo.data_lembrete || null,
+        status_sincronizacao: false,
+      };
+      const { error } = await supabase.from('manejos_sanitarios').insert(payload);
+      if (error) throw error;
+
+      try {
+        await syncRelations(manejo);
+        if (manejo.status === 'concluido') await generateMovimentacoes(manejo);
+      } catch (createError) {
+        await removerMovimentacoesPorOrigem(id);
+        await supabase.from('manejos_sanitarios').delete().eq('id', id);
+        throw createError;
+      }
+      const created = await sanitarioService.getById(id);
+      if (!created) throw new Error('Manejo não encontrado');
+      return created;
+    } catch (error) {
+      if (error instanceof Error && error.name === 'DomainValidationError') throw error;
+      throw withPersistenceError('Não foi possível salvar o manejo sanitário', error);
     }
-    const created = await sanitarioService.getById(id);
-    if (!created) throw new Error('Manejo não encontrado');
-    return created;
   },
 
   update: async (id: string, updates: Partial<ManejoSanitario>): Promise<ManejoSanitario> => {

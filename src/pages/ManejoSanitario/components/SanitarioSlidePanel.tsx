@@ -56,14 +56,6 @@ const STANDARD_TIPOS_MANEJO = [
   'Vermifugação',
   'Tratamento',
   'Exames',
-  'Outro',
-];
-
-const SUGESTOES_MANEJO = [
-  'Vacinação',
-  'Vermifugação',
-  'Tratamento',
-  'Exames',
   'Castração',
   'Descorna',
   'Casqueamento',
@@ -221,11 +213,7 @@ export const SanitarioSlidePanel: React.FC<SanitarioSlidePanelProps> = ({
                             setFormData({ ...formData, tipo_manejo: val });
                           }}
                           options={[
-                            { label: 'Vacinação', value: 'Vacinação' },
-                            { label: 'Vermifugação', value: 'Vermifugação' },
-                            { label: 'Tratamento', value: 'Tratamento' },
-                            { label: 'Exames', value: 'Exames' },
-                            { label: 'Outro', value: 'Outro' },
+                            ...STANDARD_TIPOS_MANEJO.map((tipo) => ({ label: tipo, value: tipo })),
                             { label: '✏️ Digitar outro tipo manualmente...', value: '__manual__' },
                           ]}
                           noMargin
@@ -268,8 +256,8 @@ export const SanitarioSlidePanel: React.FC<SanitarioSlidePanelProps> = ({
                           noMargin
                         />
                         <datalist id="lista-sugestoes-tipo-manejo">
-                          {SUGESTOES_MANEJO.map((s, idx) => (
-                            <option key={idx} value={s} />
+                          {STANDARD_TIPOS_MANEJO.map((tipo, idx) => (
+                            <option key={idx} value={tipo} />
                           ))}
                         </datalist>
                       </div>

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Plus, Scale, Layers, Search, Edit, Trash2, Calendar, TrendingUp } from 'lucide-react';
+import { Plus, Scale, Search, Edit, Trash2, Calendar, TrendingUp } from 'lucide-react';
 import { Button } from '../../components/Button';
 import { Card } from '../../components/Card';
 import { Pagination } from '../../components/Pagination';
@@ -7,14 +7,11 @@ import { Table, Column } from '../../components/Table';
 import { Badge } from '../../components/Badge';
 import { Input } from '../../components/Input';
 import { Select } from '../../components/Select';
-import { SlidePanel } from '../../components/SlidePanel';
-import { Modal } from '../../components/Modal';
-import { Tabs } from '../../components/Tabs';
 import { EmptyState } from '../../components/EmptyState';
 import { ErrorState } from '../../components/ErrorState';
 import { usePesagens } from '../../hooks/usePesagens';
-import { useLotes } from '../../hooks/useLotes';
 import { useAnimais } from '../../hooks/useAnimais';
+import { useLotes } from '../../hooks/useLotes';
 import { useUIStore } from '../../store/useUIStore';
 import { useConnectivityStore } from '../../store/useConnectivityStore';
 import { SyncStatusIndicator, type SyncStatus } from '../../components/SyncStatusIndicator';
@@ -32,6 +29,7 @@ type PesagemRow = Pesagem & {
 export const PesagensPage: React.FC = () => {
   const { slidePanel, closeSlidePanel, showToast } = useUIStore();
   const { animais } = useAnimais();
+  const { lotes } = useLotes();
   const isOffline = useConnectivityStore((state) => state.status === 'offline');
 
   const [search, setSearch] = useState('');
@@ -49,12 +47,8 @@ export const PesagensPage: React.FC = () => {
     page,
     limit,
   });
-  const { createLote } = useLotes();
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   const isSaving = isSubmitting || isCreating || isCreatingGrupo || isUpdating;
-
-  // Seleção múltipla para Ação em Lote "Criar Lote de Animais"
-  const [selectedPesagemIds, setSelectedPesagemIds] = useState<string[]>([]);
 
   // Slide Panel state
   const [slideOpen, setSlideOpen] = useState(false);
@@ -76,15 +70,12 @@ export const PesagensPage: React.FC = () => {
     observacoes: '',
   });
 
-  // Modal Lote State
-  const [loteModalOpen, setLoteModalOpen] = useState(false);
-  const [loteName, setLoteName] = useState('');
-
   // State para Pesagem em Grupo
   const [grupoRows, setGrupoRows] = useState<{ animal_id: string; brinco_animal: string; peso_kg: number }[]>([
     { animal_id: '', brinco_animal: '', peso_kg: 0 },
     { animal_id: '', brinco_animal: '', peso_kg: 0 },
   ]);
+  const [selectedLoteId, setSelectedLoteId] = useState('');
 
   React.useEffect(() => {
     if (!isOffline) return;
@@ -108,6 +99,11 @@ export const PesagensPage: React.FC = () => {
     });
     setSlideMode('create');
     setActiveTabPanel('individual');
+    setSelectedLoteId('');
+    setGrupoRows([
+      { animal_id: '', brinco_animal: '', peso_kg: 0 },
+      { animal_id: '', brinco_animal: '', peso_kg: 0 },
+    ]);
     setSlideOpen(true);
   };
 
@@ -199,36 +195,6 @@ export const PesagensPage: React.FC = () => {
       setModalOpen(false);
     } catch (err) {
       showToast('Erro ao excluir pesagem.', 'error');
-    }
-  };
-
-  const handleCriarLoteComSelecionados = () => {
-    setLoteName('');
-    setLoteModalOpen(true);
-  };
-
-  const confirmarCriacaoLote = async () => {
-    if (!loteName.trim()) {
-      showToast('Por favor, informe o nome do Lote.', 'error');
-      return;
-    }
-    
-    const animalIds = selectedPesagemIds
-      .map(id => pesagens.find(p => p.id === id)?.animal_id)
-      .filter(Boolean) as string[];
-
-    try {
-      await createLote({ nome: loteName.trim(), animais_ids: animalIds });
-      if (animalIds.length > 0) {
-        showToast(`Lote "${loteName.trim()}" criado com ${animalIds.length} animais! Acesse Lotes & Retiros para gerenciá-lo.`, 'success');
-      } else {
-        showToast(`Lote "${loteName.trim()}" criado com sucesso!`, 'success');
-      }
-      setSelectedPesagemIds([]);
-      setLoteModalOpen(false);
-      setLoteName('');
-    } catch (e) {
-      showToast('Erro ao criar lote.', 'error');
     }
   };
 
@@ -336,24 +302,10 @@ export const PesagensPage: React.FC = () => {
         <div className="min-w-0 flex-1">
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white tracking-tight">Histórico de Pesagens</h1>
           <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-            Acompanhe o Ganho Médio Diário (GMD) e crie lotes a partir do peso do rebanho.
+            Acompanhe o Ganho Médio Diário (GMD) e registre o peso do rebanho.
           </p>
         </div>
-        <div className="flex items-center gap-3 shrink-0 flex-wrap sm:flex-nowrap">
-          <Button
-            id="btn-criar-lote-pesagens"
-            variant={selectedPesagemIds.length > 0 ? 'primary' : 'secondary'}
-            icon={Layers}
-            onClick={handleCriarLoteComSelecionados}
-            title={
-              selectedPesagemIds.length > 0
-                ? `Criar lote com as ${selectedPesagemIds.length} pesagens selecionadas`
-                : 'Criar novo lote de animais a partir de pesagens'
-            }
-            className={selectedPesagemIds.length > 0 ? 'ring-2 ring-emerald-500/40 shadow-sm' : ''}
-          >
-            {selectedPesagemIds.length > 0 ? `Criar Lote (${selectedPesagemIds.length})` : 'Criar Lote'}
-          </Button>
+        <div className="flex items-center gap-3 shrink-0">
           <Button variant="primary" icon={Plus} onClick={handleOpenCreate}>
             Nova Pesagem
           </Button>
@@ -458,18 +410,6 @@ export const PesagensPage: React.FC = () => {
                 setModalOpen(true);
               }
             }}
-            selectedIds={selectedPesagemIds}
-            onToggleSelect={(id) => {
-              if (selectedPesagemIds.includes(id)) {
-                setSelectedPesagemIds(selectedPesagemIds.filter(i => i !== id));
-              } else {
-                setSelectedPesagemIds([...selectedPesagemIds, id]);
-              }
-            }}
-            onSelectAll={() => {
-              if (selectedPesagemIds.length === pesagens.length) setSelectedPesagemIds([]);
-              else setSelectedPesagemIds(pesagens.map(p => p.id));
-            }}
           />
           {!isOffline && (
             <Pagination
@@ -484,37 +424,6 @@ export const PesagensPage: React.FC = () => {
         )}
       </Card>
 
-      {/* STICKY BATCH ACTION BAR (Barra Flutuante para Ações em Lote) */}
-      {selectedPesagemIds.length > 0 && (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-gray-900/95 dark:bg-gray-900/95 text-white border border-gray-700/80 shadow-2xl rounded-2xl p-4 flex flex-wrap items-center justify-between gap-4 backdrop-blur-md max-w-2xl w-11/12 animate-slide-up">
-          <div className="flex items-center space-x-3">
-            <span className="flex items-center justify-center w-7 h-7 rounded-full bg-emerald-500 text-gray-950 font-bold text-xs">
-              {selectedPesagemIds.length}
-            </span>
-            <span className="text-sm font-semibold text-gray-100">
-              {selectedPesagemIds.length === 1 ? '1 pesagem selecionada' : `${selectedPesagemIds.length} pesagens selecionadas`}
-            </span>
-          </div>
-
-          <div className="flex items-center space-x-2">
-            <Button
-              variant="primary"
-              icon={Layers}
-              onClick={handleCriarLoteComSelecionados}
-              className="bg-emerald-500 hover:bg-emerald-400 text-gray-950 font-bold px-3 py-1.5 text-xs"
-            >
-              Criar Lote ({selectedPesagemIds.length})
-            </Button>
-            <Button
-              variant="ghost"
-              onClick={() => setSelectedPesagemIds([])}
-              className="!bg-slate-800 hover:!bg-slate-700 !text-white hover:!text-white border border-slate-600 font-bold px-3.5 py-1.5 text-xs rounded-lg transition-all shadow-sm"
-            >
-              Desmarcar Todos
-            </Button>
-          </div>
-        </div>
-      )}
 
       {/* SLIDE PANEL (Tela 2.1 - Nova Pesagem) */}
       
@@ -533,6 +442,9 @@ export const PesagensPage: React.FC = () => {
         grupoRows={grupoRows}
         setGrupoRows={setGrupoRows}
         animais={animais}
+        lotes={lotes}
+        selectedLoteId={selectedLoteId}
+        setSelectedLoteId={setSelectedLoteId}
       />
       <PesagemModals
         modalOpen={modalOpen}
@@ -540,12 +452,6 @@ export const PesagensPage: React.FC = () => {
         pesagemToDelete={pesagemToDelete}
         handleDeleteConfirm={handleDeleteConfirm}
         isDeleting={isDeleting}
-        loteModalOpen={loteModalOpen}
-        setLoteModalOpen={setLoteModalOpen}
-        loteName={loteName}
-        setLoteName={setLoteName}
-        selectedPesagemIds={selectedPesagemIds}
-        confirmarCriacaoLote={confirmarCriacaoLote}
       />
 
     </div>

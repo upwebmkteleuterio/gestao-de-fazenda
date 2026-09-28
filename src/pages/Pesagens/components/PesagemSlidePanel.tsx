@@ -5,8 +5,8 @@ import { Select } from '../../../components/Select';
 import { Input } from '../../../components/Input';
 import { Button } from '../../../components/Button';
 import { Badge } from '../../../components/Badge';
-import { Plus, Edit, Trash2, Calendar, Scale, TrendingUp, ArrowRight, Info } from 'lucide-react';
-import { Pesagem, Animal } from '../../../types/database';
+import { Plus, Edit, Trash2, Calendar, Scale, TrendingUp, ArrowRight, Info, Search } from 'lucide-react';
+import { Pesagem, Animal, Lote } from '../../../types/database';
 
 interface PesagemSlidePanelProps {
   slideOpen: boolean;
@@ -23,13 +23,50 @@ interface PesagemSlidePanelProps {
   grupoRows: { animal_id: string; brinco_animal: string; peso_kg: number }[];
   setGrupoRows: (rows: { animal_id: string; brinco_animal: string; peso_kg: number }[]) => void;
   animais: Animal[];
+  lotes: Lote[];
+  selectedLoteId: string;
+  setSelectedLoteId: (id: string) => void;
 }
 
 export const PesagemSlidePanel: React.FC<PesagemSlidePanelProps> = ({
   slideOpen, setSlideOpen, slideMode, setSlideMode, selectedPesagem,
   formData, setFormData, isSaving, handleSave, activeTabPanel, setActiveTabPanel,
-  grupoRows, setGrupoRows, animais
+  grupoRows, setGrupoRows, animais, lotes, selectedLoteId, setSelectedLoteId
 }) => {
+  const [animalSearch, setAnimalSearch] = React.useState('');
+  const [loteSearch, setLoteSearch] = React.useState('');
+  const filteredAnimais = animais.filter((animal) => {
+    const query = animalSearch.trim().toLocaleLowerCase();
+    if (!query) return true;
+    return animal.brinco.toLocaleLowerCase().includes(query) || animal.id.toLocaleLowerCase().includes(query);
+  });
+  const filteredLotes = lotes.filter((lote) => {
+    const query = loteSearch.trim().toLocaleLowerCase();
+    return !query || lote.nome.toLocaleLowerCase().includes(query);
+  });
+  const selectedAnimal = animais.find((animal) => animal.id === formData.animal_id);
+  const animaisParaSelecao = selectedAnimal && !filteredAnimais.some((animal) => animal.id === selectedAnimal.id)
+    ? [selectedAnimal, ...filteredAnimais]
+    : filteredAnimais;
+
+  const handleLoteChange = (loteId: string) => {
+    setSelectedLoteId(loteId);
+    const lote = lotes.find((item) => item.id === loteId);
+    if (!lote) {
+      setGrupoRows([
+        { animal_id: '', brinco_animal: '', peso_kg: 0 },
+        { animal_id: '', brinco_animal: '', peso_kg: 0 },
+      ]);
+      return;
+    }
+    const uniqueAnimalIds = [...new Set(lote.animais_ids)];
+    const rows = uniqueAnimalIds
+      .map((animalId) => animais.find((animal) => animal.id === animalId))
+      .filter((animal): animal is Animal => Boolean(animal))
+      .map((animal) => ({ animal_id: animal.id, brinco_animal: animal.brinco, peso_kg: 0 }));
+    setGrupoRows(rows.length > 0 ? rows : [{ animal_id: '', brinco_animal: '', peso_kg: 0 }]);
+  };
+
   return (
     <SlidePanel
       isOpen={slideOpen}
@@ -221,6 +258,15 @@ export const PesagemSlidePanel: React.FC<PesagemSlidePanelProps> = ({
 
             {activeTabPanel === 'individual' ? (
               <div className="space-y-4 pt-2">
+                <Input
+                  label="Buscar animal por Brinco ou ID"
+                  id="animal_search"
+                  type="search"
+                  icon={Search}
+                  value={animalSearch}
+                  onChange={(e) => setAnimalSearch(e.target.value)}
+                  placeholder="Digite o brinco ou identificação..."
+                />
                 <Select
                   label="Selecione o Animal (Brinco/ID)"
                   id="animal_select"
@@ -235,9 +281,9 @@ export const PesagemSlidePanel: React.FC<PesagemSlidePanelProps> = ({
                       tipo_animal: found?.tipo_animal || 'vaca',
                     });
                   }}
-                  options={animais.map(a => ({
-                    label: `${a.brinco} - ${a.tipo_animal} (${a.raca || 'Nelore'})`,
-                    value: a.id,
+                  options={animaisParaSelecao.map((animal) => ({
+                    label: `${animal.brinco} - ${animal.tipo_animal} (${animal.raca || 'Nelore'})`,
+                    value: animal.id,
                   }))}
                 />
 
@@ -267,6 +313,35 @@ export const PesagemSlidePanel: React.FC<PesagemSlidePanelProps> = ({
             ) : (
               /* MODO GRUPO */
               <div className="space-y-4 pt-2">
+                <div className="space-y-2 rounded-xl border border-emerald-100 bg-emerald-50/50 p-3 dark:border-emerald-900/40 dark:bg-emerald-950/20">
+                  <Input
+                    label="Buscar lote existente"
+                    id="lote_search"
+                    type="search"
+                    icon={Search}
+                    value={loteSearch}
+                    onChange={(e) => setLoteSearch(e.target.value)}
+                    placeholder="Digite o nome do lote..."
+                    noMargin
+                  />
+                  <Select
+                    label="Selecionar lote para carregar os animais"
+                    id="lote_select"
+                    value={selectedLoteId}
+                    onChange={(e) => handleLoteChange(e.target.value)}
+                    options={[
+                      { label: 'Selecione um lote existente...', value: '' },
+                      ...filteredLotes.map((lote) => ({
+                        label: `${lote.nome} (${new Set(lote.animais_ids).size} animais)`,
+                        value: lote.id,
+                      })),
+                    ]}
+                    noMargin
+                  />
+                  <p className="text-xs text-gray-500 dark:text-gray-400">
+                    Os animais vinculados ao lote serão carregados sem duplicidade.
+                  </p>
+                </div>
                 <Input
                   label="Data da Pesagem em Grupo *"
                   id="data_grupo"
