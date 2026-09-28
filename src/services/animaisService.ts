@@ -739,7 +739,7 @@ const getChildrenByMother = async (userId: string, motherId: string): Promise<An
       );
       if (error) throw error;
       const rows = (data ?? []) as unknown as AnimalDbRow[];
-      remoteChildren.push(...rows.map(toAnimal));
+      remoteChildren.push(...await withRemoteTimeout(withNormalizedToques(rows)));
       total = count ?? 0;
       offset += rows.length;
       if (rows.length === 0) break;

@@ -40,6 +40,7 @@ interface AnimaisSlidePanelProps {
   calcularIdadeFormatada: (date: string) => string;
   showToast: Toast;
   animais?: Animal[];
+  pastagens?: Array<{ id: string; nome_pasto: string }>;
   handleCreateFilho?: (maeId: string) => void;
   handleOpenChild?: (animal: Animal) => void;
 }
@@ -48,7 +49,7 @@ export const AnimaisSlidePanel: React.FC<AnimaisSlidePanelProps> = ({
   slideOpen, setSlideOpen, slideMode, setSlideMode, selectedAnimal, formData, setFormData,
   handleSave, matrizTab, setMatrizTab, novoToqueData, setNovoToqueData,
   novoToqueResultado, setNovoToqueResultado, novoToqueObs, setNovoToqueObs,
-  handleAddToque, handleRemoveToque, isSaving, calcularIdadeFormatada, showToast, animais = [], handleCreateFilho, handleOpenChild
+  handleAddToque, handleRemoveToque, isSaving, calcularIdadeFormatada, showToast, animais = [], pastagens = [], handleCreateFilho, handleOpenChild
 }) => {
   const [idadeMode, setIdadeMode] = React.useState<'data' | 'meses'>('data');
   const childrenParentId = slideMode === 'view' && selectedAnimal && ['vaca', 'matriz', 'novilha'].includes(selectedAnimal.tipo_animal)
@@ -61,6 +62,8 @@ export const AnimaisSlidePanel: React.FC<AnimaisSlidePanelProps> = ({
     const parent = animais.find((animal) => animal.id === reference || animal.brinco === reference);
     return parent ? `${parent.brinco} (${parent.tipo_animal})` : `${reference} (referência legada)`;
   };
+  const pastureName = selectedAnimal?.pasto_nome
+    || pastagens.find((pastagem) => pastagem.id === selectedAnimal?.pasto_id)?.nome_pasto;
   return (
   <>
     <datalist id="pais-list">
@@ -131,6 +134,10 @@ export const AnimaisSlidePanel: React.FC<AnimaisSlidePanelProps> = ({
                 <p className="font-medium text-gray-800 dark:text-gray-200">{calcularIdadeFormatada(selectedAnimal.data_nascimento)}</p>
               </div>
               <div>
+                <p className="text-xs text-gray-400 uppercase font-semibold">Data de Nascimento</p>
+                <p className="font-medium text-gray-800 dark:text-gray-200">{new Date(`${selectedAnimal.data_nascimento}T00:00:00`).toLocaleDateString('pt-BR')}</p>
+              </div>
+              <div>
                 <p className="text-xs text-gray-400 uppercase font-semibold">Categoria</p>
                 <p className="font-medium text-gray-800 dark:text-gray-200">
                   {selectedAnimal.categoria === 'PA' && 'PA – Puro por Avaliação'}
@@ -144,10 +151,21 @@ export const AnimaisSlidePanel: React.FC<AnimaisSlidePanelProps> = ({
                 <p className="text-xs text-gray-400 uppercase font-semibold">Peso Atual</p>
                 <p className="font-medium text-gray-800 dark:text-gray-200">{selectedAnimal.peso_atual ? `${selectedAnimal.peso_atual} kg` : 'N/I'}</p>
               </div>
+              {pastureName && (
+                <div>
+                  <p className="text-xs text-gray-400 uppercase font-semibold">Pasto</p>
+                  <p className="font-medium text-gray-800 dark:text-gray-200">{pastureName}</p>
+                </div>
+              )}
               <div>
                 <p className="text-xs text-gray-400 uppercase font-semibold">Tipo de Reprodução</p>
                 <p className="font-medium text-gray-800 dark:text-gray-200 flex items-center gap-1.5">
-                  {selectedAnimal.tipo_cobertura === 'Inseminacao' || selectedAnimal.tipo_cobertura === 'Inseminação' ? (
+                  {selectedAnimal.tipo_cobertura === 'IATF' ? (
+                    <>
+                      <InseminacaoIcon className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                      IATF
+                    </>
+                  ) : selectedAnimal.tipo_cobertura === 'Inseminacao' || selectedAnimal.tipo_cobertura === 'Inseminação' ? (
                     <>
                       <InseminacaoIcon className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
                       Inseminação
@@ -182,6 +200,12 @@ export const AnimaisSlidePanel: React.FC<AnimaisSlidePanelProps> = ({
                 <div className="col-span-2 pt-2 border-t border-gray-100 dark:border-gray-700">
                   <p className="text-xs text-red-500 font-bold uppercase">Motivo do Descarte</p>
                   <p className="text-gray-700 dark:text-gray-300 font-medium">{selectedAnimal.motivo_descarte || 'Sem motivo informado'}</p>
+                  <p className="text-xs text-red-500 font-bold uppercase mt-2">Data do Descarte</p>
+                  <p className="text-gray-700 dark:text-gray-300 font-medium">
+                    {selectedAnimal.data_descarte
+                      ? new Date(`${selectedAnimal.data_descarte}T00:00:00`).toLocaleDateString('pt-BR')
+                      : 'Não informada'}
+                  </p>
                   <p className="text-xs text-gray-400 mt-1">
                     Histórico de descartes para este brinco: <span className="font-bold">{selectedAnimal.qtd_descartes_brinco || 1}</span>
                   </p>
@@ -251,7 +275,7 @@ export const AnimaisSlidePanel: React.FC<AnimaisSlidePanelProps> = ({
               </div>
             )}
 
-            {selectedAnimal.tipo_animal === 'matriz' && (
+            {['matriz', 'vaca', 'novilha'].includes(selectedAnimal.tipo_animal) && (
               <div className="bg-purple-50/50 dark:bg-purple-950/20 p-4 rounded-xl border border-purple-100 dark:border-purple-800/40 space-y-4">
                 <h4 className="text-xs font-bold text-purple-800 dark:text-purple-400 uppercase">Ficha Reprodutiva</h4>
                 <div className="grid grid-cols-2 gap-4 text-sm">
@@ -349,7 +373,7 @@ export const AnimaisSlidePanel: React.FC<AnimaisSlidePanelProps> = ({
                   id="opcao_inseminacao"
                   onClick={() => setFormData({ ...formData, tipo_cobertura: 'Inseminação' })}
                   className={`py-2.5 px-4 rounded-lg text-sm font-semibold border flex items-center justify-center gap-2.5 transition-all cursor-pointer ${
-                    formData.tipo_cobertura === 'Inseminação' || formData.tipo_cobertura === 'Inseminacao'
+                    formData.tipo_cobertura === 'Inseminação' || formData.tipo_cobertura === 'Inseminacao' || formData.tipo_cobertura === 'IATF'
                       ? 'bg-emerald-600 text-white border-emerald-600 shadow-sm ring-2 ring-emerald-500/20'
                       : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-700 hover:bg-emerald-50/40 dark:hover:bg-gray-700/60'
                   }`}
@@ -377,10 +401,15 @@ export const AnimaisSlidePanel: React.FC<AnimaisSlidePanelProps> = ({
               </div>
               <Select
                 id="tipo_cobertura"
-                value={formData.tipo_cobertura === 'Inseminação' || formData.tipo_cobertura === 'Inseminacao' ? 'Inseminação' : 'Monta Natural'}
+                value={formData.tipo_cobertura === 'IATF'
+                  ? 'IATF'
+                  : formData.tipo_cobertura === 'Inseminação' || formData.tipo_cobertura === 'Inseminacao'
+                    ? 'Inseminação'
+                    : 'Monta Natural'}
                 onChange={(e) => setFormData({ ...formData, tipo_cobertura: e.target.value as TipoCobertura })}
                 options={[
                   { label: '💉 Inseminação', value: 'Inseminação' },
+                  { label: '⏱️ IATF (Inseminação em Tempo Fixo)', value: 'IATF' },
                   { label: '🌿 Monta Natural (Touro & Vaca a Campo)', value: 'Monta Natural' },
                 ]}
                 noMargin
@@ -652,8 +681,8 @@ export const AnimaisSlidePanel: React.FC<AnimaisSlidePanelProps> = ({
                       ]}
                     />
                     <div className="flex justify-end pt-2">
-                      <Button type="button" variant="primary" className="text-xs py-1.5 px-3">
-                        Salvar Cobertura
+                      <Button type="submit" variant="primary" className="text-xs py-1.5 px-3" loading={isSaving}>
+                        Salvar Cobertura e Animal
                       </Button>
                     </div>
                   </div>

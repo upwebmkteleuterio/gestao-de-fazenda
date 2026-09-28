@@ -193,6 +193,7 @@ export const AnimaisPage: React.FC = () => {
       {/* SlidePanel de Criação / Edição / Ficha Técnica */}
       <AnimaisSlidePanel
         animais={todosAnimais}
+        pastagens={pastagens}
         handleCreateFilho={handleCreateFilho}
         handleOpenChild={handleOpenView}
         slideOpen={slideOpen}
