@@ -97,7 +97,7 @@ export const AnimaisPage: React.FC = () => {
     handleSave,
     handleDeleteConfirm,
     showToast,
-  } = useAnimalForm();
+  } = useAnimalForm(todosAnimais);
 
   return (
     <div className="space-y-6 animate-fade-in pb-12">

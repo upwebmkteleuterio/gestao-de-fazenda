@@ -12,6 +12,7 @@ const ANIMAL_AVATARS: Record<TipoAnimal, AnimalAvatarConfig> = {
   bezerra: { src: '/assets/animais/Bezerra.png', label: 'Bezerra' },
   bezerro: { src: '/assets/animais/Bezerro.png', label: 'Bezerro' },
   novilha: { src: '/assets/animais/Novilha.png', label: 'Novilha' },
+  novilho: { src: '/assets/animais/Garrote.png', label: 'Novilho' },
   garrote: { src: '/assets/animais/Garrote.png', label: 'Garrote' },
   matriz: { src: '/assets/animais/Vaca.png', label: 'Matriz (representada por Vaca)' },
 };

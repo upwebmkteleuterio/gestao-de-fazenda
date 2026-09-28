@@ -3,8 +3,10 @@ import { Animal } from '@/types/database';
 import { useAnimais } from '@/hooks/useAnimais';
 import { usePastagens } from '@/hooks/usePastagens';
 import { useUIStore } from '@/store/useUIStore';
+import { classifyAnimalType } from '@/services/animalClassification';
 import { isFutureDate, isValidDate, validateAnimalFields } from '@/services/domainValidation';
 
+const EMPTY_ANIMALS: Animal[] = [];
 const INITIAL_FORM_DATA: Partial<Animal> = {
   brinco: '',
   tipo_animal: 'vaca',
@@ -25,7 +27,7 @@ const INITIAL_FORM_DATA: Partial<Animal> = {
   peso_atual: 0,
 };
 
-export const useAnimalForm = () => {
+export const useAnimalForm = (animals: Animal[] = EMPTY_ANIMALS) => {
   const { slidePanel, closeSlidePanel, showToast } = useUIStore();
   const { pastagens } = usePastagens();
   const { createAnimal, updateAnimal, deleteAnimal, isDeleting, syncLocalMutation } = useAnimais();
@@ -45,6 +47,13 @@ export const useAnimalForm = () => {
   // Modal de exclusão
   const [modalOpen, setModalOpen] = useState(false);
   const [animalToDelete, setAnimalToDelete] = useState<Animal | null>(null);
+
+  useEffect(() => {
+    const tipoAnimal = classifyAnimalType(formData, animals);
+    if (tipoAnimal !== formData.tipo_animal) {
+      setFormData((previous) => ({ ...previous, tipo_animal: tipoAnimal }));
+    }
+  }, [animals, formData.data_nascimento, formData.filhos_ids, formData.mae_id, formData.sexo, formData.status_reprodutivo, formData.tipo_animal, formData.touro_cobertura]);
 
   const handleOpenCreate = (overrides?: Partial<Animal>) => {
     setSelectedAnimal(null);
@@ -152,8 +161,13 @@ export const useAnimalForm = () => {
   const handleSave = async (e: FormEvent) => {
     e.preventDefault();
     if (isSaving) return;
+    const classifiedFormData = {
+      ...formData,
+      tipo_animal: classifyAnimalType(formData, animals),
+    };
+    setFormData(classifiedFormData);
     try {
-      validateAnimalFields(formData);
+      validateAnimalFields(classifiedFormData);
     } catch (error) {
       showToast(error instanceof Error ? error.message : 'Confira os dados do animal.', 'error');
       return;
@@ -162,14 +176,14 @@ export const useAnimalForm = () => {
     setIsSaving(true);
     try {
       if (slideMode === 'create') {
-        await createAnimal(formData as Omit<Animal, 'id' | 'createdAt' | 'status_sincronizacao'>);
+        await createAnimal(classifiedFormData as Omit<Animal, 'id' | 'createdAt' | 'status_sincronizacao'>);
         setSlideOpen(false);
-        showToast(`Animal ${formData.brinco} cadastrado com sucesso!`);
+        showToast(`Animal ${classifiedFormData.brinco} cadastrado com sucesso!`);
         syncLocalMutation();
       } else if (slideMode === 'edit' && selectedAnimal) {
-        await updateAnimal({ id: selectedAnimal.id, updates: formData });
+        await updateAnimal({ id: selectedAnimal.id, updates: classifiedFormData });
         setSlideOpen(false);
-        showToast(`Animal ${formData.brinco} atualizado com sucesso!`);
+        showToast(`Animal ${classifiedFormData.brinco} atualizado com sucesso!`);
         syncLocalMutation();
       }
     } catch (error) {

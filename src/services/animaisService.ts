@@ -17,6 +17,7 @@ import {
 } from '@/offline/database';
 import { useConnectivityStore } from '@/store/useConnectivityStore';
 import { Animal, AnimalSyncStatus, RegistroToqueAno } from '@/types/database';
+import { classifyAnimalType, classifyAnimals } from './animalClassification';
 import { DomainValidationError, isValidParentRecord, validateAnimalFields } from './domainValidation';
 
 type AnimalDbRow = {
@@ -180,10 +181,11 @@ const withNormalizedToques = async (rows: AnimalDbRow[]): Promise<Animal[]> => {
     normalizedByAnimal.set(row.animal_id, records);
   });
 
-  return animals.map((animal) => {
+  const normalizedAnimals = animals.map((animal) => {
     const normalized = normalizedByAnimal.get(animal.id);
     return normalized && normalized.length > 0 ? { ...animal, historico_toque: normalized } : animal;
   });
+  return classifyAnimals(normalizedAnimals);
 };
 
 const syncNormalizedToques = async (animalId: string, brinco: string, historicoToque: RegistroToqueAno[] | null | undefined): Promise<void> => {
@@ -352,8 +354,16 @@ const normalizeAndValidateAnimal = async (
   originalMaeId?: string,
   originalPaiId?: string,
 ): Promise<AnimalCreateInput> => {
-  validateAnimalFields(input);
-  const brinco = input.brinco.trim();
+  const local = await readLocalAnimals(userId);
+  const context = currentId
+    ? local.data.map((animal) => animal.id === currentId ? { ...animal, ...input } : animal)
+    : [...local.data, input];
+  const classifiedInput: AnimalCreateInput = {
+    ...input,
+    tipo_animal: classifyAnimalType(input, context),
+  };
+  validateAnimalFields(classifiedInput);
+  const brinco = classifiedInput.brinco.trim();
   if ((!currentId || brinco !== originalBrinco?.trim()) && await findActiveBrincoConflict(userId, brinco, currentId)) {
     throw new DomainValidationError(`O ID/Brinco ${brinco} já está em uso por outro animal ativo. Os registros existentes foram preservados.`);
   }
@@ -365,19 +375,19 @@ const normalizeAndValidateAnimal = async (
     return parent.id;
   };
   return {
-    ...input,
+    ...classifiedInput,
     brinco,
-    raca: input.raca?.trim() || undefined,
-    cor: input.cor?.trim() || undefined,
-    cdc: input.cdc?.trim() || undefined,
-    cdn: input.cdn?.trim() || undefined,
-    touro_cobertura: input.touro_cobertura?.trim() || undefined,
-    observacoes: input.observacoes?.trim() || undefined,
-    motivo_descarte: input.motivo_descarte?.trim() || undefined,
-    data_descarte: input.data_descarte || undefined,
-    historico_toque: input.historico_toque?.map((toque) => ({ ...toque, brinco, observacoes: toque.observacoes?.trim() || undefined })),
-    mae_id: await normalizeParent(input.mae_id, 'mae', originalMaeId),
-    pai_id: await normalizeParent(input.pai_id, 'pai', originalPaiId),
+    raca: classifiedInput.raca?.trim() || undefined,
+    cor: classifiedInput.cor?.trim() || undefined,
+    cdc: classifiedInput.cdc?.trim() || undefined,
+    cdn: classifiedInput.cdn?.trim() || undefined,
+    touro_cobertura: classifiedInput.touro_cobertura?.trim() || undefined,
+    observacoes: classifiedInput.observacoes?.trim() || undefined,
+    motivo_descarte: classifiedInput.motivo_descarte?.trim() || undefined,
+    data_descarte: classifiedInput.data_descarte || undefined,
+    historico_toque: classifiedInput.historico_toque?.map((toque) => ({ ...toque, brinco, observacoes: toque.observacoes?.trim() || undefined })),
+    mae_id: await normalizeParent(classifiedInput.mae_id, 'mae', originalMaeId),
+    pai_id: await normalizeParent(classifiedInput.pai_id, 'pai', originalPaiId),
   };
 };
 
@@ -431,9 +441,9 @@ const syncLegacyChildren = async (animalId: string) => {
 
 const readLocalAnimals = async (userId: string): Promise<{ data: Animal[]; capturedAt?: string }> => {
   const records = await listOfflineRecords<Animal>({ userId, entity: ENTITY });
-  const data = records
+  const data = classifyAnimals(records
     .filter((record) => !record.data.localDeleted)
-    .map((record) => record.data);
+    .map((record) => record.data));
   const snapshot = await getOfflineSnapshot<Animal[]>(snapshotKey(userId));
   return { data, capturedAt: snapshot?.capturedAt };
 };
@@ -632,7 +642,16 @@ const remoteUpdateAnimal = async (id: string, updates: Partial<Animal>): Promise
   if (!currentData) throw new Error('Animal não encontrado');
   const current = (await withRemoteTimeout(withNormalizedToques([currentData as unknown as AnimalDbRow])))[0];
   if (!current) throw new Error('Animal não encontrado');
-  validateAnimalFields({ ...current, ...updates });
+  const classificationFields = ['sexo', 'data_nascimento', 'status_reprodutivo', 'touro_cobertura', 'filhos_ids', 'mae_id', 'tipo_animal'];
+  const shouldReclassify = classificationFields.some((field) => field in updates);
+  const next = {
+    ...current,
+    ...updates,
+    tipo_animal: shouldReclassify
+      ? classifyAnimalType({ ...current, ...updates }, Boolean(updates.filhos_ids?.length || current.filhos_ids?.length))
+      : current.tipo_animal,
+  };
+  validateAnimalFields(next);
   if (updates.brinco && updates.brinco !== current.brinco) {
     const currentUserId = await getCurrentUserId();
     if (!currentUserId || await findActiveBrincoConflict(currentUserId, updates.brinco, id)) throw new DomainValidationError(`O ID/Brinco ${updates.brinco} já está em uso por outro animal ativo. Os registros existentes foram preservados.`);
@@ -641,7 +660,8 @@ const remoteUpdateAnimal = async (id: string, updates: Partial<Animal>): Promise
   if (updates.status === 'descarte' && current.status !== 'descarte') {
     qtdDescartes = await withRemoteTimeout(getDiscardCount(updates.brinco || current.brinco)) + 1;
   }
-  const patch = buildAnimalPatch(updates);
+  const normalizedUpdates = { ...updates, tipo_animal: next.tipo_animal };
+  const patch = buildAnimalPatch(normalizedUpdates);
   patch.qtd_descartes_brinco = qtdDescartes;
   const { data, error } = await withRemoteTimeout(supabase.from('animais').update(patch).eq('id', id).select('*').single());
   if (error) throw error;
@@ -660,9 +680,9 @@ const remoteDeleteAnimal = async (id: string): Promise<void> => {
 };
 
 const MOTHER_TYPES: Animal['tipo_animal'][] = ['vaca', 'matriz', 'novilha', 'bezerra'];
-const isMotherCandidate = (animal: Animal, excludeId?: string): boolean => (
+const isMotherCandidate = (animal: Animal, excludeId?: string, animals: readonly Animal[] = [animal]): boolean => (
   animal.id !== excludeId
-  && MOTHER_TYPES.includes(animal.tipo_animal)
+  && MOTHER_TYPES.includes(classifyAnimalType(animal, animals))
   && !['morto', 'vendido'].includes(animal.status)
 );
 
@@ -683,7 +703,7 @@ export type AnimalRelationshipResult = {
 const searchMaeCandidates = async (userId: string, value: string, excludeId?: string): Promise<AnimalRelationshipResult> => {
   const local = await readLocalAnimals(userId);
   const search = sanitizeSearch(value).toLocaleLowerCase();
-  const localMatches = local.data.filter((animal) => isMotherCandidate(animal, excludeId)
+  const localMatches = local.data.filter((animal) => isMotherCandidate(animal, excludeId, local.data)
     && (!search || animal.brinco.toLocaleLowerCase().includes(search)));
   if (!search || !isBrowserOnline()) return { data: localMatches, source: 'local', capturedAt: local.capturedAt };
 
@@ -696,7 +716,6 @@ const searchMaeCandidates = async (userId: string, value: string, excludeId?: st
       let query = supabase
         .from('animais')
         .select('*', { count: 'exact' })
-        .in('tipo_animal', MOTHER_TYPES)
         .not('status', 'in', '(morto,vendido)')
         .order('brinco', { ascending: true })
         .range(offset, offset + batchSize - 1);
@@ -704,13 +723,18 @@ const searchMaeCandidates = async (userId: string, value: string, excludeId?: st
       const { data, count, error } = await withRemoteTimeout(query);
       if (error) throw error;
       const rows = (data ?? []) as unknown as AnimalDbRow[];
-      remoteAnimals.push(...rows.map(toAnimal).filter((animal) => isMotherCandidate(animal, excludeId)));
+      remoteAnimals.push(...rows.map(toAnimal));
       total = count ?? 0;
       offset += rows.length;
       if (rows.length === 0) break;
     } while (offset < total);
-    await cacheOnlineAnimals(userId, remoteAnimals, false);
-    return { data: mergeAnimalsById(remoteAnimals, localMatches), source: 'remote' };
+    const remoteIds = new Set(remoteAnimals.map((animal) => animal.id));
+    const derivedRemoteAnimals = classifyAnimals([
+      ...local.data.filter((animal) => !remoteIds.has(animal.id)),
+      ...remoteAnimals,
+    ]).filter((animal) => remoteIds.has(animal.id) && isMotherCandidate(animal, excludeId, [...local.data, ...remoteAnimals]));
+    await cacheOnlineAnimals(userId, derivedRemoteAnimals, false);
+    return { data: mergeAnimalsById(derivedRemoteAnimals, localMatches), source: 'remote' };
   } catch (error) {
     if (!isTransportError(error)) throw error;
     return { data: localMatches, source: 'local', capturedAt: local.capturedAt };
@@ -780,9 +804,15 @@ export const animaisService = {
       const { data, count, error } = await withRemoteTimeout(query);
       if (error) throw error;
       const rows = (data ?? []) as unknown as AnimalDbRow[];
-      const animals = filters?.includeHistorico === false
+      const fetchedAnimals = filters?.includeHistorico === false
         ? rows.map(toAnimal)
         : await withRemoteTimeout(withNormalizedToques(rows));
+      const localContext = await readLocalAnimals(userId);
+      const fetchedIds = new Set(fetchedAnimals.map((animal) => animal.id));
+      const animals = classifyAnimals([
+        ...localContext.data.filter((animal) => !fetchedIds.has(animal.id)),
+        ...fetchedAnimals,
+      ]).filter((animal) => fetchedIds.has(animal.id));
       const isCompleteCacheQuery = !filters?.search
         && (!filters?.sexo || filters.sexo === 'all')
         && (!filters?.status || filters.status === 'all')
@@ -819,15 +849,18 @@ export const animaisService = {
     const userId = await getCurrentUserId();
     if (!userId) return null;
     if (!isBrowserOnline()) {
-      const record = await getOfflineRecord<Animal>(localRecordKey(userId, id));
-      return record && record.userId === userId && record.entity === ENTITY && !record.data.localDeleted ? record.data : null;
+      const local = await readLocalAnimals(userId);
+      return local.data.find((animal) => animal.id === id) ?? null;
     }
     try {
       const { data, error } = await withRemoteTimeout(supabase.from('animais').select('*').eq('id', id).maybeSingle());
       if (error) throw error;
       if (!data) return null;
-      const [animal] = await withRemoteTimeout(withNormalizedToques([data as unknown as AnimalDbRow]));
-      if (!animal) return null;
+      const [fetchedAnimal] = await withRemoteTimeout(withNormalizedToques([data as unknown as AnimalDbRow]));
+      if (!fetchedAnimal) return null;
+      const local = await readLocalAnimals(userId);
+      const context = [...local.data.filter((item) => item.id !== fetchedAnimal.id), fetchedAnimal];
+      const animal = { ...fetchedAnimal, tipo_animal: classifyAnimalType(fetchedAnimal, context) };
       const { data: activeRows, error: activeError } = await withRemoteTimeout(supabase.from('animais').select('id, brinco').eq('status', 'ativo'));
       if (activeError) throw activeError;
       const outsidePage = ((activeRows ?? []) as Array<{ id: string; brinco: string }>)
@@ -835,8 +868,8 @@ export const animaisService = {
       return annotateBrincoConflicts([animal], outsidePage)[0];
     } catch (error) {
       if (!isTransportError(error)) throw error;
-      const record = await getOfflineRecord<Animal>(localRecordKey(userId, id));
-      return record && record.userId === userId && record.entity === ENTITY && !record.data.localDeleted ? record.data : null;
+      const local = await readLocalAnimals(userId);
+      return local.data.find((candidate) => candidate.id === id) ?? null;
     }
   },
 

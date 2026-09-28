@@ -51,6 +51,8 @@ export const AnimaisFilters: React.FC<AnimaisFiltersProps> = ({
           { label: 'Bezerro', value: 'bezerro' },
           { label: 'Novilha', value: 'novilha' },
           { label: 'Garrote', value: 'garrote' },
+          { label: 'Novilho', value: 'novilho' },
+          { label: 'Matriz', value: 'matriz' },
         ]}
       />
 

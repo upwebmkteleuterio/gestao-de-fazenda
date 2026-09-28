@@ -1,4 +1,5 @@
 import { Animal, EventoReproducao, Insumo, Lote, ManejoSanitario, MovimentacaoInsumo, Pastagem, Pesagem, ServicoPastagem, TipoAnimal, TransacaoFinanceira } from '@/types/database';
+import { calculateAnimalAgeMonths, classifyAnimalType } from './animalClassification';
 
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 const MAX_REPRODUCAO_TEXT_LENGTH = 200;
@@ -41,7 +42,7 @@ export const validateAnimalFields = (animal: Partial<Animal>): void => {
   if (!animal.categoria) throw new DomainValidationError('Selecione a categoria do animal.');
   if (!isValidDate(animal.data_nascimento)) throw new DomainValidationError('Informe uma data de nascimento válida.');
   if (isFutureDate(animal.data_nascimento)) throw new DomainValidationError('A data de nascimento não pode ser futura.');
-  const ageMonths = (Date.now() - new Date(`${animal.data_nascimento}T00:00:00`).getTime()) / (1000 * 60 * 60 * 24 * 30.4375);
+  const ageMonths = calculateAnimalAgeMonths(animal.data_nascimento);
   if (!Number.isFinite(ageMonths) || ageMonths < 0 || ageMonths > MAX_ANIMAL_AGE_MONTHS) throw new DomainValidationError('Informe uma idade entre 0 e 600 meses.');
   if (animal.data_descarte !== undefined && animal.data_descarte !== '') {
     if (!isValidDate(animal.data_descarte)) throw new DomainValidationError('Informe uma data de descarte válida.');
@@ -230,7 +231,7 @@ export const validateReportFilters = (filters: {
 
 export const parentTypes: Record<'mae' | 'pai', TipoAnimal[]> = {
   mae: ['vaca', 'matriz', 'novilha', 'bezerra'],
-  pai: ['touro', 'garrote', 'bezerro'],
+  pai: ['touro', 'novilho', 'garrote', 'bezerro'],
 };
 
 export const isPlausibleAnimalWeight = (peso: number): boolean => peso < 20 || peso > 1500;
@@ -238,13 +239,14 @@ export const isPlausiblePesagem = (peso: number): boolean => peso < 20 || peso >
 
 export const isValidAnimalReference = (reference: string, animals: Animal[], kind: 'mae' | 'pai', currentId?: string): boolean => {
   const animal = animals.find((candidate) => candidate.id === reference || candidate.brinco === reference);
-  return Boolean(animal && animal.id !== currentId && parentTypes[kind].includes(animal.tipo_animal) && animal.status !== 'morto' && animal.status !== 'vendido');
+  const derivedType = animal ? classifyAnimalType(animal, animals) : undefined;
+  return Boolean(animal && animal.id !== currentId && derivedType && parentTypes[kind].includes(derivedType) && animal.status !== 'morto' && animal.status !== 'vendido');
 };
 
 export const isValidParentRecord = (reference: string, animals: Animal[], kind: 'mae' | 'pai', currentId?: string): Animal | undefined => {
   const animal = animals.find((candidate) => candidate.id === reference || candidate.brinco === reference);
-  if (!animal || animal.id === currentId || !parentTypes[kind].includes(animal.tipo_animal) || ['morto', 'vendido'].includes(animal.status)) return undefined;
-  return animal;
+  if (!animal || animal.id === currentId || !parentTypes[kind].includes(classifyAnimalType(animal, animals)) || ['morto', 'vendido'].includes(animal.status)) return undefined;
+  return { ...animal, tipo_animal: classifyAnimalType(animal, animals) };
 };
 
 const validateOptionalDomainText = (value: unknown, label: string, maxLength = MAX_DOMAIN_TEXT_LENGTH): void => {

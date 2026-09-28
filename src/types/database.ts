@@ -1,6 +1,6 @@
 // Interfaces TypeScript para o Esquema do Banco de Dados (Supabase / PostgreSQL)
 
-export type TipoAnimal = 'vaca' | 'touro' | 'bezerra' | 'bezerro' | 'novilha' | 'garrote' | 'matriz';
+export type TipoAnimal = 'vaca' | 'touro' | 'bezerra' | 'bezerro' | 'novilha' | 'novilho' | 'garrote' | 'matriz';
 export type SexoAnimal = 'M' | 'F';
 export type StatusAnimal = 'ativo' | 'descarte' | 'morto' | 'vendido';
 export type CategoriaAnimal = 'PA' | 'PC' | 'PO' | 'CO';

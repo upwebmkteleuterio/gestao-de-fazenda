@@ -7,8 +7,9 @@ import { Badge } from '../../../components/Badge';
 import { Trash2, Syringe, Wheat, Activity, Calendar, AlertTriangle, CheckCircle2, X, Edit } from 'lucide-react';
 import { MontaNaturalIcon } from '../../../components/MontaNaturalIcon';
 import { InseminacaoIcon } from '../../../components/InseminacaoIcon';
-import { Animal, TipoAnimal, CategoriaAnimal, StatusAnimal, SexoAnimal, RegistroToqueAno, TipoCobertura } from '../../../types/database';
+import { Animal, CategoriaAnimal, StatusAnimal, SexoAnimal, RegistroToqueAno, TipoCobertura } from '../../../types/database';
 import { Tabs } from '../../../components/Tabs';
+import { animalTypeLabels } from '@/services/animalClassification';
 import { isPlausibleAnimalWeight } from '@/services/domainValidation';
 import { useAnimalChildren } from '@/hooks/useAnimais';
 import { MaeSearchInput } from './MaeSearchInput';
@@ -325,26 +326,13 @@ export const AnimaisSlidePanel: React.FC<AnimaisSlidePanelProps> = ({
               {/* ROW 1: Tipo e Brinco */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <Select
-                label="Tipo de Animal *"
-                id="tipo_animal"
-                value={formData.tipo_animal}
-                onChange={(e) => {
-                  const newTipo = e.target.value as TipoAnimal;
-                  const isFemea = ['vaca', 'bezerra', 'novilha', 'matriz'].includes(newTipo);
-                  const isMacho = ['touro', 'bezerro', 'garrote'].includes(newTipo);
-                  setFormData({
-                    ...formData,
-                    tipo_animal: newTipo,
-                    sexo: isFemea ? 'F' : isMacho ? 'M' : formData.sexo,
-                  });
-                }}
+                label="Sexo *"
+                id="sexo"
+                value={formData.sexo || 'F'}
+                onChange={(e) => setFormData({ ...formData, sexo: e.target.value as SexoAnimal })}
                 options={[
-                  { label: 'Vaca', value: 'vaca' },
-                  { label: 'Touro', value: 'touro' },
-                  { label: 'Bezerra', value: 'bezerra' },
-                  { label: 'Bezerro', value: 'bezerro' },
-                  { label: 'Novilha', value: 'novilha' },
-                  { label: 'Garrote', value: 'garrote' },
+                  { label: 'Fêmea', value: 'F' },
+                  { label: 'Macho', value: 'M' },
                 ]}
                 noMargin
               />
@@ -476,19 +464,17 @@ export const AnimaisSlidePanel: React.FC<AnimaisSlidePanelProps> = ({
               </div>
             </div>
             
-            {/* ROW 3: Sexo e Raça */}
+            {/* ROW 3: Classificação automática e Raça */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <Select
-                label="Sexo *"
-                id="sexo"
-                value={formData.sexo || 'F'}
-                onChange={(e) => setFormData({ ...formData, sexo: e.target.value as SexoAnimal })}
-                disabled={['vaca', 'touro', 'bezerra', 'bezerro', 'novilha', 'garrote', 'matriz'].includes(formData.tipo_animal as string)}
-                options={[
-                  { label: 'Fêmea', value: 'F' },
-                  { label: 'Macho', value: 'M' },
-                ]}
-              />
+              <div className="space-y-1.5">
+                <label htmlFor="tipo_animal_automatico" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                  Tipo de Animal (automático)
+                </label>
+                <div id="tipo_animal_automatico" className="flex min-h-[42px] items-center rounded-lg border border-gray-200 bg-gray-50 px-3 text-sm font-semibold text-gray-700 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-200" aria-live="polite">
+                  {animalTypeLabels[formData.tipo_animal || 'vaca']}
+                </div>
+                <p className="text-xs text-gray-500 dark:text-gray-400">Calculado pelo sexo, idade e informações reprodutivas.</p>
+              </div>
               <Input
                 label="Raça"
                 id="raca"
@@ -602,7 +588,7 @@ export const AnimaisSlidePanel: React.FC<AnimaisSlidePanelProps> = ({
                     id="pai_id"
                     value={formData.pai_id || ''}
                     onChange={(e) => setFormData({ ...formData, pai_id: e.target.value || undefined })}
-                    options={[{ label: 'Sem pai informado', value: '' }, ...animais.filter((a) => ['touro', 'garrote', 'bezerro'].includes(a.tipo_animal) && a.id !== selectedAnimal?.id).map((a) => ({ label: `${a.brinco} - ${a.tipo_animal}`, value: a.id }))]}
+                    options={[{ label: 'Sem pai informado', value: '' }, ...animais.filter((a) => ['touro', 'novilho', 'garrote', 'bezerro'].includes(a.tipo_animal) && a.id !== selectedAnimal?.id).map((a) => ({ label: `${a.brinco} - ${a.tipo_animal}`, value: a.id }))]}
                   />
                 </div>
 
