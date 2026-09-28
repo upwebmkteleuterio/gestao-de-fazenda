@@ -39,7 +39,7 @@ export const useReproducaoTable = () => {
     page,
     limit,
   }, {
-    useOfflineCache: true,
+    onlineOnly: true,
     enabled: !dateRangeInvalid,
   });
 

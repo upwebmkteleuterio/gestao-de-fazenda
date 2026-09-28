@@ -388,8 +388,15 @@ export const reproducaoService = {
     };
   },
 
-  getAll: async (filters?: ReproducaoReportFilters): Promise<ReproducaoQuery> => {
+  getAll: async (
+    filters?: ReproducaoReportFilters,
+    options?: { onlineOnly?: boolean },
+  ): Promise<ReproducaoQuery> => {
     validateReportFilters(filters ?? {});
+    const onlineOnly = options?.onlineOnly ?? false;
+    if (onlineOnly && !isBrowserOnline()) {
+      throw new Error('Conexão necessária para carregar o histórico reprodutivo.');
+    }
     const userId = await getCurrentUserId();
     if (!userId) return { data: [], total: 0, source: 'local' };
 
@@ -404,6 +411,7 @@ export const reproducaoService = {
       && filters.limit === PAGE_SIZE;
 
     if (!isBrowserOnline()) {
+      if (onlineOnly) throw new Error('Conexão necessária para carregar o histórico reprodutivo.');
       const local = await readLocalFirstPage(userId);
       return { data: local.data, total: local.data.length, source: 'local', capturedAt: local.capturedAt };
     }
@@ -438,11 +446,11 @@ export const reproducaoService = {
       const { data, count, error } = await query;
       if (error) throw error;
       const items = ((data ?? []) as unknown as ReproducaoDbRow[]).map(toEvento);
-      if (isFirstPage) await cacheFirstPageSafely(userId, items);
-      const capturedAt = await readCapturedAtSafely(userId);
+      if (isFirstPage && !onlineOnly) await cacheFirstPageSafely(userId, items);
+      const capturedAt = onlineOnly ? undefined : await readCapturedAtSafely(userId);
       return { data: items, total: count ?? items.length, source: 'remote', capturedAt };
     } catch (error) {
-      if (!isNetworkError(error)) throw error;
+      if (onlineOnly || !isNetworkError(error)) throw error;
       const local = await readLocalFirstPage(userId);
       return { data: local.data, total: local.data.length, source: 'local', capturedAt: local.capturedAt };
     }

@@ -188,8 +188,10 @@ export const ReprodutivoTable: React.FC<ReprodutivoTableProps> = ({
       ) : isError ? (
         <div className="p-6">
           <ErrorState
-            title="Erro ao carregar eventos reprodutivos"
-            message="Não foi possível sincronizar os registros de IATF, monta ou diagnóstico. Tente novamente."
+            title={isOffline ? 'Conexão necessária' : 'Erro ao carregar eventos reprodutivos'}
+            message={isOffline
+              ? 'O histórico reprodutivo exige uma conexão ativa. Verifique sua internet e tente novamente.'
+              : 'Não foi possível sincronizar os registros de IATF, monta ou diagnóstico. Tente novamente.'}
             onRetry={onRetry}
           />
         </div>

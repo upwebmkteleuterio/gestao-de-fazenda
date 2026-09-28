@@ -8,12 +8,14 @@ import { EventoReproducao } from '../types/database';
 type UseReproducaoOptions = {
   includeSummary?: boolean;
   useOfflineCache?: boolean;
+  onlineOnly?: boolean;
   enabled?: boolean;
 };
 
 export const useReproducao = (filters?: ReproducaoReportFilters, options?: UseReproducaoOptions) => {
   const includeSummary = options?.includeSummary ?? false;
   const useOfflineCache = options?.useOfflineCache ?? false;
+  const onlineOnly = options?.onlineOnly ?? false;
   const enabled = options?.enabled ?? true;
   const queryClient = useQueryClient();
   const { session } = useAuth();
@@ -23,9 +25,9 @@ export const useReproducao = (filters?: ReproducaoReportFilters, options?: UseRe
   const wasOffline = useRef(offline);
 
   const query = useQuery<ReproducaoQuery>({
-    queryKey: ['reproducao', userId, useOfflineCache, filters],
-    queryFn: () => reproducaoService.getAll(filters),
-    enabled: enabled && Boolean(userId) && (useOfflineCache || !offline),
+    queryKey: ['reproducao', userId, useOfflineCache, onlineOnly, filters],
+    queryFn: () => reproducaoService.getAll(filters, { onlineOnly }),
+    enabled: enabled && Boolean(userId) && (onlineOnly ? !offline : useOfflineCache || !offline),
   });
   const summaryQuery = useQuery({
     queryKey: ['reproducao-report-summary', userId, filters],
@@ -42,17 +44,23 @@ export const useReproducao = (filters?: ReproducaoReportFilters, options?: UseRe
   }, [connectivityStatus, offline, userId, includeSummary, query.refetch, summaryQuery.refetch]);
 
   const fetchAllEventos = useCallback(async () => {
-    if (offline && !useOfflineCache) throw new Error('Relatório indisponível offline.');
+    if (offline && (onlineOnly || !useOfflineCache)) throw new Error('Relatório indisponível offline.');
     const batchSize = 500;
-    const first = await reproducaoService.getAll({ ...filters, page: 1, limit: batchSize });
+    const first = await reproducaoService.getAll(
+      { ...filters, page: 1, limit: batchSize },
+      { onlineOnly },
+    );
     const batches = [first.data];
     for (let page = 2; (page - 1) * batchSize < first.total; page += 1) {
-      if (offline && !useOfflineCache) throw new Error('Relatório indisponível offline.');
-      const batch = await reproducaoService.getAll({ ...filters, page, limit: batchSize });
+      if (offline && (onlineOnly || !useOfflineCache)) throw new Error('Relatório indisponível offline.');
+      const batch = await reproducaoService.getAll(
+        { ...filters, page, limit: batchSize },
+        { onlineOnly },
+      );
       batches.push(batch.data);
     }
     return batches.flat();
-  }, [filters, offline, useOfflineCache]);
+  }, [filters, offline, onlineOnly, useOfflineCache]);
 
   const createMutation = useMutation({
     mutationFn: (item: Omit<EventoReproducao, 'id' | 'createdAt' | 'status_sincronizacao'>) => reproducaoService.create(item),
@@ -94,6 +102,9 @@ export const useReproducao = (filters?: ReproducaoReportFilters, options?: UseRe
   const showingLocalData = query.data?.source === 'local';
   const eventos = offline && (!useOfflineCache || !showingLocalData) ? [] : query.data?.data ?? [];
   const totalEventos = offline && (!useOfflineCache || !showingLocalData) ? 0 : query.data?.total ?? 0;
+  const offlineError = onlineOnly && offline
+    ? new Error('Conexão necessária para carregar o histórico reprodutivo.')
+    : undefined;
 
   return {
     eventos,
@@ -103,8 +114,8 @@ export const useReproducao = (filters?: ReproducaoReportFilters, options?: UseRe
     summary: summaryQuery.data,
     isOffline: offline,
     isLoading: query.isLoading || (!offline && summaryQuery.isLoading),
-    isError: query.isError || summaryQuery.isError,
-    error: query.error || summaryQuery.error,
+    isError: query.isError || summaryQuery.isError || Boolean(offlineError),
+    error: query.error || summaryQuery.error || offlineError,
     refetch: query.refetch,
     fetchAllEventos,
     createEvento: createMutation.mutateAsync,

@@ -33,8 +33,6 @@ export const ManejoReprodutivoPage: React.FC = () => {
     page,
     setPage,
     totalEventos,
-    source,
-    capturedAt,
     isOffline,
     eventos,
     isLoading,
@@ -114,13 +112,12 @@ export const ManejoReprodutivoPage: React.FC = () => {
       {/* Header com ações principais */}
       <ReprodutivoHeader onNovoRegistro={handleOpenCreate} novoRegistroDisabled={offline} />
 
-      {(offline || source === 'local' || capturedAt) && (
+      {offline && (
         <div className="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-200" role="status">
           <WifiOff className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
           <div>
-            <p className="font-semibold">{offline ? 'Modo offline: exibindo a primeira página em cache.' : 'Cache offline disponível para o histórico reprodutivo.'}</p>
-            <p className="mt-0.5 text-xs">A busca, os filtros e a paginação ficam disponíveis novamente quando a conexão for restaurada. Novo registro, edição, exclusão e registro em lote ficam indisponíveis offline.</p>
-            {capturedAt && <p className="mt-1 text-[11px] opacity-80">Cache atualizado em {new Date(capturedAt).toLocaleString('pt-BR')}</p>}
+            <p className="font-semibold">Conexão necessária para o histórico reprodutivo.</p>
+            <p className="mt-0.5 text-xs">Os registros são carregados somente enquanto houver conexão ativa. Verifique sua internet para consultar o histórico, usar filtros e paginação ou registrar eventos.</p>
           </div>
         </div>
       )}
