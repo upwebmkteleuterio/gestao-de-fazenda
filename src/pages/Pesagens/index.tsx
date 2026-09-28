@@ -148,6 +148,11 @@ export const PesagensPage: React.FC = () => {
           await createPesagem(formData as Omit<Pesagem, 'id' | 'createdAt' | 'status_sincronizacao'>);
           showToast(`Pesagem do animal ${formData.brinco_animal} salva com sucesso!`);
         } else {
+          const selectedLote = lotes.find((lote) => lote.id === selectedLoteId);
+          if (!selectedLote) {
+            showToast('Selecione um lote cadastrado para a pesagem em grupo.', 'error');
+            return;
+          }
           const filledRows = grupoRows.filter((row) => row.animal_id || row.brinco_animal || row.peso_kg > 0);
           const validGrupo = grupoRows.filter((row) => row.animal_id && row.brinco_animal && row.peso_kg > 0);
           if (validGrupo.length === 0 || validGrupo.length !== filledRows.length) {
@@ -164,6 +169,8 @@ export const PesagensPage: React.FC = () => {
             animal_id: row.animal_id,
             brinco_animal: row.brinco_animal,
             tipo_animal: (animais.find((animal) => animal.id === row.animal_id)?.tipo_animal || 'vaca') as Pesagem['tipo_animal'],
+            lote_id: selectedLote.id,
+            lote_nome: selectedLote.nome,
             peso_kg: row.peso_kg,
             data_pesagem: dataPesagem,
             observacoes: 'Pesagem registrada em grupo',
@@ -214,6 +221,12 @@ export const PesagensPage: React.FC = () => {
           {row.brinco_duplicado && <span className="text-[10px] font-semibold text-amber-700 dark:text-amber-300">Brinco duplicado · histórico separado por animal</span>}
         </div>
       ),
+    },
+    {
+      header: 'Lote',
+      render: (row) => row.lote_nome
+        ? <span className="text-xs font-semibold text-amber-700 dark:text-amber-300">{row.lote_nome}</span>
+        : <span className="text-xs text-gray-400">Individual</span>,
     },
     {
       header: '1ª Pesagem (Anterior)',
@@ -325,12 +338,12 @@ export const PesagensPage: React.FC = () => {
       <Card noPadding>
         <div className="p-4 border-b border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-800 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
           <Input
-            id="search-brinco"
+            id="search-brinco-lote"
             type="text"
             icon={Search}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Buscar por Brinco..." noMargin
+            placeholder="Buscar por Brinco ou Lote..." noMargin
             disabled={isOffline}
           />
 

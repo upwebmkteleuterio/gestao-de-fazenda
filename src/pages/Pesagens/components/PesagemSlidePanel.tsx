@@ -179,6 +179,7 @@ export const PesagemSlidePanel: React.FC<PesagemSlidePanelProps> = ({
                   </span>
                 </div>
                 <p className="font-bold text-gray-900 dark:text-white text-base">Brinco: {selectedPesagem.brinco_animal}</p>
+                {selectedPesagem.lote_nome && <p className="text-xs text-amber-700 dark:text-amber-300 mt-1">Lote: {selectedPesagem.lote_nome}</p>}
                 {selectedPesagem.brinco_duplicado && <p className="text-xs text-amber-700 dark:text-amber-300 mt-1">Brinco duplicado legado: este histórico permanece separado pelo animal_id.</p>}
               </div>
             </div>
@@ -397,7 +398,7 @@ export const PesagemSlidePanel: React.FC<PesagemSlidePanelProps> = ({
               <div className="space-y-4 pt-2">
                 <div ref={loteComboboxRef} className="relative">
                   <Input
-                    label="Lote para carregar os animais"
+                    label="Lote cadastrado *"
                     id="lote_combobox"
                     type="search"
                     icon={Search}
@@ -408,7 +409,7 @@ export const PesagemSlidePanel: React.FC<PesagemSlidePanelProps> = ({
                     }}
                     onClick={() => setLoteDropdownOpen(true)}
                     onChange={(e) => handleLoteSearchChange(e.target.value)}
-                    placeholder="Digite para buscar um lote..."
+                    placeholder="Selecione um lote para carregar os animais..."
                     autoComplete="off"
                     role="combobox"
                     aria-expanded={loteDropdownOpen}

@@ -449,6 +449,7 @@ export const InsumosPage: React.FC = () => {
                 { label: 'Suplemento / Sal', value: 'suplemento' },
                 { label: 'Ração', value: 'racao' },
                 { label: 'Defensivo / Herbicida', value: 'defensivo' },
+                { label: 'Outros', value: 'outros' },
               ]}
             />
           </div>

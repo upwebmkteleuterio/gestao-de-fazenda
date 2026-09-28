@@ -60,6 +60,8 @@ export interface Pesagem {
   animal_id: string;
   brinco_animal: string;
   tipo_animal?: TipoAnimal;
+  lote_id?: string;
+  lote_nome?: string;
   peso_kg: number;
   data_pesagem: string; // YYYY-MM-DD
   // Dados da 1ª pesagem (pesagem anterior) para comparação direta

@@ -19,6 +19,7 @@ import {
 } from '@/offline/database';
 import { useConnectivityStore } from '@/store/useConnectivityStore';
 import { animaisService, syncAnimais } from './animaisService';
+import { lotesService } from './lotesService';
 import { Animal, Pesagem } from '@/types/database';
 import { DomainValidationError, validatePesagemFields } from './domainValidation';
 
@@ -27,6 +28,8 @@ type PesagemDbRow = {
   animal_id: string;
   brinco_animal: string;
   tipo_animal: Pesagem['tipo_animal'] | null;
+  lote_id: string | null;
+  lote_nome: string | null;
   peso_kg: number | string;
   data_pesagem: string;
   peso_anterior: number | string | null;
@@ -60,12 +63,20 @@ const isBrowserOnline = () => (
   && useConnectivityStore.getState().status !== 'offline'
 );
 const getCurrentUserId = () => readCurrentUserId(isBrowserOnline());
+const sanitizeSearchForPostgrest = (value: string) => value
+  .trim()
+  .replace(/[\\,().:"']/g, ' ')
+  .replace(/[%_]/g, (character) => `\\${character}`)
+  .replace(/\s+/g, ' ')
+  .trim();
 
 const toPesagem = (row: PesagemDbRow): Pesagem => ({
   id: row.id,
   animal_id: row.animal_id,
   brinco_animal: row.brinco_animal,
   tipo_animal: row.tipo_animal ?? undefined,
+  lote_id: row.lote_id ?? undefined,
+  lote_nome: row.lote_nome ?? undefined,
   peso_kg: Number(row.peso_kg),
   data_pesagem: row.data_pesagem,
   peso_anterior: row.peso_anterior === null ? undefined : Number(row.peso_anterior),
@@ -84,6 +95,8 @@ const validateInput = (item: Partial<Pesagem>): PesagemInput => {
     animal_id: item.animal_id as string,
     brinco_animal: item.brinco_animal!.trim(),
     tipo_animal: item.tipo_animal,
+    lote_id: item.lote_id,
+    lote_nome: item.lote_nome?.trim() || undefined,
     peso_kg: item.peso_kg as number,
     data_pesagem: item.data_pesagem as string,
     observacoes: item.observacoes?.trim() || undefined,
@@ -121,6 +134,7 @@ const buildCreatePayload = (item: PesagemInput, id: string, calc: ReturnType<typ
   gmd_calculado: calc.gmd ?? null,
   dias_intervalo: calc.diasIntervalo ?? null,
   observacoes: item.observacoes ?? null,
+  ...(item.lote_id ? { lote_id: item.lote_id, lote_nome: item.lote_nome ?? null } : {}),
   status_sincronizacao: false,
 });
 
@@ -128,6 +142,8 @@ const toCreateItem = (item: LocalPesagem): PesagemInput => ({
   animal_id: item.animal_id,
   brinco_animal: item.brinco_animal,
   tipo_animal: item.tipo_animal,
+  lote_id: item.lote_id,
+  lote_nome: item.lote_nome,
   peso_kg: item.peso_kg,
   data_pesagem: item.data_pesagem,
   observacoes: item.observacoes,
@@ -147,12 +163,25 @@ const localRecord = (userId: string, item: LocalPesagem) => ({
   updatedAt: new Date().toISOString(),
 });
 
-const readLocalPage = async (userId: string) => {
+const matchesPesagemFilters = (item: Pesagem, filters?: { search?: string; tipoAnimal?: string; startDate?: string; endDate?: string }) => {
+  const search = filters?.search?.trim().toLocaleLowerCase();
+  const matchesSearch = !search
+    || item.brinco_animal.toLocaleLowerCase().includes(search)
+    || item.lote_nome?.toLocaleLowerCase().includes(search);
+  return Boolean(matchesSearch)
+    && (!filters?.tipoAnimal || filters.tipoAnimal === 'all' || item.tipo_animal === filters.tipoAnimal)
+    && (!filters?.startDate || item.data_pesagem >= filters.startDate)
+    && (!filters?.endDate || item.data_pesagem <= filters.endDate);
+};
+
+const readLocalPage = async (userId: string, filters?: { search?: string; tipoAnimal?: string; startDate?: string; endDate?: string }) => {
   const [records, snapshot] = await Promise.all([
     listOfflineRecords<LocalPesagem>({ userId, entity: ENTITY }),
     getOfflineSnapshot<Pesagem[]>(SNAPSHOT_KEY(userId)),
   ]);
-  const data = sortPesagens(records.filter((record) => !record.data.localDeleted).map((record) => record.data)).slice(0, PAGE_SIZE);
+  const data = sortPesagens(records
+    .filter((record) => !record.data.localDeleted && matchesPesagemFilters(record.data, filters))
+    .map((record) => record.data)).slice(0, PAGE_SIZE);
   return { data, capturedAt: snapshot?.capturedAt };
 };
 
@@ -202,6 +231,22 @@ const ensurePesagemReference = async (
     if (error) throw error;
     if (((data ?? []) as Array<{ id: string }>).some((row) => row.id !== exceptId)) throw new DomainValidationError('Já existe uma pesagem deste animal nesta data. Confira o histórico para evitar duplicidade.');
   }
+};
+
+const ensureGroupLote = async (userId: string, items: PesagemInput[]) => {
+  const loteIds = new Set(items.map((item) => item.lote_id).filter((id): id is string => Boolean(id)));
+  if (loteIds.size !== 1 || items.some((item) => !item.lote_id || !item.lote_nome)) {
+    throw new DomainValidationError('Selecione um lote cadastrado para a pesagem em grupo.');
+  }
+  const loteId = [...loteIds][0];
+  if (items.some((item) => item.lote_nome !== items[0].lote_nome)) {
+    throw new DomainValidationError('O lote selecionado deve ser o mesmo em todas as linhas.');
+  }
+  const lote = await lotesService.getById(userId, loteId);
+  if (!lote || lote.nome !== items[0].lote_nome) {
+    throw new DomainValidationError('O lote selecionado não foi encontrado. Selecione um lote cadastrado.');
+  }
+  return lote;
 };
 
 const annotatePesagens = async (items: Pesagem[]): Promise<Pesagem[]> => {
@@ -419,13 +464,14 @@ export const pesagensService = {
     const userId = await getCurrentUserId();
     if (!userId) return { data: [], total: 0, source: 'local' };
     if (!isBrowserOnline()) {
-      const local = await readLocalPage(userId);
+      const local = await readLocalPage(userId, filters);
       const data = await annotatePesagens(local.data);
       return { data, total: data.length, source: 'local', capturedAt: local.capturedAt };
     }
     try {
       let query = supabase.from('pesagens').select('*', { count: 'exact' });
-      if (filters?.search) query = query.ilike('brinco_animal', `%${filters.search}%`);
+      const search = filters?.search ? sanitizeSearchForPostgrest(filters.search) : '';
+      if (search) query = query.or(`brinco_animal.ilike.%${search}%,lote_nome.ilike.%${search}%`);
       if (filters?.tipoAnimal && filters.tipoAnimal !== 'all') query = query.eq('tipo_animal', filters.tipoAnimal);
       if (filters?.startDate) query = query.gte('data_pesagem', filters.startDate);
       if (filters?.endDate) query = query.lte('data_pesagem', filters.endDate);
@@ -437,7 +483,9 @@ export const pesagensService = {
       const itemsWithConflicts = await annotatePesagens(items);
       const isFirstPage = !filters?.search && (!filters?.tipoAnimal || filters.tipoAnimal === 'all') && !filters?.startDate && !filters?.endDate && filters?.page === 1 && filters.limit === PAGE_SIZE;
       if (isFirstPage) await cacheOnlinePage(userId, itemsWithConflicts);
-      const localPending = (await listOfflineRecords<LocalPesagem>({ userId, entity: ENTITY })).map((record) => record.data).filter((item) => item.syncStatus && item.syncStatus !== 'synced');
+      const localPending = (await listOfflineRecords<LocalPesagem>({ userId, entity: ENTITY }))
+        .map((record) => record.data)
+        .filter((item) => item.syncStatus && item.syncStatus !== 'synced' && matchesPesagemFilters(item, filters));
       const merged = new Map(itemsWithConflicts.map((item) => [item.id, item]));
       localPending.forEach((item) => { if (item.localDeleted) merged.delete(item.id); else if (item.data_pesagem) merged.set(item.id, item); });
       const mergedData = await annotatePesagens(sortPesagens([...merged.values()]));
@@ -445,7 +493,7 @@ export const pesagensService = {
     } catch (error) {
       const message = error instanceof Error ? error.message.toLowerCase() : '';
       if (!isBrowserOnline() || /network|fetch|offline|load failed|failed to fetch/.test(message)) {
-        const local = await readLocalPage(userId);
+        const local = await readLocalPage(userId, filters);
         const data = await annotatePesagens(local.data);
         return { data, total: data.length, source: 'local', capturedAt: local.capturedAt };
       }
@@ -462,7 +510,7 @@ export const pesagensService = {
   },
 
   getRecent: async (): Promise<Pesagem[]> => {
-    const { data, error } = await supabase.from('pesagens').select('id, animal_id, brinco_animal, tipo_animal, peso_kg, data_pesagem, peso_anterior, data_pesagem_anterior, ganho_peso_kg, gmd_calculado, dias_intervalo, observacoes, status_sincronizacao, created_at').order('data_pesagem', { ascending: false }).order('created_at', { ascending: false }).range(0, 4);
+    const { data, error } = await supabase.from('pesagens').select('id, animal_id, brinco_animal, tipo_animal, lote_id, lote_nome, peso_kg, data_pesagem, peso_anterior, data_pesagem_anterior, ganho_peso_kg, gmd_calculado, dias_intervalo, observacoes, status_sincronizacao, created_at').order('data_pesagem', { ascending: false }).order('created_at', { ascending: false }).range(0, 4);
     if (error) throw error;
     return ((data ?? []) as unknown as PesagemDbRow[]).map(toPesagem);
   },
@@ -491,6 +539,7 @@ export const pesagensService = {
     if (!userId) throw new Error('Sua sessão expirou. Entre novamente.');
     if (items.length === 0) throw new DomainValidationError('Informe ao menos um animal para a pesagem em grupo.');
     const validItems = items.map((item) => validateInput(item));
+    await ensureGroupLote(userId, validItems);
     const keys = new Set<string>();
     validItems.forEach((item) => {
       const key = `${item.animal_id}:${item.data_pesagem}`;

@@ -263,6 +263,7 @@ export const AnimaisSlidePanel: React.FC<AnimaisSlidePanelProps> = ({
                       <span className="min-w-0">
                         <span className="block truncate text-sm font-bold text-gray-900 dark:text-gray-100">{child.brinco}</span>
                         <span className="block text-xs capitalize text-gray-500 dark:text-gray-400">{child.tipo_animal} · {child.sexo === 'F' ? 'Fêmea' : 'Macho'} · Nascimento {new Date(`${child.data_nascimento}T00:00:00`).toLocaleDateString('pt-BR')}</span>
+                        <span className="block text-[11px] text-blue-700 dark:text-blue-300">CDC: {child.cdc || 'Não informado'} · CDN: {child.cdn || 'Não informado'}</span>
                       </span>
                       <span className="shrink-0 text-right text-[11px] text-gray-500 dark:text-gray-400">
                         <span className="block">{calcularIdadeFormatada(child.data_nascimento)}</span>
