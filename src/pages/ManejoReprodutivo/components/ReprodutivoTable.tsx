@@ -10,6 +10,7 @@ import {
 import { Card } from '@/components/Card';
 import { Table, Column } from '@/components/Table';
 import { Badge } from '@/components/Badge';
+import type { ReproducaoDiagnostic } from '@/hooks/useReproducao';
 import { Pagination } from '@/components/Pagination';
 import { EmptyState } from '@/components/EmptyState';
 import { ErrorState } from '@/components/ErrorState';
@@ -25,6 +26,7 @@ interface ReprodutivoTableProps {
   isLoading: boolean;
   isOffline?: boolean;
   isError?: boolean;
+  diagnostic?: ReproducaoDiagnostic;
   onRetry?: () => void;
   onNovoEvento?: () => void;
   selectedIds: string[];
@@ -44,6 +46,7 @@ export const ReprodutivoTable: React.FC<ReprodutivoTableProps> = ({
   isLoading,
   isOffline = false,
   isError,
+  diagnostic,
   onRetry,
   onNovoEvento,
   selectedIds,
@@ -194,6 +197,15 @@ export const ReprodutivoTable: React.FC<ReprodutivoTableProps> = ({
               : 'Não foi possível sincronizar os registros de IATF, monta ou diagnóstico. Tente novamente.'}
             onRetry={onRetry}
           />
+          {import.meta.env.DEV && diagnostic && (
+            <div className="mt-4 rounded-lg border border-dashed border-gray-300 bg-gray-50 p-3 text-left text-xs text-gray-600 dark:border-gray-700 dark:bg-gray-900/40 dark:text-gray-300" aria-label="Diagnóstico de consultas em desenvolvimento">
+              <p className="font-semibold text-gray-700 dark:text-gray-200">Diagnóstico (desenvolvimento)</p>
+              <p className="mt-1">Lista: status {diagnostic.list.status}, fetch {diagnostic.list.fetchStatus}, itens {diagnostic.list.itemCount}, total {diagnostic.list.total}, origem {diagnostic.list.source ?? 'nenhuma'}.</p>
+              <p>Resumo: solicitado {diagnostic.summary.requested ? 'sim' : 'não'}, status {diagnostic.summary.status}, fetch {diagnostic.summary.fetchStatus}.</p>
+              {diagnostic.list.error && <p>Erro da lista: {diagnostic.list.error.name}: {diagnostic.list.error.message}</p>}
+              {diagnostic.summary.error && <p>Erro do resumo: {diagnostic.summary.error.name}: {diagnostic.summary.error.message}</p>}
+            </div>
+          )}
         </div>
       ) : eventos.length === 0 ? (
         <div className="p-6">

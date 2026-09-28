@@ -37,6 +37,7 @@ export const ManejoReprodutivoPage: React.FC = () => {
     eventos,
     isLoading,
     isError,
+    diagnostic,
     refetch,
     selectedEventoIds,
     setSelectedEventoIds,
@@ -146,6 +147,7 @@ export const ManejoReprodutivoPage: React.FC = () => {
         isLoading={isLoading}
         isOffline={offline}
         isError={isError}
+        diagnostic={diagnostic}
         onRetry={refetch}
         onNovoEvento={offline ? undefined : handleOpenCreate}
         selectedIds={selectedEventoIds}

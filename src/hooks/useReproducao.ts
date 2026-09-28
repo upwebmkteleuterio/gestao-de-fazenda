@@ -12,6 +12,33 @@ type UseReproducaoOptions = {
   enabled?: boolean;
 };
 
+export type ReproducaoDiagnostic = {
+  list: {
+    status: string;
+    fetchStatus: string;
+    itemCount: number;
+    total: number;
+    source: ReproducaoQuery['source'] | null;
+    error: { name: string; message: string } | null;
+  };
+  summary: {
+    requested: boolean;
+    status: string;
+    fetchStatus: string;
+    error: { name: string; message: string } | null;
+  };
+};
+
+const getDiagnosticError = (error: unknown) => {
+  if (!error || typeof error !== 'object') return null;
+  const candidate = error as { name?: unknown; message?: unknown };
+  if (typeof candidate.name !== 'string' && typeof candidate.message !== 'string') return null;
+  return {
+    name: typeof candidate.name === 'string' ? candidate.name : 'Error',
+    message: typeof candidate.message === 'string' ? candidate.message : 'A consulta falhou.',
+  };
+};
+
 export const useReproducao = (filters?: ReproducaoReportFilters, options?: UseReproducaoOptions) => {
   const includeSummary = options?.includeSummary ?? false;
   const useOfflineCache = options?.useOfflineCache ?? false;
@@ -34,14 +61,19 @@ export const useReproducao = (filters?: ReproducaoReportFilters, options?: UseRe
     queryFn: () => reproducaoService.getReportSummary(filters),
     enabled: enabled && includeSummary && Boolean(userId) && !offline,
   });
+  const refetch = useCallback(async () => {
+    await Promise.all([
+      query.refetch(),
+      includeSummary ? summaryQuery.refetch() : Promise.resolve(),
+    ]);
+  }, [includeSummary, query.refetch, summaryQuery.refetch]);
 
   useEffect(() => {
     if (connectivityStatus === 'online' && wasOffline.current && userId) {
-      void query.refetch();
-      if (includeSummary) void summaryQuery.refetch();
+      void refetch();
     }
     wasOffline.current = offline;
-  }, [connectivityStatus, offline, userId, includeSummary, query.refetch, summaryQuery.refetch]);
+  }, [connectivityStatus, offline, userId, refetch]);
 
   const fetchAllEventos = useCallback(async () => {
     if (offline && (onlineOnly || !useOfflineCache)) throw new Error('Relatório indisponível offline.');
@@ -105,18 +137,36 @@ export const useReproducao = (filters?: ReproducaoReportFilters, options?: UseRe
   const offlineError = onlineOnly && offline
     ? new Error('Conexão necessária para carregar o histórico reprodutivo.')
     : undefined;
+  const source = query.data?.source ?? null;
+  const diagnostic: ReproducaoDiagnostic = {
+    list: {
+      status: query.status,
+      fetchStatus: query.fetchStatus,
+      itemCount: query.data?.data.length ?? 0,
+      total: query.data?.total ?? 0,
+      source,
+      error: getDiagnosticError(query.error),
+    },
+    summary: {
+      requested: includeSummary,
+      status: includeSummary ? summaryQuery.status : 'disabled',
+      fetchStatus: includeSummary ? summaryQuery.fetchStatus : 'idle',
+      error: includeSummary ? getDiagnosticError(summaryQuery.error) : null,
+    },
+  };
 
   return {
     eventos,
     totalEventos,
-    source: query.data?.source ?? null,
+    source,
     capturedAt: query.data?.capturedAt,
     summary: summaryQuery.data,
     isOffline: offline,
-    isLoading: query.isLoading || (!offline && summaryQuery.isLoading),
-    isError: query.isError || summaryQuery.isError || Boolean(offlineError),
-    error: query.error || summaryQuery.error || offlineError,
-    refetch: query.refetch,
+    isLoading: query.isLoading || (includeSummary && !offline && summaryQuery.isLoading),
+    isError: query.isError || (includeSummary && summaryQuery.isError) || Boolean(offlineError),
+    error: query.error || (includeSummary ? summaryQuery.error : undefined) || offlineError,
+    diagnostic,
+    refetch,
     fetchAllEventos,
     createEvento: createMutation.mutateAsync,
     createEventosBatch: createBatchMutation.mutateAsync,
