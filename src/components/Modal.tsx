@@ -8,7 +8,6 @@ export interface ModalProps {
   title: string;
   children: React.ReactNode;
   actions?: React.ReactNode;
-  contentOverflowVisible?: boolean;
 }
 
 export const Modal: React.FC<ModalProps> = ({
@@ -17,7 +16,6 @@ export const Modal: React.FC<ModalProps> = ({
   title,
   children,
   actions,
-  contentOverflowVisible = false,
 }) => {
   const [shouldRender, setShouldRender] = useState(isOpen);
   const [isVisible, setIsVisible] = useState(false);
@@ -52,13 +50,11 @@ export const Modal: React.FC<ModalProps> = ({
 
         {/* Modal Box */}
         <div
-          className={`inline-block align-bottom bg-white dark:bg-gray-900 rounded-xl text-left shadow-2xl transform transition-all duration-200 ease-out sm:my-8 sm:align-middle sm:max-w-lg sm:w-full border border-gray-100 dark:border-gray-800 relative z-[10000] ${
-            contentOverflowVisible ? 'overflow-visible' : 'overflow-hidden'
-          } ${
+          className={`inline-block align-bottom bg-white dark:bg-gray-900 rounded-xl text-left shadow-2xl transform transition-all duration-200 ease-out sm:my-8 sm:align-middle sm:max-w-lg sm:w-full border border-gray-100 dark:border-gray-800 relative z-[10000] overflow-hidden ${
             isVisible ? 'opacity-100 translate-y-0 sm:scale-100' : 'opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95'
           }`}
         >
-          <div className={`bg-white dark:bg-gray-900 px-6 pt-6 pb-4 relative ${contentOverflowVisible ? 'overflow-visible' : 'overflow-hidden'}`}>
+          <div className="bg-white dark:bg-gray-900 px-6 pt-6 pb-4 relative overflow-hidden">
             <div className="absolute -top-10 -right-10 w-32 h-32 bg-gray-100 dark:bg-gray-800 rounded-full opacity-50 pointer-events-none" />
 
             <div className="relative z-10">

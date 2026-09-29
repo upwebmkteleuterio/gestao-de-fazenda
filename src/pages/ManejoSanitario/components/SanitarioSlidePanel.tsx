@@ -172,7 +172,12 @@ export const SanitarioSlidePanel: React.FC<SanitarioSlidePanelProps> = ({
                   <div className="flex items-center space-x-1 text-xs bg-gray-100 dark:bg-gray-800 p-0.5 rounded-lg border border-gray-200 dark:border-gray-700">
                     <button
                       type="button"
-                      onClick={() => setModoManualTipo(false)}
+                      onClick={() => {
+                        setModoManualTipo(false);
+                        if (!STANDARD_TIPOS_MANEJO.includes(formData.tipo_manejo)) {
+                          setFormData({ ...formData, tipo_manejo: 'Vacinação' });
+                        }
+                      }}
                       className={`px-2.5 py-1 rounded-md font-semibold transition-all flex items-center space-x-1 cursor-pointer ${
                         !modoManualTipo
                           ? 'bg-emerald-600 text-white shadow-xs'
@@ -198,109 +203,31 @@ export const SanitarioSlidePanel: React.FC<SanitarioSlidePanelProps> = ({
                 </div>
 
                 {!modoManualTipo ? (
-                  <div className="space-y-1.5">
-                    <div className="space-y-2">
-                      <div className="w-full">
-                        <Select
-                          id="tipo_manejo_select"
-                          value={STANDARD_TIPOS_MANEJO.includes(formData.tipo_manejo) ? formData.tipo_manejo : '__manual__'}
-                          onChange={(e) => {
-                            const val = e.target.value;
-                            if (val === '__manual__') {
-                              setModoManualTipo(true);
-                              return;
-                            }
-                            setFormData({ ...formData, tipo_manejo: val });
-                          }}
-                          options={[
-                            ...STANDARD_TIPOS_MANEJO.map((tipo) => ({ label: tipo, value: tipo })),
-                            { label: '✏️ Digitar outro tipo manualmente...', value: '__manual__' },
-                          ]}
-                          noMargin
-                        />
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => setModoManualTipo(true)}
-                        className="w-full sm:w-auto justify-center px-3 py-2 text-xs font-semibold rounded-lg border border-emerald-300 dark:border-emerald-700 bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/60 dark:hover:bg-emerald-900 text-emerald-700 dark:text-emerald-300 flex items-center gap-1.5 whitespace-nowrap shadow-2xs transition-all cursor-pointer h-[38px]"
-                        title="Digitar tipo de manejo manualmente"
-                      >
-                        <PenLine className="w-3.5 h-3.5" />
-                        <span className="hidden sm:inline">Lançar</span> Manual
-                      </button>
-                    </div>
-                    <div className="flex items-center justify-between text-[11px] text-gray-500 dark:text-gray-400 px-1 pt-0.5">
-                      <span>Selecione da lista ou digite livremente</span>
-                      <button
-                        type="button"
-                        onClick={() => setModoManualTipo(true)}
-                        className="text-emerald-600 dark:text-emerald-400 hover:underline font-medium inline-flex items-center gap-1"
-                      >
-                        <PenLine className="w-3 h-3" />
-                        Digitar manualmente
-                      </button>
-                    </div>
-                  </div>
+                  <Select
+                    id="tipo_manejo_select"
+                    value={STANDARD_TIPOS_MANEJO.includes(formData.tipo_manejo) ? formData.tipo_manejo : STANDARD_TIPOS_MANEJO[0]}
+                    onChange={(e) => setFormData({ ...formData, tipo_manejo: e.target.value })}
+                    options={STANDARD_TIPOS_MANEJO.map((tipo) => ({ label: tipo, value: tipo }))}
+                    noMargin
+                  />
                 ) : (
-                  <div className="space-y-1.5">
-                    <div className="space-y-2">
-                      <div className="w-full">
-                        <Input
-                          id="tipo_manejo_select"
-                          type="text"
-                          list="lista-sugestoes-tipo-manejo"
-                          placeholder="Ex: Castração, Casqueamento..."
-                          value={formData.tipo_manejo || ''}
-                          onChange={(e) => setFormData({ ...formData, tipo_manejo: e.target.value })}
-                          required
-                          noMargin
-                        />
-                        <datalist id="lista-sugestoes-tipo-manejo">
-                          {STANDARD_TIPOS_MANEJO.map((tipo, idx) => (
-                            <option key={idx} value={tipo} />
-                          ))}
-                        </datalist>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setModoManualTipo(false);
-                          if (!STANDARD_TIPOS_MANEJO.includes(formData.tipo_manejo)) {
-                            setFormData({ ...formData, tipo_manejo: 'Vacinação' });
-                          }
-                        }}
-                        className="w-full sm:w-auto justify-center px-3 py-2 text-xs font-semibold rounded-lg border border-gray-300 dark:border-gray-700 bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 flex items-center gap-1.5 whitespace-nowrap shadow-2xs transition-all cursor-pointer h-[38px]"
-                        title="Voltar para a seleção da lista padrão"
-                      >
-                        <List className="w-3.5 h-3.5" />
-                        <span className="hidden sm:inline">Ver</span> Lista
-                      </button>
-                    </div>
-                    <div className="flex items-center justify-between text-[11px] px-1 pt-0.5">
-                      <span className="text-gray-500 dark:text-gray-400">
-                        {formData.tipo_manejo && !STANDARD_TIPOS_MANEJO.includes(formData.tipo_manejo) ? (
-                          <span className="text-amber-600 dark:text-amber-400 font-medium">
-                            ✏️ Manejo personalizado: {formData.tipo_manejo}
-                          </span>
-                        ) : (
-                          'Digite qualquer tipo ou escolha das sugestões'
-                        )}
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setModoManualTipo(false);
-                          if (!STANDARD_TIPOS_MANEJO.includes(formData.tipo_manejo)) {
-                            setFormData({ ...formData, tipo_manejo: 'Vacinação' });
-                          }
-                        }}
-                        className="text-emerald-600 dark:text-emerald-400 hover:underline font-medium inline-flex items-center gap-1"
-                      >
-                        <List className="w-3 h-3" />
-                        Voltar para lista
-                      </button>
-                    </div>
-                  </div>
+                  <Input
+                    id="tipo_manejo_select"
+                    type="text"
+                    list="lista-sugestoes-tipo-manejo"
+                    placeholder="Ex: Castração, Casqueamento..."
+                    value={formData.tipo_manejo || ''}
+                    onChange={(e) => setFormData({ ...formData, tipo_manejo: e.target.value })}
+                    required
+                    noMargin
+                  />
+                )}
+                {modoManualTipo && (
+                  <datalist id="lista-sugestoes-tipo-manejo">
+                    {STANDARD_TIPOS_MANEJO.map((tipo) => (
+                      <option key={tipo} value={tipo} />
+                    ))}
+                  </datalist>
                 )}
               </div>
 

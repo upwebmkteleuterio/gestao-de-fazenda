@@ -78,6 +78,8 @@ export const Lotes: React.FC = () => {
         isError,
         refetch,
         createLote,
+        updateLote,
+        isUpdating,
         moverPasto,
         deleteLote,
         isDeleting
@@ -111,11 +113,24 @@ export const Lotes: React.FC = () => {
     const [novoLoteAnimaisIds, setNovoLoteAnimaisIds] = useState<string[]>([]);
     const [animalPickerOpen, setAnimalPickerOpen] = useState(false);
     const animalPickerRef = useRef<HTMLDivElement>(null);
+    const [addAnimalSearch, setAddAnimalSearch] = useState("");
+    const [addAnimalPickerOpen, setAddAnimalPickerOpen] = useState(false);
+    const [animaisParaAdicionarIds, setAnimaisParaAdicionarIds] = useState<string[]>([]);
+    const addAnimalPickerRef = useRef<HTMLDivElement>(null);
     const [isCreating, setIsCreating] = useState(false);
+    const [isAddingAnimals, setIsAddingAnimals] = useState(false);
 
     const animaisDisponiveisParaLote = animais.filter((animal) => {
-        if (!animal.id || !animal.brinco || novoLoteAnimaisIds.includes(animal.id)) return false;
+        if (!animal.id || !animal.brinco) return false;
         const query = novoLoteAnimalSearch.trim().toLocaleLowerCase();
+        return !query
+            || animal.brinco.toLocaleLowerCase().includes(query)
+            || animal.id.toLocaleLowerCase().includes(query);
+    });
+
+    const animaisDisponiveisParaAdicionar = animais.filter((animal) => {
+        if (!animal.id || !animal.brinco || selectedLote?.animais_ids.includes(animal.id)) return false;
+        const query = addAnimalSearch.trim().toLocaleLowerCase();
         return !query
             || animal.brinco.toLocaleLowerCase().includes(query)
             || animal.id.toLocaleLowerCase().includes(query);
@@ -123,8 +138,12 @@ export const Lotes: React.FC = () => {
 
     useEffect(() => {
         const handleOutsideClick = (event: MouseEvent) => {
-            if (animalPickerRef.current && !animalPickerRef.current.contains(event.target as Node)) {
+            const target = event.target as Node;
+            if (animalPickerRef.current && !animalPickerRef.current.contains(target)) {
                 setAnimalPickerOpen(false);
+            }
+            if (addAnimalPickerRef.current && !addAnimalPickerRef.current.contains(target)) {
+                setAddAnimalPickerOpen(false);
             }
         };
         document.addEventListener("mousedown", handleOutsideClick);
@@ -133,6 +152,31 @@ export const Lotes: React.FC = () => {
 
     const handleOpenLoteView = (lote: Lote) => {
         setSelectedLote(lote);
+        setAddAnimalSearch("");
+        setAnimaisParaAdicionarIds([]);
+        setAddAnimalPickerOpen(false);
+    };
+
+    const handleAddAnimaisAoLote = async () => {
+        if (!selectedLote || isAddingAnimals || animaisParaAdicionarIds.length === 0) return;
+
+        const animaisIds = [...new Set([...selectedLote.animais_ids, ...animaisParaAdicionarIds])];
+        setIsAddingAnimals(true);
+        try {
+            const loteAtualizado = await updateLote({
+                id: selectedLote.id,
+                updates: { animais_ids: animaisIds },
+            });
+            setSelectedLote(loteAtualizado);
+            setAnimaisParaAdicionarIds([]);
+            setAddAnimalSearch("");
+            setAddAnimalPickerOpen(false);
+            showToast("Animais adicionados ao lote com sucesso!", "success");
+        } catch (error) {
+            showToast(error instanceof Error ? error.message : "Erro ao adicionar animais ao lote.", "error");
+        } finally {
+            setIsAddingAnimals(false);
+        }
     };
 
     const handleDeleteLote = (lote: Lote) => {
@@ -477,7 +521,6 @@ export const Lotes: React.FC = () => {
                         setCreateModalOpen(false);
                 }}
                 title="Criar Novo Lote"
-                contentOverflowVisible
                 actions={<div className="flex items-center justify-end gap-2 w-full">
                     <Button
                         variant="secondary"
@@ -534,24 +577,33 @@ export const Lotes: React.FC = () => {
                             aria-controls="novo-lote-animal-options"
                         />
                         {animalPickerOpen && (
-                            <div id="novo-lote-animal-options" role="listbox" className="absolute z-[10001] mt-1 max-h-52 w-full overflow-y-auto rounded-xl border border-gray-200 bg-white p-1 shadow-lg dark:border-gray-700 dark:bg-gray-800">
-                                {animaisDisponiveisParaLote.length > 0 ? animaisDisponiveisParaLote.map(animal => (
-                                    <button
-                                        key={animal.id}
-                                        type="button"
-                                        role="option"
-                                        aria-selected={false}
-                                        className="flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm text-gray-700 hover:bg-emerald-50 dark:text-gray-200 dark:hover:bg-emerald-950/40"
-                                        onClick={() => {
-                                            setNovoLoteAnimaisIds(ids => [...ids, animal.id]);
-                                            setNovoLoteAnimalSearch("");
-                                            setAnimalPickerOpen(true);
-                                        }}
-                                    >
-                                        <span className="font-medium">Brinco: {animal.brinco}</span>
-                                        <span className="text-xs text-gray-500 dark:text-gray-400">ID: {animal.id}</span>
-                                    </button>
-                                )) : (
+                            <div id="novo-lote-animal-options" role="listbox" className="mt-1 max-h-52 w-full overflow-y-auto rounded-xl border border-gray-200 bg-white p-1 shadow-lg dark:border-gray-700 dark:bg-gray-800">
+                                {animaisDisponiveisParaLote.length > 0 ? animaisDisponiveisParaLote.map(animal => {
+                                    const isSelected = novoLoteAnimaisIds.includes(animal.id);
+                                    return (
+                                        <button
+                                            key={animal.id}
+                                            type="button"
+                                            role="option"
+                                            aria-selected={isSelected}
+                                            className={`flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm transition-colors ${isSelected
+                                                ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/50 dark:text-emerald-200"
+                                                : "text-gray-700 hover:bg-emerald-50 dark:text-gray-200 dark:hover:bg-emerald-950/40"}`}
+                                            onClick={() => {
+                                                setNovoLoteAnimaisIds(ids => isSelected
+                                                    ? ids.filter(id => id !== animal.id)
+                                                    : [...ids, animal.id]);
+                                                setNovoLoteAnimalSearch("");
+                                                setAnimalPickerOpen(true);
+                                            }}
+                                        >
+                                            <span className="font-medium">Brinco: {animal.brinco}</span>
+                                            <span className={`text-xs ${isSelected ? "text-emerald-700 dark:text-emerald-300" : "text-gray-500 dark:text-gray-400"}`}>
+                                                {isSelected ? "Selecionado" : `ID: ${animal.id}`}
+                                            </span>
+                                        </button>
+                                    );
+                                }) : (
                                     <p className="px-3 py-2 text-sm text-gray-500 dark:text-gray-400">Nenhum animal cadastrado disponível.</p>
                                 )}
                             </div>
@@ -672,6 +724,93 @@ export const Lotes: React.FC = () => {
                                 );
                             })()}
                         </div>
+                    </div>
+                    <div ref={addAnimalPickerRef} className="rounded-xl border border-emerald-100 bg-emerald-50/50 p-3.5 dark:border-emerald-900/40 dark:bg-emerald-950/20">
+                        <h4 className="text-xs font-semibold uppercase tracking-wider text-emerald-800 dark:text-emerald-200">Adicionar animais ao lote</h4>
+                        <p className="mt-1 text-xs text-emerald-700 dark:text-emerald-300">Selecione animais cadastrados para manter os vínculos atuais e adicionar novos.</p>
+                        <div className="mt-3">
+                            <Input
+                                id="input-adicionar-animal-lote"
+                                type="search"
+                                icon={Search}
+                                placeholder="Buscar animal por brinco ou ID..."
+                                value={addAnimalSearch}
+                                onFocus={() => setAddAnimalPickerOpen(true)}
+                                onChange={event => {
+                                    setAddAnimalSearch(event.target.value);
+                                    setAddAnimalPickerOpen(true);
+                                }}
+                                autoComplete="off"
+                                role="combobox"
+                                aria-expanded={addAnimalPickerOpen}
+                                aria-controls="adicionar-animal-lote-options"
+                                disabled={isUpdating || isAddingAnimals}
+                            />
+                            {addAnimalPickerOpen && (
+                                <div id="adicionar-animal-lote-options" role="listbox" className="mt-1 max-h-44 w-full overflow-y-auto rounded-xl border border-gray-200 bg-white p-1 shadow-lg dark:border-gray-700 dark:bg-gray-800">
+                                    {animaisDisponiveisParaAdicionar.length > 0 ? animaisDisponiveisParaAdicionar.map(animal => {
+                                        const isSelected = animaisParaAdicionarIds.includes(animal.id);
+                                        return (
+                                            <button
+                                                key={animal.id}
+                                                type="button"
+                                                role="option"
+                                                aria-selected={isSelected}
+                                                className={`flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm transition-colors ${isSelected
+                                                    ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/50 dark:text-emerald-200"
+                                                    : "text-gray-700 hover:bg-emerald-50 dark:text-gray-200 dark:hover:bg-emerald-950/40"}`}
+                                                onClick={() => {
+                                                    setAnimaisParaAdicionarIds(ids => isSelected
+                                                        ? ids.filter(id => id !== animal.id)
+                                                        : [...ids, animal.id]);
+                                                    setAddAnimalSearch("");
+                                                    setAddAnimalPickerOpen(true);
+                                                }}
+                                                disabled={isUpdating || isAddingAnimals}
+                                            >
+                                                <span className="font-medium">Brinco: {animal.brinco}</span>
+                                                <span className={`text-xs ${isSelected ? "text-emerald-700 dark:text-emerald-300" : "text-gray-500 dark:text-gray-400"}`}>
+                                                    {isSelected ? "Selecionado" : `ID: ${animal.id}`}
+                                                </span>
+                                            </button>
+                                        );
+                                    }) : (
+                                        <p className="px-3 py-2 text-sm text-gray-500 dark:text-gray-400">Nenhum animal disponível para adicionar.</p>
+                                    )}
+                                </div>
+                            )}
+                        </div>
+                        {animaisParaAdicionarIds.length > 0 && (
+                            <div className="mt-2 space-y-2" aria-label="Animais a adicionar">
+                                {animaisParaAdicionarIds.map(animalId => {
+                                    const animal = animais.find(item => item.id === animalId);
+                                    if (!animal) return null;
+                                    return (
+                                        <div key={animal.id} className="flex items-center justify-between rounded-lg border border-emerald-200 bg-emerald-100/70 px-3 py-2 text-sm dark:border-emerald-800 dark:bg-emerald-900/40">
+                                            <span className="text-emerald-900 dark:text-emerald-100">Brinco: <strong>{animal.brinco}</strong></span>
+                                            <button
+                                                type="button"
+                                                aria-label={`Remover animal ${animal.brinco} da seleção`}
+                                                className="rounded-md p-1 text-emerald-700 hover:bg-white hover:text-red-600 dark:text-emerald-200 dark:hover:bg-gray-800"
+                                                onClick={() => setAnimaisParaAdicionarIds(ids => ids.filter(id => id !== animal.id))}
+                                                disabled={isUpdating || isAddingAnimals}
+                                            >
+                                                <X className="h-4 w-4" />
+                                            </button>
+                                        </div>
+                                    );
+                                })}
+                                <Button
+                                    variant="primary"
+                                    onClick={handleAddAnimaisAoLote}
+                                    loading={isAddingAnimals}
+                                    disabled={isUpdating || isAddingAnimals}
+                                    className="w-full"
+                                >
+                                    Salvar animais no lote
+                                </Button>
+                            </div>
+                        )}
                     </div>
                 </div>
             </Modal>
