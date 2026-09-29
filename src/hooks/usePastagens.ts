@@ -66,14 +66,16 @@ export const usePastagens = (filters?: PastagemFilters, pastoIdSelected?: string
     });
   };
 
-  const syncLocalMutation = () => {
+  const syncLocalMutation = async () => {
     if (!userId) return;
-    void syncPastagens(userId)
-      .catch(() => undefined)
-      .finally(() => {
-        void queryClient.invalidateQueries({ queryKey: ['pastagens', userId] });
-        void queryClient.invalidateQueries({ queryKey: ['animais'] });
-      });
+    try {
+      await syncPastagens(userId);
+    } catch {
+      // A sincronização será retomada quando houver conectividade.
+    } finally {
+      void queryClient.invalidateQueries({ queryKey: ['pastagens', userId] });
+      void queryClient.invalidateQueries({ queryKey: ['animais'] });
+    }
   };
 
   const createPastoMutation = useMutation({

@@ -70,6 +70,10 @@ export const PastagensPage: React.FC = () => {
     handleAddServico,
     handleDeletePasto,
     animaisNoPasto,
+    animaisDisponiveis,
+    animaisSelecionados,
+    handleSelectAnimal,
+    handleRemoveSelectedAnimal,
     resumoRebanhoPasto,
     servicosDoPasto,
   } = usePastagemForm({
@@ -155,6 +159,10 @@ export const PastagensPage: React.FC = () => {
         setModalOpen={setModalOpen}
         setPastoToDelete={setPastoToDelete}
         animaisNoPasto={animaisNoPasto}
+        animaisDisponiveis={animaisDisponiveis}
+        animaisSelecionados={animaisSelecionados}
+        onSelectAnimal={handleSelectAnimal}
+        onRemoveSelectedAnimal={handleRemoveSelectedAnimal}
         resumoRebanhoPasto={resumoRebanhoPasto}
         servicosDoPasto={servicosDoPasto}
         checkSaidaVencida={checkSaidaVencida}

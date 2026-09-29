@@ -634,6 +634,17 @@ const remoteCreateAnimal = async (newAnimal: AnimalCreateInput, id: string): Pro
 };
 
 const remoteUpdateAnimal = async (id: string, updates: Partial<Animal>): Promise<Animal> => {
+  const updateFields = Object.keys(updates);
+  if (updateFields.length > 0 && updateFields.every((field) => field === 'pasto_id' || field === 'pasto_nome')) {
+    const { data, error } = await withRemoteTimeout(supabase.from('animais').update({
+      pasto_id: updates.pasto_id ?? null,
+      pasto_nome: updates.pasto_nome ?? null,
+      status_sincronizacao: false,
+    }).eq('id', id).select('*').single());
+    if (error) throw error;
+    return toAnimal(data as unknown as AnimalDbRow);
+  }
+
   const { data: currentData, error: currentError } = await withRemoteTimeout(supabase.from('animais').select('*').eq('id', id).maybeSingle());
   if (currentError) throw currentError;
   if (!currentData) throw new Error('Animal não encontrado');
@@ -884,6 +895,14 @@ export const animaisService = {
     const normalized = await normalizeAndValidateAnimal(userId, { ...current, ...updates } as AnimalCreateInput, id, current.brinco);
     const { id: _id, createdAt: _createdAt, status_sincronizacao: _status, ...normalizedUpdates } = normalized as Animal & { id?: string; createdAt?: string };
     return queueLocalUpdate(userId, id, normalizedUpdates, current);
+  },
+
+  updateAnimalPasture: async (userId: string, id: string, pastoId: string, pastoNome: string): Promise<Animal> => {
+    if (!userId) throw new Error('Sua sessão expirou. Entre novamente.');
+    const local = await readLocalAnimals(userId);
+    const current = local.data.find((animal) => animal.id === id) ?? await animaisService.getById(id);
+    if (!current) throw new DomainValidationError('Animal não encontrado para vincular à pastagem.');
+    return queueLocalUpdate(userId, id, { pasto_id: pastoId, pasto_nome: pastoNome }, current);
   },
 
   delete: async (userId: string, id: string): Promise<boolean> => {

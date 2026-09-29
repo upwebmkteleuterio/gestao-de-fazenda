@@ -1,5 +1,5 @@
 import { useState, useMemo, FormEvent } from 'react';
-import { Pastagem, ServicoPastagem } from '@/types/database';
+import { Animal, Pastagem, ServicoPastagem } from '@/types/database';
 import { validatePastagemFields, validateServicoPastagemFields } from '@/services/domainValidation';
 import { useAnimais } from '@/hooks/useAnimais';
 import { useUIStore } from '@/store/useUIStore';
@@ -33,7 +33,7 @@ interface UsePastagemFormParams {
   deletePastagem: (id: string) => Promise<boolean>;
   addServico: (data: Omit<ServicoPastagem, 'id' | 'createdAt'>) => Promise<ServicoPastagem>;
   servicos: ServicoPastagem[];
-  syncLocalMutation: () => void;
+  syncLocalMutation: () => Promise<void>;
 }
 
 export const usePastagemForm = ({
@@ -45,9 +45,11 @@ export const usePastagemForm = ({
   syncLocalMutation,
 }: UsePastagemFormParams) => {
   const { showToast } = useUIStore();
-  const { animais } = useAnimais();
+  const { animais, updateAnimalPasture, syncLocalMutation: syncAnimaisLocalMutation } = useAnimais();
 
   const [slideOpen, setSlideOpen] = useState(false);
+  const [selectedAnimalIds, setSelectedAnimalIds] = useState<string[]>([]);
+  const [pendingCreatedPasto, setPendingCreatedPasto] = useState<Pastagem | null>(null);
   const [isEditing, setIsEditing] = useState(false);
   const [activeTab, setActiveTab] = useState<'dados' | 'servicos'>('dados');
   const [selectedPasto, setSelectedPasto] = useState<Pastagem | null>(null);
@@ -68,6 +70,8 @@ export const usePastagemForm = ({
   // Abertura para Novo Piquete/Pasto
   const handleOpenCreate = () => {
     setSelectedPasto(null);
+    setSelectedAnimalIds([]);
+    setPendingCreatedPasto(null);
     setIsEditing(false);
     setActiveTab('dados');
     setPastoForm({
@@ -80,6 +84,8 @@ export const usePastagemForm = ({
   // Abertura ao Clicar na Linha/Card (Detalhes e Configuração do Pasto)
   const handleOpenDetails = (pasto: Pastagem) => {
     setSelectedPasto(pasto);
+    setSelectedAnimalIds([]);
+    setPendingCreatedPasto(null);
     setIsEditing(true);
     setActiveTab('dados');
     setPastoForm({ ...pasto });
@@ -102,17 +108,35 @@ export const usePastagemForm = ({
     }
 
     setIsSaving(true);
+    let pastoSincronizado = false;
     try {
       if (isEditing && selectedPasto) {
         await updatePastagem({ id: selectedPasto.id, updates: pastoForm });
         showToast('Parâmetros da área atualizados com sucesso!');
       } else {
-        const created = await createPastagem(pastoForm as Omit<Pastagem, 'id' | 'createdAt'>);
+        const created = pendingCreatedPasto
+          ? await updatePastagem({ id: pendingCreatedPasto.id, updates: pastoForm })
+          : await createPastagem(pastoForm as Omit<Pastagem, 'id' | 'createdAt'>);
+        setPendingCreatedPasto(created);
+        const selectedAnimals = selectedAnimalIds
+          .map((id) => animais.find((animal) => animal.id === id))
+          .filter((animal): animal is Animal => Boolean(animal && animal.status === 'ativo'));
+        await Promise.all(selectedAnimals.map((animal) => updateAnimalPasture({
+          id: animal.id,
+          pastoId: created.id,
+          pastoNome: created.nome_pasto,
+        })));
+        if (selectedAnimals.length > 0) {
+          await syncLocalMutation();
+          pastoSincronizado = true;
+          syncAnimaisLocalMutation();
+        }
+        setSelectedAnimalIds([]);
+        setPendingCreatedPasto(null);
         showToast('Novo piquete/pasto criado com sucesso!');
-        setSelectedPasto(created);
       }
       setSlideOpen(false);
-      syncLocalMutation();
+      if (!pastoSincronizado) await syncLocalMutation();
     } catch (error) {
       showToast(error instanceof Error ? error.message : 'Erro ao salvar pastagem.', 'error');
     } finally {
@@ -174,6 +198,19 @@ export const usePastagemForm = ({
     return animais.filter((a) => a.pasto_id === selectedPasto.id && a.status === 'ativo');
   }, [animais, selectedPasto]);
 
+  const animaisDisponiveis = useMemo(() => animais.filter((animal) => animal.status === 'ativo'), [animais]);
+  const animaisSelecionados = useMemo(
+    () => selectedAnimalIds.map((id) => animaisDisponiveis.find((animal) => animal.id === id)).filter((animal): animal is Animal => Boolean(animal)),
+    [animaisDisponiveis, selectedAnimalIds],
+  );
+  const handleSelectAnimal = (animal: Animal) => {
+    if (animal.status !== 'ativo') return;
+    setSelectedAnimalIds((current) => current.includes(animal.id) ? current : [...current, animal.id]);
+  };
+  const handleRemoveSelectedAnimal = (animalId: string) => {
+    setSelectedAnimalIds((current) => current.filter((id) => id !== animalId));
+  };
+
   // Contagens do rebanho no pasto (automáticas ou manuais inseridas pelo usuário)
   const resumoRebanhoPasto = useMemo(() => {
     const vacasAuto = animaisNoPasto.filter((a) => ['vaca', 'novilha'].includes(a.tipo_animal)).length;
@@ -230,6 +267,10 @@ export const usePastagemForm = ({
     handleAddServico,
     handleDeletePasto,
     animaisNoPasto,
+    animaisDisponiveis,
+    animaisSelecionados,
+    handleSelectAnimal,
+    handleRemoveSelectedAnimal,
     resumoRebanhoPasto,
     servicosDoPasto,
   };

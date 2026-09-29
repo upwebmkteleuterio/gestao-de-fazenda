@@ -168,6 +168,18 @@ export const useAnimais = (filters?: AnimalFilters) => {
     },
   });
 
+  const updateAnimalPastureMutation = useMutation({
+    networkMode: 'always',
+    mutationFn: ({ id, pastoId, pastoNome }: { id: string; pastoId: string; pastoNome: string }) => {
+      if (!userId) throw new Error('Sua sessão expirou. Entre novamente.');
+      return animaisService.updateAnimalPasture(userId, id, pastoId, pastoNome);
+    },
+    onSuccess: (animal) => {
+      updateLocalAnimalCache(animal);
+      invalidateAnimalQueries();
+    },
+  });
+
   const deleteMutation = useMutation({
     networkMode: 'always',
     mutationFn: (id: string) => {
@@ -205,6 +217,7 @@ export const useAnimais = (filters?: AnimalFilters) => {
     isCreating: createMutation.isPending,
     updateAnimal: updateMutation.mutateAsync,
     isUpdating: updateMutation.isPending,
+    updateAnimalPasture: updateAnimalPastureMutation.mutateAsync,
     deleteAnimal: deleteMutation.mutateAsync,
     isDeleting: deleteMutation.isPending,
     syncLocalMutation,

@@ -6,7 +6,7 @@ import { Button } from '../../../components/Button';
 import { Badge } from '../../../components/Badge';
 import { 
   Plus, Map, Sprout, Search, AlertTriangle, Calendar, Users, Edit3, Trash2, 
-  Clock, CheckCircle2, ShieldAlert, Layers, Wrench, ChevronRight, Filter
+  Clock, CheckCircle2, ShieldAlert, Layers, Wrench, ChevronRight, Filter, X
 } from 'lucide-react';
 import { Animal, Pastagem, ServicoPastagem } from '../../../types/database';
 import type { ServicoFormValues } from '../hooks/usePastagemForm';
@@ -32,6 +32,10 @@ interface PastagensSlidePanelProps {
   setModalOpen: Dispatch<SetStateAction<boolean>>;
   setPastoToDelete: Dispatch<SetStateAction<Pastagem | null>>;
   animaisNoPasto: Animal[];
+  animaisDisponiveis: Animal[];
+  animaisSelecionados: Animal[];
+  onSelectAnimal: (animal: Animal) => void;
+  onRemoveSelectedAnimal: (animalId: string) => void;
   resumoRebanhoPasto: ResumoRebanhoPasto;
   servicosDoPasto: ServicoPastagem[];
   checkSaidaVencida: (date?: string) => boolean;
@@ -41,8 +45,48 @@ export const PastagensSlidePanel = ({
   slideOpen, setSlideOpen, isEditing, isSaving, isDeleting, isAddingServico, activeTab, setActiveTab,
   selectedPasto, pastoForm, setPastoForm, servicoForm, setServicoForm,
   handleSavePasto, handleAddServico, setModalOpen, setPastoToDelete,
-  animaisNoPasto, resumoRebanhoPasto, servicosDoPasto, checkSaidaVencida
-}: PastagensSlidePanelProps) => (
+  animaisNoPasto, animaisDisponiveis, animaisSelecionados, onSelectAnimal, onRemoveSelectedAnimal,
+  resumoRebanhoPasto, servicosDoPasto, checkSaidaVencida
+}: PastagensSlidePanelProps) => {
+  const [animalSearch, setAnimalSearch] = React.useState('');
+  const [animalDropdownOpen, setAnimalDropdownOpen] = React.useState(false);
+  const animalComboboxRef = React.useRef<HTMLDivElement>(null);
+  const selectedAnimalIds = new Set(animaisSelecionados.map((animal) => animal.id));
+  const query = animalSearch.trim().toLocaleLowerCase();
+  const filteredAnimais = animaisDisponiveis.filter((animal) => !selectedAnimalIds.has(animal.id) && (
+    !query || [animal.brinco, animal.id, animal.tipo_animal, animal.raca, animal.cdc, animal.cdn]
+      .some((value) => value?.toLocaleLowerCase().includes(query))
+  ));
+
+  React.useEffect(() => {
+    const handleOutsideClick = (event: MouseEvent) => {
+      if (animalComboboxRef.current && !animalComboboxRef.current.contains(event.target as Node)) setAnimalDropdownOpen(false);
+    };
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setAnimalDropdownOpen(false);
+    };
+    document.addEventListener('mousedown', handleOutsideClick);
+    document.addEventListener('keydown', handleEscape);
+    return () => {
+      document.removeEventListener('mousedown', handleOutsideClick);
+      document.removeEventListener('keydown', handleEscape);
+    };
+  }, []);
+
+  React.useEffect(() => {
+    if (!slideOpen) {
+      setAnimalDropdownOpen(false);
+      setAnimalSearch('');
+    }
+  }, [slideOpen]);
+
+  const handleSelect = (animal: Animal) => {
+    onSelectAnimal(animal);
+    setAnimalSearch('');
+    setAnimalDropdownOpen(false);
+  };
+
+  return (
   <>
     <SlidePanel
         isOpen={slideOpen}
@@ -147,6 +191,85 @@ export const PastagensSlidePanel = ({
                   maxLength={200}
                   required
                 />
+
+                {!selectedPasto && (
+                  <div className="space-y-3">
+                    <div ref={animalComboboxRef} className="relative">
+                      <Input
+                        label="Adicionar animais ao novo piquete"
+                        id="pastagem_animais_combobox"
+                        type="search"
+                        icon={Search}
+                        value={animalSearch}
+                        onFocus={(event) => {
+                          event.currentTarget.select();
+                          setAnimalDropdownOpen(true);
+                        }}
+                        onClick={() => setAnimalDropdownOpen(true)}
+                        onChange={(event) => {
+                          setAnimalSearch(event.target.value);
+                          setAnimalDropdownOpen(true);
+                        }}
+                        placeholder="Busque por brinco, ID, raça ou categoria..."
+                        autoComplete="off"
+                        role="combobox"
+                        aria-expanded={animalDropdownOpen}
+                        aria-controls="pastagem-animais-opcoes"
+                        aria-autocomplete="list"
+                      />
+                      {animalDropdownOpen && (
+                        <div
+                          id="pastagem-animais-opcoes"
+                          role="listbox"
+                          aria-label="Animais disponíveis"
+                          className="absolute z-20 -mt-3 max-h-56 w-full overflow-y-auto rounded-xl border border-gray-200 bg-white p-1 shadow-lg dark:border-gray-700 dark:bg-gray-800"
+                        >
+                          {filteredAnimais.length > 0 ? filteredAnimais.map((animal) => (
+                            <button
+                              key={animal.id}
+                              type="button"
+                              role="option"
+                              aria-selected={false}
+                              className="flex w-full items-center justify-between gap-3 rounded-lg px-3 py-2 text-left text-sm text-gray-700 hover:bg-emerald-50 dark:text-gray-200 dark:hover:bg-emerald-950/40"
+                              onClick={() => handleSelect(animal)}
+                            >
+                              <span className="min-w-0">
+                                <span className="block font-medium">Brinco #{animal.brinco} · {animal.tipo_animal}</span>
+                                <span className="block truncate text-xs text-gray-500 dark:text-gray-400">{animal.raca || 'Raça não informada'} · ID: {animal.id}</span>
+                              </span>
+                            </button>
+                          )) : (
+                            <p className="px-3 py-2 text-sm text-gray-500 dark:text-gray-400" role="status">
+                              {animaisDisponiveis.length === 0 ? 'Nenhum animal ativo disponível.' : 'Nenhum animal encontrado.'}
+                            </p>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                    {animaisSelecionados.length > 0 ? (
+                      <div className="space-y-2" aria-label="Animais selecionados">
+                        <p className="text-xs font-medium text-gray-600 dark:text-gray-400">Selecionados ({animaisSelecionados.length})</p>
+                        <ul className="flex flex-wrap gap-2">
+                          {animaisSelecionados.map((animal) => (
+                            <li key={animal.id} className="flex items-center gap-1.5">
+                              <Badge variant="success">#{animal.brinco} · {animal.tipo_animal}</Badge>
+                              <button
+                                type="button"
+                                onClick={() => onRemoveSelectedAnimal(animal.id)}
+                                aria-label={`Remover animal ${animal.brinco} dos selecionados`}
+                                className="rounded-full p-1 text-gray-500 hover:bg-red-50 hover:text-red-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 dark:text-gray-400 dark:hover:bg-red-950/40 dark:hover:text-red-300"
+                              >
+                                <X className="h-3.5 w-3.5" aria-hidden="true" />
+                              </button>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    ) : (
+                      <p className="text-xs text-gray-500 dark:text-gray-400" role="status">Nenhum animal selecionado. Você pode criar o pasto sem vincular animais.</p>
+                    )}
+                  </div>
+                )}
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <Input
@@ -476,4 +599,5 @@ export const PastagensSlidePanel = ({
         </div>
       </SlidePanel>
   </>
-);
+  );
+};
