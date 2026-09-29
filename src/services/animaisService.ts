@@ -416,6 +416,55 @@ const syncLegacyArray = async (table: 'lotes' | 'manejos_sanitarios', id: string
   }
 };
 
+const syncRemoteParentChildren = async (parentId: string | undefined, childId: string, include: boolean): Promise<void> => {
+  if (!parentId) return;
+  const { data, error } = await supabase.from('animais').select('filhos_ids').eq('id', parentId).maybeSingle();
+  if (error) throw error;
+  if (!data) return;
+  const currentIds = ((data as { filhos_ids?: string[] | null }).filhos_ids ?? []).filter((id): id is string => typeof id === 'string');
+  const nextIds = new Set(currentIds);
+  if (include) nextIds.add(childId);
+  else nextIds.delete(childId);
+  if (nextIds.size === currentIds.length && currentIds.every((id) => nextIds.has(id))) return;
+  const { error: updateError } = await supabase
+    .from('animais')
+    .update({ filhos_ids: Array.from(nextIds), status_sincronizacao: false })
+    .eq('id', parentId);
+  if (updateError) throw updateError;
+};
+
+const syncLocalParentChildren = async (userId: string, parentId: string | undefined, childId: string, include: boolean): Promise<void> => {
+  if (!parentId) return;
+  const record = await getOfflineRecord<Animal>(localRecordKey(userId, parentId));
+  if (!record || record.userId !== userId || record.entity !== ENTITY || record.data.localDeleted) return;
+  const currentIds = record.data.filhos_ids ?? [];
+  const nextIds = new Set(currentIds);
+  if (include) nextIds.add(childId);
+  else nextIds.delete(childId);
+  if (nextIds.size === currentIds.length && currentIds.every((id) => nextIds.has(id))) return;
+  await saveOfflineRecord({
+    ...record,
+    data: { ...record.data, filhos_ids: Array.from(nextIds) },
+    updatedAt: new Date().toISOString(),
+  });
+};
+
+const detachLocalChildrenFromDeletedParent = async (userId: string, parentId: string): Promise<void> => {
+  const records = await listOfflineRecords<Animal>({ userId, entity: ENTITY });
+  for (const record of records) {
+    if (record.data.localDeleted || (record.data.mae_id !== parentId && record.data.pai_id !== parentId)) continue;
+    await saveOfflineRecord({
+      ...record,
+      data: {
+        ...record.data,
+        mae_id: record.data.mae_id === parentId ? undefined : record.data.mae_id,
+        pai_id: record.data.pai_id === parentId ? undefined : record.data.pai_id,
+      },
+      updatedAt: new Date().toISOString(),
+    });
+  }
+};
+
 const syncLegacyChildren = async (animalId: string) => {
   const batchSize = 500;
   let offset = 0;
@@ -565,6 +614,7 @@ const queueLocalCreate = async (userId: string, newAnimal: AnimalCreateInput, id
     },
     { userId, entity: ENTITY, operation: 'create', payload: { id, animal: toCreatePayload(animal) } },
   );
+  await syncLocalParentChildren(userId, animal.mae_id, id, true);
   return animal;
 };
 
@@ -586,6 +636,8 @@ const queueLocalUpdate = async (userId: string, id: string, updates: Partial<Ani
     },
     { userId, entity: ENTITY, operation: 'update', payload: { id, updates: toUpdatePayload(updates) } },
   );
+  await syncLocalParentChildren(userId, currentAnimal.mae_id, id, false);
+  await syncLocalParentChildren(userId, animal.mae_id, id, true);
   return animal;
 };
 
@@ -599,6 +651,8 @@ const queueLocalDelete = async (userId: string, id: string): Promise<boolean> =>
     },
     { userId, entity: ENTITY, operation: 'delete', payload: { id } },
   );
+  await syncLocalParentChildren(userId, currentRecord.data.mae_id, id, false);
+  await detachLocalChildrenFromDeletedParent(userId, id);
   return true;
 };
 
@@ -628,9 +682,11 @@ const remoteCreateAnimal = async (newAnimal: AnimalCreateInput, id: string): Pro
     const existing = await findRemoteAnimal(id);
     if (!existing) throw error;
     await withRemoteTimeout(syncNormalizedToques(id, newAnimal.brinco, newAnimal.historico_toque));
+    await withRemoteTimeout(syncRemoteParentChildren(newAnimal.mae_id, id, true));
     return existing;
   }
   await withRemoteTimeout(syncNormalizedToques(id, newAnimal.brinco, newAnimal.historico_toque));
+  await withRemoteTimeout(syncRemoteParentChildren(newAnimal.mae_id, id, true));
   const [animal] = await withRemoteTimeout(withNormalizedToques([data as AnimalDbRow]));
   if (!animal) throw new Error('Animal criado não retornou dados');
   return animal;
@@ -665,6 +721,8 @@ const remoteUpdateAnimal = async (id: string, updates: Partial<Animal>): Promise
   patch.qtd_descartes_brinco = qtdDescartes;
   const { data, error } = await withRemoteTimeout(supabase.from('animais').update(patch).eq('id', id).select('*').single());
   if (error) throw error;
+  await withRemoteTimeout(syncRemoteParentChildren(current.mae_id, id, false));
+  await withRemoteTimeout(syncRemoteParentChildren(next.mae_id, id, true));
   await withRemoteTimeout(syncNormalizedToques(id, updates.brinco ?? current.brinco, updates.historico_toque ?? current.historico_toque));
   const [animal] = await withRemoteTimeout(withNormalizedToques([data as unknown as AnimalDbRow]));
   if (!animal) throw new Error('Animal atualizado não retornou dados');
@@ -672,8 +730,11 @@ const remoteUpdateAnimal = async (id: string, updates: Partial<Animal>): Promise
 };
 
 const remoteDeleteAnimal = async (id: string): Promise<void> => {
+  const { data: currentData, error: currentError } = await withRemoteTimeout(supabase.from('animais').select('mae_id').eq('id', id).maybeSingle());
+  if (currentError) throw currentError;
   await withRemoteTimeout(syncLegacyArray('lotes', id, id));
   await withRemoteTimeout(syncLegacyArray('manejos_sanitarios', id, id));
+  await withRemoteTimeout(syncRemoteParentChildren((currentData as { mae_id?: string | null } | null)?.mae_id ?? undefined, id, false));
   await withRemoteTimeout(syncLegacyChildren(id));
   const { error } = await withRemoteTimeout(supabase.from('animais').delete().eq('id', id));
   if (error) throw error;
