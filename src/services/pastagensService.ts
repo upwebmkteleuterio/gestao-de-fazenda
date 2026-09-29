@@ -17,7 +17,6 @@ import {
   type OutboxOperation,
 } from '@/offline/database';
 import { useConnectivityStore } from '@/store/useConnectivityStore';
-import { animaisService } from '@/services/animaisService';
 import { validatePastagemFields, validateServicoPastagemFields } from '@/services/domainValidation';
 import { Pastagem, ServicoPastagem } from '@/types/database';
 
@@ -415,11 +414,11 @@ const remoteUpdatePastagem = async (id: string, updates: Partial<Pastagem>): Pro
 };
 
 const remoteDeletePastagem = async (id: string): Promise<void> => {
-  const { data, error } = await supabase.from('animais').select('id').eq('pasto_id', id);
-  if (error) throw error;
-  for (const animal of (data ?? []) as Array<{ id: string }>) {
-    await animaisService.updateRemote(animal.id, { pasto_id: undefined, pasto_nome: undefined });
-  }
+  const { error: updateError } = await supabase
+    .from('animais')
+    .update({ pasto_id: null, pasto_nome: null })
+    .eq('pasto_id', id);
+  if (updateError) throw updateError;
   const { error: deleteError } = await supabase.from('pastagens').delete().eq('id', id);
   if (deleteError) throw deleteError;
 };
@@ -627,7 +626,11 @@ const compactUnsyncedCreateDelete = async (userId: string): Promise<void> => {
 const runPastagemSync = async (userId: string): Promise<void> => {
   await compactUnsyncedCreateDelete(userId);
   const operations = await listOutboxOperations<PastagemOutboxPayload>({ userId, entity: ENTITY });
-  if (operations.length === 0) return;
+  if (operations.length === 0) {
+    cancelScheduledRetry(userId);
+    useConnectivityStore.getState().setOnline();
+    return;
+  }
   useConnectivityStore.getState().setSyncing();
   let retryAt: string | null = null;
 
