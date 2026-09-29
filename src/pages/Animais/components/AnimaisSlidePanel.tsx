@@ -31,6 +31,7 @@ import {
     CheckCircle2,
     X,
     Edit,
+    ExternalLink,
 } from "lucide-react";
 
 import { MontaNaturalIcon } from "../../../components/MontaNaturalIcon";
@@ -84,6 +85,7 @@ interface AnimaisSlidePanelProps {
         nome_pasto: string;
     }>;
     lotes?: Lote[];
+    handleOpenLote: (lote: Lote) => void;
     handleCreateFilho?: (maeId: string) => void;
     handleOpenChild?: (animal: Animal) => void;
 }
@@ -114,6 +116,7 @@ export const AnimaisSlidePanel: React.FC<AnimaisSlidePanelProps> = (
         animais = [],
         pastagens = [],
         lotes = [],
+        handleOpenLote,
         handleCreateFilho,
         handleOpenChild
     }
@@ -260,8 +263,27 @@ export const AnimaisSlidePanel: React.FC<AnimaisSlidePanelProps> = (
                             {linkedLotes.length > 0 && <Badge variant="neutral">{linkedLotes.length}</Badge>}
                         </div>
                         {linkedLotes.length > 0 ? (
-                            <ul className="mt-2 space-y-1.5 text-sm text-gray-800 dark:text-gray-200">
-                                {linkedLotes.map(lote => <li key={lote.id} className="rounded-lg bg-white/80 px-3 py-2 dark:bg-gray-800/80">{lote.nome}</li>)}
+                            <ul className="mt-2 space-y-2 text-sm text-gray-800 dark:text-gray-200">
+                                {linkedLotes.map(lote => (
+                                    <li key={lote.id} className="flex items-center justify-between gap-3 rounded-lg bg-white/80 px-3 py-2 dark:bg-gray-800/80">
+                                        <div className="min-w-0">
+                                            <p className="truncate font-semibold text-gray-900 dark:text-gray-100">{lote.nome}</p>
+                                            <p className="text-xs text-gray-500 dark:text-gray-400">{lote.animais_ids.length} {lote.animais_ids.length === 1 ? "animal" : "animais"}</p>
+                                            <p className="text-xs text-emerald-700 dark:text-emerald-300">{lote.pasto_nome || pastagens.find(pastagem => pastagem.id === lote.pasto_id)?.nome_pasto || "Sem pasto vinculado"}</p>
+                                        </div>
+                                        <Button
+                                            type="button"
+                                            variant="secondary"
+                                            size="sm"
+                                            icon={ExternalLink}
+                                            title={`Abrir detalhes do lote ${lote.nome}`}
+                                            aria-label={`Abrir detalhes do lote ${lote.nome}`}
+                                            onClick={() => handleOpenLote(lote)}
+                                        >
+                                            Abrir detalhes
+                                        </Button>
+                                    </li>
+                                ))}
                             </ul>
                         ) : (
                             <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">Nenhum lote vinculado.</p>

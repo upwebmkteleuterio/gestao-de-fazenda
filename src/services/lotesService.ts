@@ -384,7 +384,7 @@ export const lotesService = {
     if (!userId) return { data: [], total: 0, source: 'local' };
     if (!isBrowserOnline()) {
       const local = await readLocalLotes(userId);
-      const recent = sortRecent(local.data).slice(0, filters?.limit ?? 10);
+      const recent = sortRecent(local.data).slice(0, filters?.limit ?? local.data.length);
       return { data: recent, total: recent.length, source: 'local', capturedAt: local.capturedAt };
     }
 
@@ -414,7 +414,7 @@ export const lotesService = {
       const message = error instanceof Error ? error.message.toLowerCase() : '';
       if (!isBrowserOnline() || /network|fetch|offline|load failed|timeout/.test(message)) {
         const local = await readLocalLotes(userId);
-        const recent = sortRecent(local.data).slice(0, filters?.limit ?? 10);
+        const recent = sortRecent(local.data).slice(0, filters?.limit ?? local.data.length);
         return { data: recent, total: recent.length, source: 'local', capturedAt: local.capturedAt };
       }
       throw error;

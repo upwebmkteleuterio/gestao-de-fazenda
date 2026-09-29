@@ -4,6 +4,7 @@ import { useLotes } from '@/hooks/useLotes';
 import { useConnectivityStore } from '@/store/useConnectivityStore';
 import { usePastagens } from '@/hooks/usePastagens';
 import { useUIStore } from '@/store/useUIStore';
+import { Lote } from '@/types/database';
 import { exportarAnimaisXLSX } from '../utils/animalUtils';
 
 export const useAnimaisTable = () => {
@@ -59,7 +60,7 @@ export const useAnimaisTable = () => {
 
   // Modal para visualização rápida de animais de um lote
   const [viewLoteModalOpen, setViewLoteModalOpen] = useState(false);
-  const [selectedLote, setSelectedLote] = useState<any>(null);
+  const [selectedLote, setSelectedLote] = useState<Lote | null>(null);
 
   const handleCriarLoteComSelecionados = () => {
     if (isOffline) {
@@ -128,7 +129,7 @@ export const useAnimaisTable = () => {
     }
   };
 
-  const handleOpenLoteView = (lote: any) => {
+  const handleOpenLoteView = (lote: Lote) => {
     setSelectedLote(lote);
     setViewLoteModalOpen(true);
   };

@@ -4,7 +4,7 @@ import { Layers, X, MapPin, ArrowRightLeft } from 'lucide-react';
 import { Button } from '@/components/Button';
 import { Select } from '@/components/Select';
 import { Table, Column } from '@/components/Table';
-import { Animal } from '@/types/database';
+import { Animal, Lote } from '@/types/database';
 
 interface LoteModalsProps {
   // Criar Lote
@@ -23,7 +23,7 @@ interface LoteModalsProps {
   // Visualizar Lote
   viewLoteModalOpen: boolean;
   onCloseViewLoteModal: () => void;
-  selectedLote: any;
+  selectedLote: Lote | null;
   todosAnimais: Animal[];
   onRowClickAnimal: (animal: Animal) => void;
   onMudarPastoLote?: (loteId: string, pastoId: string) => void;

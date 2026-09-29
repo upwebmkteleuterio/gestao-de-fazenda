@@ -64,6 +64,7 @@ export const AnimaisPage: React.FC = () => {
     viewLoteModalOpen,
     setViewLoteModalOpen,
     selectedLote,
+    handleOpenLoteView,
     handleExportRelatorio,
   } = useAnimaisTable();
 
@@ -196,6 +197,10 @@ export const AnimaisPage: React.FC = () => {
         animais={todosAnimais}
         pastagens={pastagens}
         lotes={lotes}
+        handleOpenLote={(lote) => {
+          setSlideOpen(false);
+          handleOpenLoteView(lote);
+        }}
         handleCreateFilho={handleCreateFilho}
         handleOpenChild={handleOpenView}
         slideOpen={slideOpen}
