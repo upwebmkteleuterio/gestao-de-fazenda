@@ -170,7 +170,7 @@ export const useAnimais = (filters?: AnimalFilters) => {
 
   const updateAnimalPastureMutation = useMutation({
     networkMode: 'always',
-    mutationFn: ({ id, pastoId, pastoNome }: { id: string; pastoId: string; pastoNome: string }) => {
+    mutationFn: ({ id, pastoId, pastoNome }: { id: string; pastoId?: string; pastoNome?: string }) => {
       if (!userId) throw new Error('Sua sessão expirou. Entre novamente.');
       return animaisService.updateAnimalPasture(userId, id, pastoId, pastoNome);
     },

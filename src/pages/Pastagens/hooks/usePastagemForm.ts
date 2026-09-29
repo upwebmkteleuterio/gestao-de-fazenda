@@ -84,7 +84,7 @@ export const usePastagemForm = ({
   // Abertura ao Clicar na Linha/Card (Detalhes e Configuração do Pasto)
   const handleOpenDetails = (pasto: Pastagem) => {
     setSelectedPasto(pasto);
-    setSelectedAnimalIds([]);
+    setSelectedAnimalIds(animais.filter((animal) => animal.status === 'ativo' && animal.pasto_id === pasto.id).map((animal) => animal.id));
     setPendingCreatedPasto(null);
     setIsEditing(true);
     setActiveTab('dados');
@@ -112,7 +112,36 @@ export const usePastagemForm = ({
     try {
       if (isEditing && selectedPasto) {
         await updatePastagem({ id: selectedPasto.id, updates: pastoForm });
-        showToast('Parâmetros da área atualizados com sucesso!');
+        const currentAnimalIds = new Set(animais.filter((animal) => animal.status === 'ativo' && animal.pasto_id === selectedPasto.id).map((animal) => animal.id));
+        const selectedAnimals = selectedAnimalIds
+          .map((id) => animais.find((animal) => animal.id === id))
+          .filter((animal): animal is Animal => Boolean(animal && animal.status === 'ativo'));
+        const selectedAnimalIdSet = new Set(selectedAnimals.map((animal) => animal.id));
+        const targetPastoNome = pastoForm.nome_pasto || selectedPasto.nome_pasto;
+        const animalsToAssign = selectedAnimals.filter((animal) => animal.pasto_id !== selectedPasto.id || animal.pasto_nome !== targetPastoNome);
+        const animalsToRemove = [...currentAnimalIds]
+          .filter((animalId) => !selectedAnimalIdSet.has(animalId))
+          .map((animalId) => animais.find((animal) => animal.id === animalId))
+          .filter((animal): animal is Animal => Boolean(animal));
+        await Promise.all([
+          ...animalsToAssign.map((animal) => updateAnimalPasture({
+            id: animal.id,
+            pastoId: selectedPasto.id,
+            pastoNome: targetPastoNome,
+          })),
+          ...animalsToRemove.map((animal) => updateAnimalPasture({
+            id: animal.id,
+            pastoId: undefined,
+            pastoNome: undefined,
+          })),
+        ]);
+        if (animalsToAssign.length > 0 || animalsToRemove.length > 0) {
+          await syncLocalMutation();
+          pastoSincronizado = true;
+          syncAnimaisLocalMutation();
+        }
+        setSelectedAnimalIds([]);
+        showToast('Parâmetros da área e animais atualizados com sucesso!');
       } else {
         const created = pendingCreatedPasto
           ? await updatePastagem({ id: pendingCreatedPasto.id, updates: pastoForm })

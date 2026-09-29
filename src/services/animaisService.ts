@@ -897,7 +897,7 @@ export const animaisService = {
     return queueLocalUpdate(userId, id, normalizedUpdates, current);
   },
 
-  updateAnimalPasture: async (userId: string, id: string, pastoId: string, pastoNome: string): Promise<Animal> => {
+  updateAnimalPasture: async (userId: string, id: string, pastoId?: string, pastoNome?: string): Promise<Animal> => {
     if (!userId) throw new Error('Sua sessão expirou. Entre novamente.');
     const local = await readLocalAnimals(userId);
     const current = local.data.find((animal) => animal.id === id) ?? await animaisService.getById(id);

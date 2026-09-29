@@ -192,11 +192,10 @@ export const PastagensSlidePanel = ({
                   required
                 />
 
-                {!selectedPasto && (
-                  <div className="space-y-3">
+                <div className="space-y-3">
                     <div ref={animalComboboxRef} className="relative">
                       <Input
-                        label="Adicionar animais ao novo piquete"
+                        label={selectedPasto ? 'Gerenciar animais deste piquete' : 'Adicionar animais ao novo piquete'}
                         id="pastagem_animais_combobox"
                         type="search"
                         icon={Search}
@@ -266,10 +265,11 @@ export const PastagensSlidePanel = ({
                         </ul>
                       </div>
                     ) : (
-                      <p className="text-xs text-gray-500 dark:text-gray-400" role="status">Nenhum animal selecionado. Você pode criar o pasto sem vincular animais.</p>
+                      <p className="text-xs text-gray-500 dark:text-gray-400" role="status">
+                        {selectedPasto ? 'Nenhum animal vinculado a este pasto.' : 'Nenhum animal selecionado. Você pode criar o pasto sem vincular animais.'}
+                      </p>
                     )}
                   </div>
-                )}
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <Input
