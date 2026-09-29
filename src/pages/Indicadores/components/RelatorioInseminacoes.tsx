@@ -24,7 +24,9 @@ const addDays = (date: string, days: number) => {
 };
 const toItem = (evento: EventoReproducao, animal?: InseminacaoRelatorioItem['animal']): InseminacaoRelatorioItem => {
   const previsaoDg = evento.data_dg || (evento.data_principal ? addDays(evento.data_principal, 35) : '');
-  const previsaoParto = evento.previsao_parto || (evento.data_principal ? addDays(evento.data_principal, 285) : '');
+  const dataBaseParto = evento.dados_protocolo?.d10 || evento.dados_protocolo?.d0 || evento.data_principal;
+  const diasGestacao = evento.dados_protocolo?.dias_gestacao_previsao || 300;
+  const previsaoParto = evento.previsao_parto || (dataBaseParto ? addDays(dataBaseParto, diasGestacao) : '');
   return {
     id: evento.id,
     brinco_matriz: evento.brinco_matriz,

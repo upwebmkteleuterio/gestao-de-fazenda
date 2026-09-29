@@ -24,6 +24,7 @@ export const ReprodutivoSlidePanel = ({
   const [modoManualEcc, setModoManualEcc] = React.useState(false);
   const [modoManualTipoEmbriao, setModoManualTipoEmbriao] = React.useState(false);
   const [modoManualReceptora, setModoManualReceptora] = React.useState(false);
+  const maxDate = new Date().toISOString().split('T')[0];
 
   const padroesSemen = ['Convencional', 'Sexado de Fêmea', 'Sexado de Macho'];
   const padroesEmbriao = ['Vitrificado FIV', 'Fresco FIV', 'Congelado Sexado'];
@@ -368,6 +369,7 @@ export const ReprodutivoSlidePanel = ({
                   label="D8 Retirada do Implante"
                   id="iatf_d8"
                   type="date"
+                  max={maxDate}
                   value={formData.d8}
                   onChange={(e) => setFormData({ ...formData, d8: e.target.value })}
                 />
@@ -375,6 +377,7 @@ export const ReprodutivoSlidePanel = ({
                   label="Data D10 (Inseminação)"
                   id="iatf_d10"
                   type="date"
+                  max={maxDate}
                   value={formData.d10}
                   onChange={(e) => {
                     const newD10 = e.target.value;
@@ -406,9 +409,11 @@ export const ReprodutivoSlidePanel = ({
 
                 <div className="grid grid-cols-1 min-[420px]:grid-cols-2 gap-3">
                   <Input
-                    label="Dias Futuros (Ex: 290 dias)"
+                    label="Dias de Gestação (Ex: 300 dias)"
                     id="iatf_dias_previsao"
                     type="number"
+                    min={200}
+                    max={400}
                     value={formData.dias_previsao_parto}
                     onChange={(e) => {
                       const dias = e.target.value === '' ? '' : Number(e.target.value);
@@ -422,7 +427,7 @@ export const ReprodutivoSlidePanel = ({
                         previsao_parto: previsaoParto,
                       });
                     }}
-                    placeholder="290"
+                    placeholder="300"
                   />
                   <Input
                     label="Data Prevista do Parto"
@@ -1230,7 +1235,7 @@ export const ReprodutivoSlidePanel = ({
                   Exame e Diagnóstico de Gestação (DG Toque / Ultrassom)
                 </h4>
                 <p className="text-xs text-gray-600 dark:text-gray-400">
-                  Ao salvar um diagnóstico como <strong>PRENHA</strong>, o status reprodutivo da matriz na tabela de animais é atualizado automaticamente e a previsão de parto é calculada (+285 dias).
+                  Ao salvar um diagnóstico como <strong>PRENHA</strong>, o status reprodutivo da matriz na tabela de animais é atualizado automaticamente e a previsão de parto é calculada (+300 dias).
                 </p>
               </div>
 

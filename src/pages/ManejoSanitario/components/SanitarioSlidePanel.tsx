@@ -199,8 +199,8 @@ export const SanitarioSlidePanel: React.FC<SanitarioSlidePanelProps> = ({
 
                 {!modoManualTipo ? (
                   <div className="space-y-1.5">
-                    <div className="flex gap-2 items-start">
-                      <div className="flex-1 min-w-0">
+                    <div className="space-y-2">
+                      <div className="w-full">
                         <Select
                           id="tipo_manejo_select"
                           value={STANDARD_TIPOS_MANEJO.includes(formData.tipo_manejo) ? formData.tipo_manejo : '__manual__'}
@@ -222,7 +222,7 @@ export const SanitarioSlidePanel: React.FC<SanitarioSlidePanelProps> = ({
                       <button
                         type="button"
                         onClick={() => setModoManualTipo(true)}
-                        className="px-3 py-2 text-xs font-semibold rounded-lg border border-emerald-300 dark:border-emerald-700 bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/60 dark:hover:bg-emerald-900 text-emerald-700 dark:text-emerald-300 flex items-center gap-1.5 whitespace-nowrap shadow-2xs transition-all cursor-pointer h-[38px]"
+                        className="w-full sm:w-auto justify-center px-3 py-2 text-xs font-semibold rounded-lg border border-emerald-300 dark:border-emerald-700 bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/60 dark:hover:bg-emerald-900 text-emerald-700 dark:text-emerald-300 flex items-center gap-1.5 whitespace-nowrap shadow-2xs transition-all cursor-pointer h-[38px]"
                         title="Digitar tipo de manejo manualmente"
                       >
                         <PenLine className="w-3.5 h-3.5" />
@@ -243,8 +243,8 @@ export const SanitarioSlidePanel: React.FC<SanitarioSlidePanelProps> = ({
                   </div>
                 ) : (
                   <div className="space-y-1.5">
-                    <div className="flex gap-2 items-start">
-                      <div className="flex-1 min-w-0">
+                    <div className="space-y-2">
+                      <div className="w-full">
                         <Input
                           id="tipo_manejo_select"
                           type="text"
@@ -269,7 +269,7 @@ export const SanitarioSlidePanel: React.FC<SanitarioSlidePanelProps> = ({
                             setFormData({ ...formData, tipo_manejo: 'Vacinação' });
                           }
                         }}
-                        className="px-3 py-2 text-xs font-semibold rounded-lg border border-gray-300 dark:border-gray-700 bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 flex items-center gap-1.5 whitespace-nowrap shadow-2xs transition-all cursor-pointer h-[38px]"
+                        className="w-full sm:w-auto justify-center px-3 py-2 text-xs font-semibold rounded-lg border border-gray-300 dark:border-gray-700 bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 flex items-center gap-1.5 whitespace-nowrap shadow-2xs transition-all cursor-pointer h-[38px]"
                         title="Voltar para a seleção da lista padrão"
                       >
                         <List className="w-3.5 h-3.5" />
@@ -386,21 +386,31 @@ export const SanitarioSlidePanel: React.FC<SanitarioSlidePanelProps> = ({
               />
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 items-start">
-                <Input
-                  label="Dose por Animal (ex: 5 ml)"
-                  id="dose_med_input"
-                  value={currentMedDose}
-                  onChange={(e) => setCurrentMedDose(e.target.value)}
-                  placeholder="Ex: 5 ml / animal"
-                />
+                <div>
+                  <label htmlFor="dose_med_input" className="flex min-h-10 items-end text-sm font-medium leading-snug text-gray-700 dark:text-gray-300 mb-1">
+                    <span>Dose por Animal<span className="block">(ex: 5 ml)</span></span>
+                  </label>
+                  <Input
+                    id="dose_med_input"
+                    value={currentMedDose}
+                    onChange={(e) => setCurrentMedDose(e.target.value)}
+                    placeholder="Ex: 5 ml / animal"
+                    noMargin
+                  />
+                </div>
 
-                <Input
-                  label="Qtd. Total Consumida (Baixa no Estoque)"
-                  id="qtd_med_input"
-                  type="number"
-                  value={currentMedQtd}
-                  onChange={(e) => setCurrentMedQtd(Number(e.target.value))}
-                />
+                <div>
+                  <label htmlFor="qtd_med_input" className="flex min-h-10 items-end text-sm font-medium leading-snug text-gray-700 dark:text-gray-300 mb-1">
+                    <span>Qtd. Total Consumida (Baixa no Estoque)</span>
+                  </label>
+                  <Input
+                    id="qtd_med_input"
+                    type="number"
+                    value={currentMedQtd}
+                    onChange={(e) => setCurrentMedQtd(Number(e.target.value))}
+                    noMargin
+                  />
+                </div>
               </div>
 
               <Button

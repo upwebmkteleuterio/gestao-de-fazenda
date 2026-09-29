@@ -183,7 +183,7 @@ const fetchEventos = async (): Promise<EventoReproducao[]> => {
   return ((data ?? []) as unknown as ReproducaoDbRow[]).map(toEvento);
 };
 
-const calcularPrevisaoParto = (dataRef?: string, dias = 285): string => {
+const calcularPrevisaoParto = (dataRef?: string, dias = 300): string => {
   if (!dataRef || !Number.isInteger(dias)) return '';
   const date = new Date(`${dataRef}T00:00:00`);
   if (isNaN(date.getTime())) return '';
@@ -648,7 +648,8 @@ export const reproducaoService = {
     await ensureNoLogicalDuplicate([normalized]);
     let previsaoParto = normalized.previsao_parto ?? '';
     if (normalized.resultado_dg === 'cheia' && !previsaoParto) {
-      previsaoParto = calcularPrevisaoParto(normalized.data_principal || normalized.data_dg);
+      const baseDate = normalized.dados_protocolo?.d10 || normalized.dados_protocolo?.d0 || normalized.data_principal || normalized.data_dg;
+      previsaoParto = calcularPrevisaoParto(baseDate);
     }
     const payload = buildEventoPayload(normalized, `rep-${crypto.randomUUID()}`, previsaoParto);
     const { data, error } = await supabase.from('eventos_reproducao').insert(payload).select('*').single();
@@ -694,7 +695,8 @@ export const reproducaoService = {
     await ensureNoLogicalDuplicate([normalized], id);
     let previsaoParto = normalized.previsao_parto || current.previsao_parto || '';
     if (normalized.resultado_dg === 'cheia' && !previsaoParto) {
-      previsaoParto = calcularPrevisaoParto(normalized.data_principal || normalized.data_dg);
+      const baseDate = normalized.dados_protocolo?.d10 || normalized.dados_protocolo?.d0 || normalized.data_principal || normalized.data_dg;
+      previsaoParto = calcularPrevisaoParto(baseDate);
     }
     const normalizedUpdates = {
       ...updates,

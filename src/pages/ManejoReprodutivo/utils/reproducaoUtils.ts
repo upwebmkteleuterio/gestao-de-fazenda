@@ -3,9 +3,9 @@
  */
 
 /**
- * Calcula a previsão estimada de parto somando dias de gestação (padrão 290 dias para gado de corte)
+ * Calcula a previsão estimada de parto somando dias de gestação (padrão 300 dias para gado de corte)
  */
-export const calcularPrevisaoParto = (dataBaseStr: string, dias = 290): string => {
+export const calcularPrevisaoParto = (dataBaseStr: string, dias = 300): string => {
   if (!dataBaseStr) return '';
   const dateObj = new Date(dataBaseStr + 'T00:00:00');
   if (isNaN(dateObj.getTime())) return '';

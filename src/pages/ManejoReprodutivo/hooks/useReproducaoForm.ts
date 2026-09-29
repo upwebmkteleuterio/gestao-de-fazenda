@@ -81,8 +81,8 @@ export const useReproducaoForm = ({
     receptora: '',
     data_dg_exame: new Date().toISOString().split('T')[0],
     dg_resultado: 'pendente',
-    dias_previsao_parto: 290,
-    previsao_parto: calcularPrevisaoParto(new Date().toISOString().split('T')[0], 290),
+    dias_previsao_parto: 300,
+    previsao_parto: calcularPrevisaoParto(new Date().toISOString().split('T')[0], 300),
     observacoes: '',
   });
 
@@ -123,8 +123,8 @@ export const useReproducaoForm = ({
       receptora: firstMatriz?.brinco || '',
       data_dg_exame: today,
       dg_resultado: 'pendente',
-      dias_previsao_parto: 290,
-      previsao_parto: calcularPrevisaoParto(today, 290),
+      dias_previsao_parto: 300,
+      previsao_parto: calcularPrevisaoParto(today, 300),
       observacoes: '',
     });
     setSelectedCowIds(firstMatriz ? [firstMatriz.id] : []);
@@ -140,7 +140,7 @@ export const useReproducaoForm = ({
     const baseDate = ev.dados_protocolo?.d10 || ev.dados_protocolo?.d0 || ev.data_principal;
     const dias = Number.isInteger(ev.dados_protocolo?.dias_gestacao_previsao)
       ? ev.dados_protocolo.dias_gestacao_previsao
-      : '';
+      : 300;
     const previsaoParto = ev.previsao_parto || (typeof dias === 'number' ? calcularPrevisaoParto(baseDate, dias) : '');
 
     setFormData({
@@ -179,7 +179,7 @@ export const useReproducaoForm = ({
     const baseDate = ev.dados_protocolo?.d10 || ev.dados_protocolo?.d0 || ev.data_principal;
     const dias = Number.isInteger(ev.dados_protocolo?.dias_gestacao_previsao)
       ? ev.dados_protocolo.dias_gestacao_previsao
-      : '';
+      : 300;
     const previsaoParto = ev.previsao_parto || (typeof dias === 'number' ? calcularPrevisaoParto(baseDate, dias) : '');
 
     setFormData({
@@ -276,11 +276,9 @@ export const useReproducaoForm = ({
         }
 
         const baseInseminacaoDate = formData.d10 || formData.d0 || formData.data_principal;
-        const calculatedParto = formData.previsao_parto || (
-          typeof formData.dias_previsao_parto === 'number' && Number.isFinite(formData.dias_previsao_parto)
-            ? calcularPrevisaoParto(baseInseminacaoDate, formData.dias_previsao_parto)
-            : ''
-        );
+        const calculatedParto = typeof formData.dias_previsao_parto === 'number' && Number.isFinite(formData.dias_previsao_parto)
+          ? calcularPrevisaoParto(baseInseminacaoDate, formData.dias_previsao_parto)
+          : '';
 
         const payload = {
           animal_id: formData.animal_id,

@@ -477,6 +477,7 @@ export const Lotes: React.FC = () => {
                         setCreateModalOpen(false);
                 }}
                 title="Criar Novo Lote"
+                contentOverflowVisible
                 actions={<div className="flex items-center justify-end gap-2 w-full">
                     <Button
                         variant="secondary"
@@ -533,7 +534,7 @@ export const Lotes: React.FC = () => {
                             aria-controls="novo-lote-animal-options"
                         />
                         {animalPickerOpen && (
-                            <div id="novo-lote-animal-options" role="listbox" className="absolute z-20 mt-1 max-h-52 w-full overflow-y-auto rounded-xl border border-gray-200 bg-white p-1 shadow-lg dark:border-gray-700 dark:bg-gray-800">
+                            <div id="novo-lote-animal-options" role="listbox" className="absolute z-[10001] mt-1 max-h-52 w-full overflow-y-auto rounded-xl border border-gray-200 bg-white p-1 shadow-lg dark:border-gray-700 dark:bg-gray-800">
                                 {animaisDisponiveisParaLote.length > 0 ? animaisDisponiveisParaLote.map(animal => (
                                     <button
                                         key={animal.id}

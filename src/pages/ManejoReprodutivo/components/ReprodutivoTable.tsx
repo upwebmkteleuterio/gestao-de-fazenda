@@ -159,7 +159,7 @@ export const ReprodutivoTable: React.FC<ReprodutivoTableProps> = ({
 
         const dataInseminacao =
           row.dados_protocolo?.d10 || row.dados_protocolo?.d0 || row.data_principal;
-        const dias = row.dados_protocolo?.dias_gestacao_previsao || 290;
+        const dias = row.dados_protocolo?.dias_gestacao_previsao || 300;
         const dataParto =
           row.previsao_parto ||
           (dataInseminacao ? calcularPrevisaoParto(dataInseminacao, dias) : '');
