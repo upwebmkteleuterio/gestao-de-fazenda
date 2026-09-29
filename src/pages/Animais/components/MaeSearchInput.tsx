@@ -38,13 +38,7 @@ export const MaeSearchInput: React.FC<MaeSearchInputProps> = ({
   const candidates = candidatesQuery.data?.data ?? [];
 
   const handleInputChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const nextValue = event.target.value;
-    setInputValue(nextValue);
-    if (value) {
-      previousValue.current = undefined;
-      setSelectedResult(undefined);
-      onChange(undefined);
-    }
+    setInputValue(event.target.value);
   };
 
   const handleSelect = (animal: Animal) => {
@@ -96,7 +90,7 @@ export const MaeSearchInput: React.FC<MaeSearchInputProps> = ({
             <p className="px-3 py-2 text-xs text-red-600 dark:text-red-400">Não foi possível buscar no banco. Tente novamente ou confira o cache local.</p>
           )}
           {!candidatesQuery.isLoading && !candidatesQuery.isError && candidates.length === 0 && (
-            <p className="px-3 py-2 text-xs text-gray-500 dark:text-gray-400">Nenhuma vaca, matriz, novilha ou bezerra encontrada para este brinco.</p>
+            <p className="px-3 py-2 text-xs text-gray-500 dark:text-gray-400">Nenhuma vaca, matriz ou novilha adulta encontrada para este brinco.</p>
           )}
           {candidates.map((animal) => (
             <button

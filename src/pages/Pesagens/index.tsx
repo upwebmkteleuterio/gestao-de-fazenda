@@ -87,12 +87,11 @@ export const PesagensPage: React.FC = () => {
   }, [isOffline]);
 
   const handleOpenCreate = () => {
-    const firstAnimal = animais[0];
     setSelectedPesagem(null);
     setFormData({
-      animal_id: firstAnimal?.id || '',
-      brinco_animal: firstAnimal?.brinco || '',
-      tipo_animal: firstAnimal?.tipo_animal || 'vaca',
+      animal_id: '',
+      brinco_animal: '',
+      tipo_animal: undefined,
       peso_kg: 0,
       data_pesagem: new Date().toISOString().split('T')[0],
       observacoes: '',

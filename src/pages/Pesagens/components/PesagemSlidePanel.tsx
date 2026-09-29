@@ -53,8 +53,12 @@ export const PesagemSlidePanel: React.FC<PesagemSlidePanelProps> = ({
   });
 
   React.useEffect(() => {
+    if (slideOpen && slideMode === 'create' && activeTabPanel === 'individual' && !formData.animal_id) {
+      setAnimalSearch('');
+      return;
+    }
     if (!animalDropdownOpen) setAnimalSearch(selectedAnimal ? animalLabel(selectedAnimal) : '');
-  }, [formData.animal_id, animais, animalDropdownOpen]);
+  }, [slideOpen, slideMode, activeTabPanel, formData.animal_id, animais, animalDropdownOpen]);
 
   React.useEffect(() => {
     if (!loteDropdownOpen) setLoteSearch(selectedLote ? loteLabel(selectedLote) : '');

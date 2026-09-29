@@ -55,6 +55,7 @@ export const AnimaisPage: React.FC = () => {
     setNomeLote,
     pastoIdLote,
     setPastoIdLote,
+    lotes,
     pastagens,
     handleMudarPastoLote,
     isCreatingLote,
@@ -194,6 +195,7 @@ export const AnimaisPage: React.FC = () => {
       <AnimaisSlidePanel
         animais={todosAnimais}
         pastagens={pastagens}
+        lotes={lotes}
         handleCreateFilho={handleCreateFilho}
         handleOpenChild={handleOpenView}
         slideOpen={slideOpen}

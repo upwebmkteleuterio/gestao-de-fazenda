@@ -1,7 +1,6 @@
 import { useState, useEffect, FormEvent } from 'react';
 import { Animal } from '@/types/database';
 import { useAnimais } from '@/hooks/useAnimais';
-import { usePastagens } from '@/hooks/usePastagens';
 import { useUIStore } from '@/store/useUIStore';
 import { classifyAnimalType } from '@/services/animalClassification';
 import { isFutureDate, isValidDate, validateAnimalFields } from '@/services/domainValidation';
@@ -17,7 +16,7 @@ const INITIAL_FORM_DATA: Partial<Animal> = {
   status: 'ativo',
   categoria: 'PO',
   motivo_descarte: '',
-  pasto_id: '',
+  pasto_id: undefined,
   cdc: '',
   cdn: '',
   status_reprodutivo: 'Solteira',
@@ -29,7 +28,6 @@ const INITIAL_FORM_DATA: Partial<Animal> = {
 
 export const useAnimalForm = (animals: Animal[] = EMPTY_ANIMALS) => {
   const { slidePanel, closeSlidePanel, showToast } = useUIStore();
-  const { pastagens } = usePastagens();
   const { createAnimal, updateAnimal, deleteAnimal, isDeleting, syncLocalMutation } = useAnimais();
 
   const [slideOpen, setSlideOpen] = useState(false);
@@ -60,7 +58,7 @@ export const useAnimalForm = (animals: Animal[] = EMPTY_ANIMALS) => {
     setFormData({
       ...INITIAL_FORM_DATA,
       data_nascimento: new Date().toISOString().split('T')[0],
-      pasto_id: pastagens[0]?.id || '',
+      pasto_id: undefined,
       ...(overrides || {}),
     });
     setSlideMode('create');

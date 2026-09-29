@@ -351,8 +351,6 @@ const normalizeAndValidateAnimal = async (
   input: AnimalCreateInput,
   currentId?: string,
   originalBrinco?: string,
-  originalMaeId?: string,
-  originalPaiId?: string,
 ): Promise<AnimalCreateInput> => {
   const local = await readLocalAnimals(userId);
   const context = currentId
@@ -367,11 +365,10 @@ const normalizeAndValidateAnimal = async (
   if ((!currentId || brinco !== originalBrinco?.trim()) && await findActiveBrincoConflict(userId, brinco, currentId)) {
     throw new DomainValidationError(`O ID/Brinco ${brinco} já está em uso por outro animal ativo. Os registros existentes foram preservados.`);
   }
-  const normalizeParent = async (reference: string | undefined, kind: 'mae' | 'pai', originalReference?: string) => {
+  const normalizeParent = async (reference: string | undefined, kind: 'mae' | 'pai') => {
     if (!reference?.trim()) return undefined;
-    if (currentId && reference.trim() === originalReference?.trim()) return reference.trim();
     const parent = await findParentCandidate(userId, reference.trim(), kind, currentId);
-    if (!parent) throw new DomainValidationError(kind === 'mae' ? 'Selecione uma mãe válida, sem usar o próprio animal.' : 'Selecione um pai válido, sem usar o próprio animal.');
+    if (!parent) throw new DomainValidationError(kind === 'mae' ? 'Selecione uma mãe adulta válida, sem usar o próprio animal.' : 'Selecione um pai válido, sem usar o próprio animal.');
     return parent.id;
   };
   return {
@@ -386,8 +383,8 @@ const normalizeAndValidateAnimal = async (
     motivo_descarte: classifiedInput.motivo_descarte?.trim() || undefined,
     data_descarte: classifiedInput.data_descarte || undefined,
     historico_toque: classifiedInput.historico_toque?.map((toque) => ({ ...toque, brinco, observacoes: toque.observacoes?.trim() || undefined })),
-    mae_id: await normalizeParent(classifiedInput.mae_id, 'mae', originalMaeId),
-    pai_id: await normalizeParent(classifiedInput.pai_id, 'pai', originalPaiId),
+    mae_id: await normalizeParent(classifiedInput.mae_id, 'mae'),
+    pai_id: await normalizeParent(classifiedInput.pai_id, 'pai'),
   };
 };
 
@@ -679,7 +676,7 @@ const remoteDeleteAnimal = async (id: string): Promise<void> => {
   if (error) throw error;
 };
 
-const MOTHER_TYPES: Animal['tipo_animal'][] = ['vaca', 'matriz', 'novilha', 'bezerra'];
+const MOTHER_TYPES: Animal['tipo_animal'][] = ['vaca', 'matriz', 'novilha'];
 const isMotherCandidate = (animal: Animal, excludeId?: string, animals: readonly Animal[] = [animal]): boolean => (
   animal.id !== excludeId
   && MOTHER_TYPES.includes(classifyAnimalType(animal, animals))
@@ -884,7 +881,7 @@ export const animaisService = {
     if (!userId) throw new Error('Sua sessão expirou. Entre novamente.');
     const current = await animaisService.getById(id);
     if (!current) throw new DomainValidationError('Animal não encontrado para edição.');
-    const normalized = await normalizeAndValidateAnimal(userId, { ...current, ...updates } as AnimalCreateInput, id, current.brinco, current.mae_id, current.pai_id);
+    const normalized = await normalizeAndValidateAnimal(userId, { ...current, ...updates } as AnimalCreateInput, id, current.brinco);
     const { id: _id, createdAt: _createdAt, status_sincronizacao: _status, ...normalizedUpdates } = normalized as Animal & { id?: string; createdAt?: string };
     return queueLocalUpdate(userId, id, normalizedUpdates, current);
   },

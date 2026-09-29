@@ -43,6 +43,7 @@ import {
     SexoAnimal,
     RegistroToqueAno,
     TipoCobertura,
+    Lote,
 } from "../../../types/database";
 
 import { Tabs } from "../../../components/Tabs";
@@ -50,6 +51,7 @@ import { animalTypeLabels } from "@/services/animalClassification";
 import { isPlausibleAnimalWeight } from "@/services/domainValidation";
 import { useAnimalChildren } from "@/hooks/useAnimais";
 import { MaeSearchInput } from "./MaeSearchInput";
+import { TouroSearchInput } from "./TouroSearchInput";
 import { AnimalAvatar } from "./AnimalAvatar";
 type MatrizTab = "cobertas" | "paridas" | "solteiras" | "toque";
 type Toast = (message: string, type?: "success" | "error" | "info") => void;
@@ -81,6 +83,7 @@ interface AnimaisSlidePanelProps {
         id: string;
         nome_pasto: string;
     }>;
+    lotes?: Lote[];
     handleCreateFilho?: (maeId: string) => void;
     handleOpenChild?: (animal: Animal) => void;
 }
@@ -110,6 +113,7 @@ export const AnimaisSlidePanel: React.FC<AnimaisSlidePanelProps> = (
         showToast,
         animais = [],
         pastagens = [],
+        lotes = [],
         handleCreateFilho,
         handleOpenChild
     }
@@ -128,6 +132,14 @@ export const AnimaisSlidePanel: React.FC<AnimaisSlidePanelProps> = (
     };
 
     const pastureName = selectedAnimal?.pasto_nome || pastagens.find(pastagem => pastagem.id === selectedAnimal?.pasto_id)?.nome_pasto;
+    const selectedPastureId = formData.pasto_id || pastagens.find(pastagem => pastagem.nome_pasto === formData.pasto_nome)?.id || "";
+    const coveredBull = selectedAnimal?.touro_cobertura
+        ? animais.find(animal => animal.id === selectedAnimal.touro_cobertura)
+        : undefined;
+    const coveredBullLabel = coveredBull
+        ? `${coveredBull.brinco} (${coveredBull.tipo_animal})`
+        : selectedAnimal?.touro_cobertura;
+    const linkedLotes = selectedAnimal ? lotes.filter(lote => lote.animais_ids.includes(selectedAnimal.id)) : [];
 
     return (
         <>
@@ -198,10 +210,6 @@ export const AnimaisSlidePanel: React.FC<AnimaisSlidePanelProps> = (
                             <p className="text-xs text-gray-400 uppercase font-semibold">Peso Atual</p>
                             <p className="font-medium text-gray-800 dark:text-gray-200">{selectedAnimal.peso_atual ? `${selectedAnimal.peso_atual} kg` : "N/I"}</p>
                         </div>
-                        {pastureName && (<div>
-                            <p className="text-xs text-gray-400 uppercase font-semibold">Pasto</p>
-                            <p className="font-medium text-gray-800 dark:text-gray-200">{pastureName}</p>
-                        </div>)}
                         <div>
                             <p className="text-xs text-gray-400 uppercase font-semibold">Tipo de Reprodução</p>
                             <p
@@ -241,6 +249,23 @@ export const AnimaisSlidePanel: React.FC<AnimaisSlidePanelProps> = (
                             <p className="text-xs text-gray-400 mt-1">Histórico de descartes para este brinco: <span className="font-bold">{selectedAnimal.qtd_descartes_brinco || 1}</span>
                             </p>
                         </div>)}
+                    </div>
+                    <div className="rounded-xl border border-emerald-100 bg-emerald-50/50 p-4 dark:border-emerald-800/40 dark:bg-emerald-950/20">
+                        <p className="text-xs font-bold uppercase tracking-wide text-emerald-700 dark:text-emerald-300">Pasto atual</p>
+                        <p className="mt-1 font-medium text-gray-800 dark:text-gray-200">{pastureName || "Nenhum pasto vinculado"}</p>
+                    </div>
+                    <div className="rounded-xl border border-amber-100 bg-amber-50/50 p-4 dark:border-amber-800/40 dark:bg-amber-950/20">
+                        <div className="flex items-center justify-between gap-3">
+                            <p className="text-xs font-bold uppercase tracking-wide text-amber-700 dark:text-amber-300">Lotes vinculados</p>
+                            {linkedLotes.length > 0 && <Badge variant="neutral">{linkedLotes.length}</Badge>}
+                        </div>
+                        {linkedLotes.length > 0 ? (
+                            <ul className="mt-2 space-y-1.5 text-sm text-gray-800 dark:text-gray-200">
+                                {linkedLotes.map(lote => <li key={lote.id} className="rounded-lg bg-white/80 px-3 py-2 dark:bg-gray-800/80">{lote.nome}</li>)}
+                            </ul>
+                        ) : (
+                            <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">Nenhum lote vinculado.</p>
+                        )}
                     </div>
                     {}
                     {(["bezerro", "bezerra"].includes(selectedAnimal.tipo_animal) || selectedAnimal.cdc || selectedAnimal.cdn) && (<div
@@ -317,7 +342,7 @@ export const AnimaisSlidePanel: React.FC<AnimaisSlidePanelProps> = (
                             <div>
                                 <p
                                     className="text-xs text-purple-600 dark:text-purple-400 uppercase font-semibold">Touro Cobertura</p>
-                                <p className="font-medium text-gray-800 dark:text-gray-200">{selectedAnimal.touro_cobertura || "N/I"}</p>
+                                <p className="font-medium text-gray-800 dark:text-gray-200">{coveredBullLabel || "N/I"}</p>
                             </div>
                         </div>
                         {selectedAnimal.historico_toque && selectedAnimal.historico_toque.length > 0 && (<div className="pt-2 border-t border-purple-100 dark:border-purple-800/40">
@@ -564,6 +589,25 @@ export const AnimaisSlidePanel: React.FC<AnimaisSlidePanelProps> = (
                                     label: "Morto",
                                     value: "morto"
                                 }]} />
+                            <Select
+                                label="Pasto atual"
+                                id="pasto_id"
+                                value={selectedPastureId}
+                                onChange={e => {
+                                    const pastagem = pastagens.find(item => item.id === e.target.value);
+                                    setFormData({
+                                        ...formData,
+                                        pasto_id: pastagem?.id || undefined,
+                                        pasto_nome: pastagem?.nome_pasto || undefined,
+                                    });
+                                }}
+                                options={[{
+                                    label: "Sem pasto vinculado",
+                                    value: ""
+                                }, ...pastagens.map(pastagem => ({
+                                    label: pastagem.nome_pasto,
+                                    value: pastagem.id
+                                }))]} />
                             <Input
                                 label="Pelagem / Cor"
                                 id="cor"
@@ -724,15 +768,14 @@ export const AnimaisSlidePanel: React.FC<AnimaisSlidePanelProps> = (
                                 activeTab={matrizTab}
                                 onChange={t => setMatrizTab(t as MatrizTab)} />
                             {matrizTab === "cobertas" && (<div className="space-y-3 pt-2">
-                                <Input
-                                    label="Touro Cobertura (Opcional)"
-                                    id="touro_cobertura"
-                                    value={formData.touro_cobertura || ""}
-                                    onChange={e => setFormData({
+                                <TouroSearchInput
+                                    value={formData.touro_cobertura}
+                                    animais={animais}
+                                    onChange={value => setFormData({
                                         ...formData,
-                                        touro_cobertura: e.target.value
+                                        touro_cobertura: value
                                     })}
-                                    placeholder="Ex: BR-0102" />
+                                />
                                 <Select
                                     label="Tipo de Cobertura"
                                     id="tipo_cobertura"

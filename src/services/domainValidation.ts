@@ -230,7 +230,7 @@ export const validateReportFilters = (filters: {
 };
 
 export const parentTypes: Record<'mae' | 'pai', TipoAnimal[]> = {
-  mae: ['vaca', 'matriz', 'novilha', 'bezerra'],
+  mae: ['vaca', 'matriz', 'novilha'],
   pai: ['touro', 'novilho', 'garrote', 'bezerro'],
 };
 
