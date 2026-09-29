@@ -24,7 +24,6 @@ export const ReprodutivoSlidePanel = ({
   const [modoManualEcc, setModoManualEcc] = React.useState(false);
   const [modoManualTipoEmbriao, setModoManualTipoEmbriao] = React.useState(false);
   const [modoManualReceptora, setModoManualReceptora] = React.useState(false);
-  const maxDate = new Date().toISOString().split('T')[0];
 
   const padroesSemen = ['Convencional', 'Sexado de Fêmea', 'Sexado de Macho'];
   const padroesEmbriao = ['Vitrificado FIV', 'Fresco FIV', 'Congelado Sexado'];
@@ -369,7 +368,6 @@ export const ReprodutivoSlidePanel = ({
                   label="D8 Retirada do Implante"
                   id="iatf_d8"
                   type="date"
-                  max={maxDate}
                   value={formData.d8}
                   onChange={(e) => setFormData({ ...formData, d8: e.target.value })}
                 />
@@ -377,7 +375,6 @@ export const ReprodutivoSlidePanel = ({
                   label="Data D10 (Inseminação)"
                   id="iatf_d10"
                   type="date"
-                  max={maxDate}
                   value={formData.d10}
                   onChange={(e) => {
                     const newD10 = e.target.value;
