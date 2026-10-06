@@ -689,16 +689,10 @@ export const AnimaisSlidePanel: React.FC<AnimaisSlidePanelProps> = (
                             </div>
                         </div>)}
                         {}
-                        {["bezerro", "bezerra"].includes(formData.tipo_animal) && (<div
-                            className="space-y-4 p-4 bg-blue-50/50 dark:bg-blue-950/20 rounded-xl border border-blue-100 dark:border-blue-800/40 mt-4">
-                            <div
-                                className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
-                                <h4
-                                    className="text-xs font-bold text-blue-800 dark:text-blue-300 uppercase tracking-wide">Ficha de Filiação & Genealogia (Bezerro/a)
-                                                      </h4>
-                                <span
-                                    className="text-[11px] font-medium text-blue-700 dark:text-blue-400 bg-blue-100/70 dark:bg-blue-900/40 px-2 py-0.5 rounded">Genealogia ABCZ
-                                                      </span>
+                        <div className="space-y-4 p-4 bg-blue-50/50 dark:bg-blue-950/20 rounded-xl border border-blue-100 dark:border-blue-800/40 mt-4">
+                            <div>
+                                <h4 className="text-xs font-bold text-blue-800 dark:text-blue-300 uppercase tracking-wide">Filiação (Pai e Mãe)</h4>
+                                <p className="text-[11px] text-blue-700 dark:text-blue-400">Informe a mãe e o pai do animal, independente da idade.</p>
                             </div>
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                 <MaeSearchInput
@@ -727,18 +721,15 @@ export const AnimaisSlidePanel: React.FC<AnimaisSlidePanelProps> = (
                                         value: a.id
                                     }))]} />
                             </div>
-                            {}
-                            <div
-                                className="pt-3 border-t border-blue-100 dark:border-blue-800/40 space-y-2.5">
-                                <div
-                                    className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
+                        </div>
+                        {["bezerro", "bezerra"].includes(formData.tipo_animal) && (<div className="space-y-4 p-4 bg-blue-50/50 dark:bg-blue-950/20 rounded-xl border border-blue-100 dark:border-blue-800/40 mt-4">
+                            <div className="space-y-2.5">
+                                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
                                     <div>
-                                        <h5
-                                            className="text-xs font-bold text-gray-900 dark:text-gray-100 uppercase tracking-wide flex items-center gap-1.5">
-                                            <span className="w-2 h-2 rounded-full bg-blue-600"></span>Registros Oficiais ABCZ (Associação Brasileira dos Criadores de Zebu)
-                                                                  </h5>
-                                        <p className="text-[11px] text-gray-500 dark:text-gray-400">Informe os números de cadastro de cobertura e de nascimento junto à ABCZ
-                                                                  </p>
+                                        <h5 className="text-xs font-bold text-gray-900 dark:text-gray-100 uppercase tracking-wide flex items-center gap-1.5">
+                                            <span className="w-2 h-2 rounded-full bg-blue-600"></span>Registros ABCZ (CDC e CDN)
+                                        </h5>
+                                        <p className="text-[11px] text-gray-500 dark:text-gray-400">Informe os números de cadastro de cobertura e de nascimento junto à ABCZ</p>
                                     </div>
                                 </div>
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1">

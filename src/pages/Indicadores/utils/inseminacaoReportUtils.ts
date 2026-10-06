@@ -23,7 +23,7 @@ export const formatarDataBR = (dataIso?: string): string => {
   return parts.length === 3 ? `${parts[2]}/${parts[1]}/${parts[0]}` : dataIso;
 };
 
-const protocoloLabel = (protocolo: string) => protocolo === 'iatf' ? 'IATF' : protocolo === 'monta_natural' ? 'Monta Natural' : 'TETF';
+const protocoloLabel = (protocolo: string) => protocolo === 'iatf' ? 'IATF' : protocolo === 'monta_natural' ? 'Monta Natural' : protocolo === 'dg' ? 'Diagnóstico (DG)' : 'TETF';
 const resultadoLabel = (resultado?: string) => resultado === 'cheia' ? 'Gestante (Prenha)' : resultado === 'vazia' ? 'Vazia' : 'Aguardando DG';
 
 export const exportarInseminacoesXLSX = (itens: InseminacaoRelatorioItem[], tituloPeriodo: string): boolean => {

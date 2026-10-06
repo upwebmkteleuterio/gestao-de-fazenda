@@ -14,10 +14,12 @@ import { EventoReproducao, DGToqueResultado, Animal } from '../../../types/datab
 export const ReprodutivoSlidePanel = ({
   slideOpen, setSlideOpen, slideMode, setSlideMode, selectedEvento,
   formData, setFormData, isSaving, handleSave, activeTab, setActiveTab,
-  selectedCowIds, toggleCowSelection, toggleAllCows, matrizes, touros,
+  selectedCowIds, toggleCowSelection, toggleAllCows, matrizes, matrizesDisponiveis, touros,
+  lotes, selectedLoteId, setSelectedLoteId,
   isFormValid, calcularPrevisaoParto, setModalOpen, setEventoToDelete, mutationsDisabled = false
 }: any) => {
   const [modoManualIatf, setModoManualIatf] = React.useState(false);
+  const [modoManualTouroMonta, setModoManualTouroMonta] = React.useState(false);
   const [modoManualDg, setModoManualDg] = React.useState(false);
   const [modoManualTouro, setModoManualTouro] = React.useState(false);
   const [modoManualTipoSemen, setModoManualTipoSemen] = React.useState(false);
@@ -36,6 +38,8 @@ export const ReprodutivoSlidePanel = ({
     '4.0 (Gorda)',
     '5.0 (Obesa)',
   ];
+  const tourosMonta = (touros ?? []) as Animal[];
+  const touroMontaLabel = (touro: Animal) => `Touro #${touro.brinco} (${touro.raca || 'Sem raça'})`;
 
   React.useEffect(() => {
     if (formData.brinco_matriz && (!formData.animal_id || !matrizes.some((m: any) => m.id === formData.animal_id))) {
@@ -81,6 +85,12 @@ export const ReprodutivoSlidePanel = ({
       }
     }
   }, [formData.touro, touros]);
+
+  React.useEffect(() => {
+    if (formData.nome_touro_monta && !tourosMonta.some((touro) => touroMontaLabel(touro) === formData.nome_touro_monta)) {
+      setModoManualTouroMonta(true);
+    }
+  }, [formData.nome_touro_monta, tourosMonta]);
 
   return (
     <>
@@ -168,17 +178,19 @@ export const ReprodutivoSlidePanel = ({
               <span>TETF (Embrião)</span>
             </button>
 
-            <button
-              onClick={() => setActiveTab('dg')}
-              className={`pb-3 px-3 font-bold text-xs sm:text-sm border-b-2 whitespace-nowrap transition-colors flex items-center space-x-1.5 ${
-                activeTab === 'dg'
-                  ? 'border-emerald-600 text-emerald-600 dark:text-emerald-400'
-                  : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400'
-              }`}
-            >
-              <Activity className="w-4 h-4" />
-              <span>Diagnóstico (DG)</span>
-            </button>
+            {selectedEvento?.tipo_protocolo === 'dg' && (
+              <button
+                onClick={() => setActiveTab('dg')}
+                className={`pb-3 px-3 font-bold text-xs sm:text-sm border-b-2 whitespace-nowrap transition-colors flex items-center space-x-1.5 ${
+                  activeTab === 'dg'
+                    ? 'border-emerald-600 text-emerald-600 dark:text-emerald-400'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400'
+                }`}
+              >
+                <Activity className="w-4 h-4" />
+                <span>Diagnóstico (DG)</span>
+              </button>
+            )}
           </div>
 
           {/* TAB 1: IATF (CAMPOS SOLICITADOS PELO CLIENTE) */}
@@ -189,7 +201,7 @@ export const ReprodutivoSlidePanel = ({
                   Inseminação em Tempo Fixo (IATF)
                 </h4>
                 <p className="text-xs text-gray-600 dark:text-gray-400">
-                  Cadastre as etapas D0, D8, D10, o touro/sêmen utilizado e o diagnóstico prévio ou pós-ultrassom.
+                  Informe a data D10 da inseminação, o touro/sêmen utilizado e o diagnóstico prévio ou pós-ultrassom.
                 </p>
               </div>
 
@@ -343,50 +355,25 @@ export const ReprodutivoSlidePanel = ({
                 )}
               </div>
 
-              {/* Cronograma D0, D8, D10 */}
-              <div className="grid grid-cols-1 min-[420px]:grid-cols-2 gap-3">
+              {/* Data D10 da inseminação */}
+              <div>
                 <Input
-                  label="D0 Implante *"
-                  id="iatf_d0"
-                  type="date"
-                  value={formData.d0}
-                  onChange={(e) => {
-                    const newD0 = e.target.value;
-                    const baseDate = formData.d10 || newD0 || formData.data_principal;
-                    setFormData({
-                      ...formData,
-                      d0: newD0,
-                      data_principal: newD0,
-                      previsao_parto: typeof formData.dias_previsao_parto === 'number'
-                        ? calcularPrevisaoParto(baseDate, formData.dias_previsao_parto)
-                        : '',
-                    });
-                  }}
-                  required
-                />
-                <Input
-                  label="D8 Retirada do Implante"
-                  id="iatf_d8"
-                  type="date"
-                  value={formData.d8}
-                  onChange={(e) => setFormData({ ...formData, d8: e.target.value })}
-                />
-                <Input
-                  label="Data D10 (Inseminação)"
+                  label="Data D10 (Inseminação) *"
                   id="iatf_d10"
                   type="date"
                   value={formData.d10}
                   onChange={(e) => {
                     const newD10 = e.target.value;
-                    const baseDate = newD10 || formData.d0 || formData.data_principal;
                     setFormData({
                       ...formData,
                       d10: newD10,
+                      data_principal: newD10 || formData.data_principal,
                       previsao_parto: typeof formData.dias_previsao_parto === 'number'
-                        ? calcularPrevisaoParto(baseDate, formData.dias_previsao_parto)
+                        ? calcularPrevisaoParto(newD10 || formData.data_principal, formData.dias_previsao_parto)
                         : '',
                     });
                   }}
+                  required={!formData.d0}
                 />
               </div>
 
@@ -414,7 +401,7 @@ export const ReprodutivoSlidePanel = ({
                     value={formData.dias_previsao_parto}
                     onChange={(e) => {
                       const dias = e.target.value === '' ? '' : Number(e.target.value);
-                      const baseDate = formData.d10 || formData.d0 || formData.data_principal;
+                      const baseDate = formData.d10 || formData.data_principal;
                       const previsaoParto = typeof dias === 'number' && Number.isFinite(dias)
                         ? calcularPrevisaoParto(baseDate, dias)
                         : '';
@@ -644,7 +631,7 @@ export const ReprodutivoSlidePanel = ({
                 <div>
                   <div className="flex flex-col items-start gap-1.5 mb-1.5">
                     <label htmlFor="iatf_ecc" className="block text-sm font-semibold text-gray-900 dark:text-gray-100">
-                      Condição Corporal (ECC) *
+                      Condição Corporal (ECC)
                     </label>
                     <div className="flex items-center space-x-1 text-xs bg-gray-100 dark:bg-gray-800 p-0.5 rounded-lg border border-gray-200 dark:border-gray-700">
                       <button
@@ -728,7 +715,6 @@ export const ReprodutivoSlidePanel = ({
                         value={formData.condicao_corporal || ''}
                         onChange={(e) => setFormData({ ...formData, condicao_corporal: e.target.value })}
                         placeholder="Ex: 2.75, 3.25, Regular+, 4.2..."
-                        required
                         noMargin
                       />
                       <div className="flex items-center justify-between text-[11px] px-1 pt-0.5">
@@ -816,23 +802,6 @@ export const ReprodutivoSlidePanel = ({
                 </div>
               </div>
 
-              {/* Reimplantou Switch */}
-              <div className="flex items-center justify-between p-3.5 rounded-lg border border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-900">
-                <div>
-                  <span className="text-sm font-bold text-gray-900 dark:text-white">Reimplantou (Ressincronização)</span>
-                  <p className="text-xs text-gray-500 dark:text-gray-400">Marque se a matriz passou por novo protocolo de reimplante.</p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setFormData({ ...formData, reimplantou: !formData.reimplantou })}
-                  className={`w-12 h-6 flex items-center rounded-full p-1 transition-colors duration-200 ${
-                    formData.reimplantou ? 'bg-emerald-600 justify-end' : 'bg-gray-300 dark:bg-gray-700 justify-start'
-                  }`}
-                >
-                  <div className="w-4 h-4 rounded-full bg-white shadow-md" />
-                </button>
-              </div>
-
               <div>
                 <label htmlFor="iatf_obs" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                   Observações
@@ -870,32 +839,73 @@ export const ReprodutivoSlidePanel = ({
                   onChange={(e) => setFormData({ ...formData, data_principal: e.target.value })}
                   required
                 />
-                <Input
-                  label="Nome / Código do Touro *"
-                  id="monta_touro"
-                  value={formData.nome_touro_monta}
-                  onChange={(e) => setFormData({ ...formData, nome_touro_monta: e.target.value })}
-                  placeholder="Ex: Touro PO Nelore #01"
-                  required
+                <Select
+                  label="Lote de matrizes"
+                  id="monta_lote"
+                  value={selectedLoteId}
+                  onChange={(e) => setSelectedLoteId(e.target.value)}
+                  options={[
+                    { label: 'Todos os animais (sem lote)', value: '' },
+                    ...lotes.map((lote: { id: string; nome: string }) => ({ label: lote.nome, value: lote.id })),
+                  ]}
                 />
+                {!modoManualTouroMonta ? (
+                  <Select
+                    label="Touro cadastrado *"
+                    id="monta_touro"
+                    value={formData.nome_touro_monta || ''}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      if (value === '__manual__') {
+                        setModoManualTouroMonta(true);
+                        return;
+                      }
+                      setFormData({ ...formData, nome_touro_monta: value });
+                    }}
+                    options={[
+                      { label: 'Selecione um touro cadastrado...', value: '' },
+                      ...tourosMonta.map((touro) => ({ label: touroMontaLabel(touro), value: touroMontaLabel(touro) })),
+                      { label: '✏️ Digitar touro manualmente...', value: '__manual__' },
+                    ]}
+                    required
+                  />
+                ) : (
+                  <div>
+                    <Input
+                      label="Nome / Código do Touro *"
+                      id="monta_touro"
+                      value={formData.nome_touro_monta}
+                      onChange={(e) => setFormData({ ...formData, nome_touro_monta: e.target.value })}
+                      placeholder="Ex: Touro PO Nelore #01"
+                      required
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setModoManualTouroMonta(false)}
+                      className="mt-1 text-xs font-medium text-emerald-600 hover:underline dark:text-emerald-400"
+                    >
+                      Selecionar touro cadastrado
+                    </button>
+                  </div>
+                )}
               </div>
 
               {/* Checkbox List com as Vacas Selecionadas */}
               <div>
                 <div className="flex justify-between items-center mb-2">
                   <label className="text-sm font-semibold text-gray-900 dark:text-gray-100">
-                    Vacas / Matrizes Selecionadas ({selectedCowIds.length} de {matrizes.length}) *
+                    Vacas / Matrizes Selecionadas ({selectedCowIds.length} de {matrizesDisponiveis.length}) *
                   </label>
                   <Button variant="ghost" onClick={toggleAllCows} className="text-xs text-emerald-600 dark:text-emerald-400">
-                    {selectedCowIds.length === matrizes.length ? 'Desmarcar Todas' : 'Selecionar Todas'}
+                    {selectedCowIds.length === matrizesDisponiveis.length ? 'Desmarcar Todas' : 'Selecionar Todas'}
                   </Button>
                 </div>
 
                 <div className="max-h-52 overflow-y-auto border border-gray-200 dark:border-gray-800 rounded-xl p-2 space-y-1 bg-white dark:bg-gray-900">
-                  {matrizes.length === 0 ? (
-                    <p className="text-xs text-gray-400 p-3 text-center">Nenhuma fêmea cadastrada no rebanho.</p>
+                  {matrizesDisponiveis.length === 0 ? (
+                    <p className="text-xs text-gray-400 p-3 text-center">Nenhuma fêmea cadastrada neste lote.</p>
                   ) : (
-                    matrizes.map((cow) => {
+                    matrizesDisponiveis.map((cow) => {
                       const isSelected = selectedCowIds.includes(cow.id);
                       return (
                         <div
@@ -1225,7 +1235,7 @@ export const ReprodutivoSlidePanel = ({
           )}
 
           {/* TAB 4: DIAGNÓSTICO (DG) */}
-          {activeTab === 'dg' && (
+          {activeTab === 'dg' && selectedEvento?.tipo_protocolo === 'dg' && (
             <div className="space-y-4">
               <div className="bg-blue-50/60 dark:bg-blue-950/30 p-4 rounded-xl border border-blue-100 dark:border-blue-900/40">
                 <h4 className="text-xs font-bold uppercase text-blue-800 dark:text-blue-300 mb-1">

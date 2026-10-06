@@ -106,11 +106,11 @@ const validateReproducaoDates = (item: Partial<EventoReproducao>): void => {
 
   if (item.tipo_protocolo !== 'iatf') return;
   const dados = item.dados_protocolo ?? {};
-  const d0 = validateReproducaoDate(dados.d0, 'D0');
+  const d0 = validateReproducaoDate(dados.d0, 'D0', true);
   const d8 = validateReproducaoDate(dados.d8, 'D8', true, true);
   const d10 = validateReproducaoDate(dados.d10, 'D10', true, true);
-  if (d8 && d8 < d0) throw new DomainValidationError('A data D8 deve ser igual ou posterior ao D0.');
-  if (d10 && d10 < (d8 || d0)) throw new DomainValidationError('A data D10 deve ser igual ou posterior à etapa anterior.');
+  if (d8 && d0 && d8 < d0) throw new DomainValidationError('A data D8 deve ser igual ou posterior ao D0.');
+  if (d10 && (d8 || d0) && d10 < (d8 || d0)) throw new DomainValidationError('A data D10 deve ser igual ou posterior à etapa anterior.');
   if (dados.data_ultrassom) validateReproducaoDate(dados.data_ultrassom, 'o ultrassom/DG', true);
   if (item.previsao_parto && !isValidDate(item.previsao_parto)) throw new DomainValidationError('Informe uma data válida para a previsão de parto.');
 };
@@ -130,14 +130,16 @@ export const validateReproducaoFields = (item: Partial<EventoReproducao>): void 
   if (observacoes.length > MAX_REPRODUCAO_OBSERVACOES_LENGTH) throw new DomainValidationError('As observações devem ter no máximo 2.000 caracteres.');
 
   if (item.tipo_protocolo === 'iatf') {
-    requireTrimmedText(dados.d0, 'a data D0');
+    if (!(dados.d10 || dados.d0)) throw new DomainValidationError('Informe a data D10 (data da inseminação).');
     requireTrimmedText(dados.touro, 'o touro/sêmen');
     const tipoSemen = requireTrimmedText(dados.tipo_semen, 'o tipo de sêmen');
     if (tipoSemen.length > MAX_REPRODUCAO_TEXT_LENGTH) throw new DomainValidationError('O tipo de sêmen deve ter no máximo 200 caracteres.');
-    const ecc = requireTrimmedText(dados.condicao_corporal, 'a condição corporal (ECC)');
-    const eccMatch = ecc.replace(',', '.').match(/^(\d+(?:\.\d+)?)(?:\s*\([^)]*\))?$/);
-    const eccNumber = eccMatch ? Number(eccMatch[1]) : Number.NaN;
-    if (!Number.isFinite(eccNumber) || eccNumber < 1 || eccNumber > 5) throw new DomainValidationError('A ECC deve ser numérica e ficar entre 1 e 5. Descrições devem ser registradas nas observações.');
+    if (typeof dados.condicao_corporal === 'string' && dados.condicao_corporal.trim()) {
+      const ecc = dados.condicao_corporal.trim();
+      const eccMatch = ecc.replace(',', '.').match(/^(\d+(?:\.\d+)?)(?:\s*\([^)]*\))?$/);
+      const eccNumber = eccMatch ? Number(eccMatch[1]) : Number.NaN;
+      if (!Number.isFinite(eccNumber) || eccNumber < 1 || eccNumber > 5) throw new DomainValidationError('A ECC deve ser numérica e ficar entre 1 e 5. Descrições devem ser registradas nas observações.');
+    }
     const dias = dados.dias_gestacao_previsao;
     if (!Number.isInteger(dias) || dias < 200 || dias > 400) throw new DomainValidationError('Os dias de previsão devem ser um inteiro entre 200 e 400.');
     if (item.previsao_parto) {

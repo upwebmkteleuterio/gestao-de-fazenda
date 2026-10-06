@@ -80,6 +80,10 @@ export const ManejoReprodutivoPage: React.FC = () => {
     formData,
     setFormData,
     matrizes,
+    matrizesDisponiveis,
+    lotes,
+    selectedLoteId,
+    setSelectedLoteId,
     tourosList,
     handleOpenCreate,
     handleOpenEdit,
@@ -205,6 +209,10 @@ export const ManejoReprodutivoPage: React.FC = () => {
         toggleCowSelection={toggleCowSelection}
         toggleAllCows={selectAllCows}
         matrizes={matrizes}
+        matrizesDisponiveis={matrizesDisponiveis}
+        lotes={lotes}
+        selectedLoteId={selectedLoteId}
+        setSelectedLoteId={setSelectedLoteId}
         touros={tourosList}
         calcularPrevisaoParto={calcularPrevisaoParto}
         setModalOpen={setModalOpen}

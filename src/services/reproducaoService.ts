@@ -647,8 +647,8 @@ export const reproducaoService = {
     const normalized = await normalizeEventInput(item);
     await ensureNoLogicalDuplicate([normalized]);
     let previsaoParto = normalized.previsao_parto ?? '';
-    if (normalized.resultado_dg === 'cheia' && !previsaoParto) {
-      const baseDate = normalized.dados_protocolo?.d10 || normalized.dados_protocolo?.d0 || normalized.data_principal || normalized.data_dg;
+    if (normalized.tipo_protocolo === 'iatf' && normalized.resultado_dg === 'cheia' && !previsaoParto) {
+      const baseDate = normalized.dados_protocolo?.d10 || normalized.dados_protocolo?.d0 || normalized.data_principal;
       previsaoParto = calcularPrevisaoParto(baseDate);
     }
     const payload = buildEventoPayload(normalized, `rep-${crypto.randomUUID()}`, previsaoParto);
@@ -694,8 +694,8 @@ export const reproducaoService = {
     const normalized = await normalizeEventInput(merged, !identityChanged);
     await ensureNoLogicalDuplicate([normalized], id);
     let previsaoParto = normalized.previsao_parto || current.previsao_parto || '';
-    if (normalized.resultado_dg === 'cheia' && !previsaoParto) {
-      const baseDate = normalized.dados_protocolo?.d10 || normalized.dados_protocolo?.d0 || normalized.data_principal || normalized.data_dg;
+    if (normalized.tipo_protocolo === 'iatf' && normalized.resultado_dg === 'cheia' && !previsaoParto) {
+      const baseDate = normalized.dados_protocolo?.d10 || normalized.dados_protocolo?.d0 || normalized.data_principal;
       previsaoParto = calcularPrevisaoParto(baseDate);
     }
     const normalizedUpdates = {

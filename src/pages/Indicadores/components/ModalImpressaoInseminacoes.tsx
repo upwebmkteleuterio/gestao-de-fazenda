@@ -282,7 +282,7 @@ export const ModalImpressaoInseminacoes: React.FC<ModalImpressaoInseminacoesProp
                           {formatarDataBR(item.data_inseminacao)}
                         </td>
                         <td className="py-2 px-3 uppercase text-[11px] font-semibold">
-                          {item.tipo_protocolo === 'iatf' ? 'IATF' : item.tipo_protocolo === 'monta_natural' ? 'Monta' : 'TETF'}
+                          {item.tipo_protocolo === 'iatf' ? 'IATF' : item.tipo_protocolo === 'monta_natural' ? 'Monta' : item.tipo_protocolo === 'dg' ? 'Diagnóstico (DG)' : 'TETF'}
                         </td>
                         <td className="py-2 px-3 font-medium text-gray-900">
                           {item.touro || '-'}

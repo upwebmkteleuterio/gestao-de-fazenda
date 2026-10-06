@@ -1,6 +1,7 @@
 import { useState, useMemo, FormEvent, useRef } from 'react';
 import { EventoReproducao, DGToqueResultado } from '@/types/database';
 import { useAnimais } from '@/hooks/useAnimais';
+import { useLotes } from '@/hooks/useLotes';
 import { useUIStore } from '@/store/useUIStore';
 import { calcularPrevisaoParto } from '../utils/reproducaoUtils';
 
@@ -21,6 +22,8 @@ export const useReproducaoForm = ({
 }: UseReproducaoFormParams) => {
   const { showToast } = useUIStore();
   const { animais } = useAnimais();
+  const { lotes } = useLotes();
+  const [selectedLoteId, setSelectedLoteIdState] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const submittingRef = useRef(false);
 
@@ -52,7 +55,6 @@ export const useReproducaoForm = ({
     condicao_corporal: string;
     data_ultrassom: string;
     dg_radio: DGToqueResultado;
-    reimplantou: boolean;
     nome_touro_monta: string;
     doadora: string;
     tipo_embriao: string;
@@ -66,7 +68,7 @@ export const useReproducaoForm = ({
     animal_id: '',
     brinco_matriz: '',
     data_principal: new Date().toISOString().split('T')[0],
-    d0: new Date().toISOString().split('T')[0],
+    d0: '',
     d8: '',
     d10: '',
     touro: '',
@@ -74,7 +76,6 @@ export const useReproducaoForm = ({
     condicao_corporal: '',
     data_ultrassom: '',
     dg_radio: 'pendente',
-    reimplantou: false,
     nome_touro_monta: '',
     doadora: '',
     tipo_embriao: 'Vitrificado FIV',
@@ -90,6 +91,15 @@ export const useReproducaoForm = ({
   const matrizes = useMemo(() => {
     return animais.filter((a) => a.sexo === 'F' && a.status === 'ativo');
   }, [animais]);
+  const loteSelecionado = lotes.find((lote) => lote.id === selectedLoteId);
+  const matrizesDisponiveis = useMemo(
+    () => loteSelecionado ? matrizes.filter((matriz) => loteSelecionado.animais_ids.includes(matriz.id)) : matrizes,
+    [loteSelecionado, matrizes],
+  );
+  const setSelectedLoteId = (loteId: string) => {
+    setSelectedLoteIdState(loteId);
+    setSelectedCowIds([]);
+  };
 
   // Lista de Touros da fazenda
   const tourosList = useMemo(() => {
@@ -108,7 +118,7 @@ export const useReproducaoForm = ({
       animal_id: firstMatriz?.id || '',
       brinco_matriz: firstMatriz?.brinco || '',
       data_principal: today,
-      d0: today,
+      d0: '',
       d8: '',
       d10: '',
       touro: '',
@@ -116,7 +126,6 @@ export const useReproducaoForm = ({
       condicao_corporal: '',
       data_ultrassom: '',
       dg_radio: 'pendente',
-      reimplantou: false,
       nome_touro_monta: '',
       doadora: '',
       tipo_embriao: 'Vitrificado FIV',
@@ -147,15 +156,14 @@ export const useReproducaoForm = ({
       animal_id: ev.animal_id,
       brinco_matriz: ev.brinco_matriz,
       data_principal: ev.data_principal || new Date().toISOString().split('T')[0],
-      d0: ev.dados_protocolo?.d0 || ev.data_principal,
-      d8: ev.dados_protocolo?.d8 || '',
+      d0: ev.dados_protocolo?.d0 ?? '',
+      d8: ev.dados_protocolo?.d8 ?? '',
       d10: ev.dados_protocolo?.d10 || '',
       touro: ev.dados_protocolo?.touro || '',
       tipo_semen: ev.dados_protocolo?.tipo_semen || 'Convencional',
       condicao_corporal: ev.dados_protocolo?.condicao_corporal || '',
       data_ultrassom: ev.dados_protocolo?.data_ultrassom || '',
       dg_radio: ev.resultado_dg || 'pendente',
-      reimplantou: ev.dados_protocolo?.reimplantou || false,
       nome_touro_monta: ev.dados_protocolo?.touro || '',
       doadora: ev.dados_protocolo?.doadora || '',
       tipo_embriao: ev.dados_protocolo?.tipo_embriao || '',
@@ -186,15 +194,14 @@ export const useReproducaoForm = ({
       animal_id: ev.animal_id,
       brinco_matriz: ev.brinco_matriz,
       data_principal: ev.data_principal || new Date().toISOString().split('T')[0],
-      d0: ev.dados_protocolo?.d0 || ev.data_principal,
-      d8: ev.dados_protocolo?.d8 || '',
+      d0: ev.dados_protocolo?.d0 ?? '',
+      d8: ev.dados_protocolo?.d8 ?? '',
       d10: ev.dados_protocolo?.d10 || '',
       touro: ev.dados_protocolo?.touro || '',
       tipo_semen: ev.dados_protocolo?.tipo_semen || 'Convencional',
       condicao_corporal: ev.dados_protocolo?.condicao_corporal || '',
       data_ultrassom: ev.dados_protocolo?.data_ultrassom || '',
       dg_radio: ev.resultado_dg || 'pendente',
-      reimplantou: ev.dados_protocolo?.reimplantou || false,
       nome_touro_monta: ev.dados_protocolo?.touro || '',
       doadora: ev.dados_protocolo?.doadora || '',
       tipo_embriao: ev.dados_protocolo?.tipo_embriao || '',
@@ -217,10 +224,10 @@ export const useReproducaoForm = ({
   };
 
   const selectAllCows = () => {
-    if (selectedCowIds.length === matrizes.length) {
+    if (selectedCowIds.length === matrizesDisponiveis.length) {
       setSelectedCowIds([]);
     } else {
-      setSelectedCowIds(matrizes.map((m) => m.id));
+      setSelectedCowIds(matrizesDisponiveis.map((m) => m.id));
     }
   };
 
@@ -275,7 +282,7 @@ export const useReproducaoForm = ({
           return;
         }
 
-        const baseInseminacaoDate = formData.d10 || formData.d0 || formData.data_principal;
+        const baseInseminacaoDate = formData.d10 || formData.data_principal;
         const calculatedParto = typeof formData.dias_previsao_parto === 'number' && Number.isFinite(formData.dias_previsao_parto)
           ? calcularPrevisaoParto(baseInseminacaoDate, formData.dias_previsao_parto)
           : '';
@@ -284,16 +291,15 @@ export const useReproducaoForm = ({
           animal_id: formData.animal_id,
           brinco_matriz: formData.brinco_matriz.trim(),
           tipo_protocolo: 'iatf' as const,
-          data_principal: formData.data_principal,
+          data_principal: formData.d10 || formData.data_principal,
           dados_protocolo: {
-            d0: formData.d0,
-            d8: formData.d8,
+            ...(formData.d0 ? { d0: formData.d0 } : {}),
+            ...(formData.d8 ? { d8: formData.d8 } : {}),
             d10: formData.d10,
             touro: formData.touro,
             tipo_semen: formData.tipo_semen,
             condicao_corporal: formData.condicao_corporal,
             data_ultrassom: formData.data_ultrassom,
-            reimplantou: formData.reimplantou,
             dias_gestacao_previsao: formData.dias_previsao_parto,
             observacoes: formData.observacoes,
           },
@@ -407,6 +413,10 @@ export const useReproducaoForm = ({
     formData,
     setFormData,
     matrizes,
+    matrizesDisponiveis,
+    lotes,
+    selectedLoteId,
+    setSelectedLoteId,
     tourosList,
     handleOpenCreate,
     handleOpenEdit,
