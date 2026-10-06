@@ -179,6 +179,22 @@ export const Lotes: React.FC = () => {
         }
     };
 
+    const handleRemoveAnimalDoLote = async (animalId: string) => {
+        if (!selectedLote || isUpdating) return;
+
+        const animaisIds = selectedLote.animais_ids.filter((id) => id !== animalId);
+        try {
+            const loteAtualizado = await updateLote({
+                id: selectedLote.id,
+                updates: { animais_ids: animaisIds },
+            });
+            setSelectedLote(loteAtualizado);
+            showToast("Animal removido do lote com sucesso!", "success");
+        } catch (error) {
+            showToast(error instanceof Error ? error.message : "Erro ao remover animal do lote.", "error");
+        }
+    };
+
     const handleDeleteLote = (lote: Lote) => {
         setLoteToDelete(lote);
         setDeleteModalOpen(true);
@@ -681,8 +697,17 @@ export const Lotes: React.FC = () => {
                                     return (
                                         <ul
                                             className="divide-y divide-gray-100 dark:divide-gray-800 p-2 text-sm text-gray-600 dark:text-gray-300">
-                                            {selectedLote?.animais_ids.map(id => (<li key={id} className="py-2 px-3 flex justify-between">
+                                            {selectedLote?.animais_ids.map(id => (<li key={id} className="py-2 px-3 flex justify-between items-center">
                                                 <span>Animal ID: {id}</span>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => handleRemoveAnimalDoLote(id)}
+                                                    disabled={isUpdating}
+                                                    title="Retirar animal do lote"
+                                                    className="p-1.5 text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/30 rounded-lg transition-colors disabled:opacity-50"
+                                                >
+                                                    <X className="w-4 h-4" />
+                                                </button>
                                             </li>))}
                                         </ul>
                                     );
@@ -703,6 +728,7 @@ export const Lotes: React.FC = () => {
                                                 <th className="py-2.5 px-3">Sexo</th>
                                                 <th className="py-2.5 px-3">Peso</th>
                                                 <th className="py-2.5 px-3">Pasto Animal</th>
+                                                <th className="py-2.5 px-3 text-right">Ações</th>
                                             </tr>
                                         </thead>
                                         <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
@@ -716,6 +742,17 @@ export const Lotes: React.FC = () => {
                                                     <td
                                                         className="py-2 px-3 text-xs text-emerald-600 dark:text-emerald-400 font-medium">
                                                         {ani.pasto_nome || "-"}
+                                                    </td>
+                                                    <td className="py-2 px-3 text-right">
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => handleRemoveAnimalDoLote(ani.id)}
+                                                            disabled={isUpdating}
+                                                            title="Retirar animal do lote"
+                                                            className="p-1.5 text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/30 rounded-lg transition-colors disabled:opacity-50"
+                                                        >
+                                                            <Trash2 className="w-4 h-4" />
+                                                        </button>
                                                     </td>
                                                 </tr>)
                                             )}

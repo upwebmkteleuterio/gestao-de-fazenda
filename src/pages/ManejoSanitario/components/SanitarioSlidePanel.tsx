@@ -85,6 +85,8 @@ export const SanitarioSlidePanel: React.FC<SanitarioSlidePanelProps> = ({
     }
   }, [formData?.tipo_manejo]);
 
+  const animaisVinculados = animais.filter((a) => formData.animais_ids.includes(a.id));
+
   return (
   <>
     <SlidePanel
@@ -420,6 +422,39 @@ export const SanitarioSlidePanel: React.FC<SanitarioSlidePanelProps> = ({
             >
               Criar / Alterar Grupo de Animais ({formData.animais_ids.length} selecionados)
             </Button>
+
+            {animaisVinculados.length === 0 && formData.animais_ids.length > 0 ? (
+              <ul className="divide-y divide-gray-100 dark:divide-gray-800 rounded-xl border border-gray-200 dark:border-gray-800 p-2 text-sm text-gray-600 dark:text-gray-300">
+                {formData.animais_ids.map((id) => (
+                  <li key={id} className="py-2 px-3">Animal ID: {id}</li>
+                ))}
+              </ul>
+            ) : formData.animais_ids.length === 0 ? (
+              <p className="text-xs text-gray-400 italic p-3 text-center border border-dashed border-gray-300 dark:border-gray-800 rounded-lg">
+                Nenhum animal vinculado a este manejo até o momento.
+              </p>
+            ) : (
+              <div className="max-h-60 overflow-y-auto rounded-xl border border-gray-200 dark:border-gray-800">
+                <table className="w-full text-left text-sm">
+                  <thead className="bg-gray-50 dark:bg-gray-900 text-xs text-gray-500 dark:text-gray-400 font-semibold border-b border-gray-100 dark:border-gray-800">
+                    <tr>
+                      <th className="py-2.5 px-3">Brinco</th>
+                      <th className="py-2.5 px-3">Categoria</th>
+                      <th className="py-2.5 px-3">Tipo</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
+                    {animaisVinculados.map((ani) => (
+                      <tr key={ani.id} className="hover:bg-gray-50/70 dark:hover:bg-gray-800/40">
+                        <td className="py-2 px-3 font-bold text-gray-900 dark:text-gray-100">{ani.brinco}</td>
+                        <td className="py-2 px-3">{ani.categoria}</td>
+                        <td className="py-2 px-3 capitalize">{ani.tipo_animal}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
 
           {/* SESSÃO 4: LEMBRETES */}

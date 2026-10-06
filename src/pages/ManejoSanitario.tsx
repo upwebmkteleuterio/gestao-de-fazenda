@@ -34,6 +34,7 @@ import { EmptyState } from '../components/EmptyState';
 import { ErrorState } from '../components/ErrorState';
 import { useSanitario } from '../hooks/useSanitario';
 import { Pagination } from '../components/Pagination';
+import { useLotes } from '../hooks/useLotes';
 import { useInsumos } from '../hooks/useInsumos';
 import { useAnimais } from '../hooks/useAnimais';
 import { useUIStore } from '../store/useUIStore';
@@ -44,6 +45,7 @@ export const ManejoSanitarioPage: React.FC = () => {
   const { showToast } = useUIStore();
   const { insumos } = useInsumos();
   const { animais } = useAnimais();
+  const { lotes } = useLotes();
 
   // Tab Estrutural: 'andamento' | 'concluido'
   const [activeTab, setActiveTab] = useState<'andamento' | 'concluido'>('andamento');
@@ -289,6 +291,23 @@ export const ManejoSanitarioPage: React.FC = () => {
     } else {
       setFormData(prev => ({ ...prev, animais_ids: animais.map(a => a.id) }));
     }
+  };
+
+  const handleAddAnimaisDoLote = (loteId: string) => {
+    const lote = lotes.find((item) => item.id === loteId);
+    if (!lote) return;
+
+    const idsDoLote = lote.animais_ids.filter((id) => animais.some((animal) => animal.id === id));
+    if (idsDoLote.length === 0) {
+      showToast('Este lote não possui animais vinculados.', 'error');
+      return;
+    }
+
+    setFormData((prev) => ({
+      ...prev,
+      animais_ids: [...new Set([...prev.animais_ids, ...idsDoLote])],
+    }));
+    showToast(`${idsDoLote.length} animal(is) do lote "${lote.nome}" adicionados ao grupo.`, 'success');
   };
 
   // Salvar Manejo Sanitário
@@ -623,6 +642,8 @@ export const ManejoSanitarioPage: React.FC = () => {
         handleSelectAllAnimais={handleSelectAllAnimais}
         toggleAnimalInGroup={toggleAnimalInGroup}
         animais={animais}
+        lotes={lotes}
+        onAddLoteAnimais={handleAddAnimaisDoLote}
       />
     </div>
   );

@@ -1,9 +1,10 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Modal } from '../../../components/Modal';
 import { Button } from '../../../components/Button';
 import { Badge } from '../../../components/Badge';
 import { Select } from '../../../components/Select';
-import { Animal, ManejoSanitario } from '../../../types/database';
+import { Users } from 'lucide-react';
+import { Animal, Lote, ManejoSanitario } from '../../../types/database';
 
 type SanitarioFormData = {
   animais_ids: string[];
@@ -22,13 +23,18 @@ type SanitarioModalsProps = {
   handleSelectAllAnimais: () => void;
   toggleAnimalInGroup: (animalId: string) => void;
   animais: Animal[];
+  lotes: Lote[];
+  onAddLoteAnimais: (loteId: string) => void;
 };
 
 export const SanitarioModals: React.FC<SanitarioModalsProps> = ({
   modalOpen, setModalOpen, itemToDelete, handleDelete,
   groupModalOpen, setGroupModalOpen, formData, isOffline, isMutating,
-  handleSelectAllAnimais, toggleAnimalInGroup, animais,
-}) => (
+  handleSelectAllAnimais, toggleAnimalInGroup, animais, lotes, onAddLoteAnimais,
+}) => {
+  const [loteSelecionadoId, setLoteSelecionadoId] = useState('');
+
+  return (
   <>
     {/* MODAL GRUPO DE MANEJO (SESSÃO 3) */}
       <Modal
@@ -42,6 +48,43 @@ export const SanitarioModals: React.FC<SanitarioModalsProps> = ({
         }
       >
         <div className="space-y-3">
+          <div className="space-y-2 rounded-xl border border-emerald-100 bg-emerald-50/50 p-3.5 dark:border-emerald-900/40 dark:bg-emerald-950/20">
+            <label htmlFor="select-lote-grupo-manejo" className="block text-xs font-bold text-emerald-800 dark:text-emerald-200">
+              Adicionar animais por lote
+            </label>
+            <Select
+              id="select-lote-grupo-manejo"
+              noMargin
+              disabled={isOffline || lotes.length === 0}
+              value={loteSelecionadoId}
+              onChange={(event) => setLoteSelecionadoId(event.target.value)}
+              options={[
+                { label: 'Selecione um lote...', value: '' },
+                ...lotes.map((lote) => ({
+                  label: `${lote.nome} (${lote.animais_ids.length} animais)`,
+                  value: lote.id,
+                })),
+              ]}
+            />
+            <Button
+              variant="secondary"
+              icon={Users}
+              className="text-xs font-bold"
+              disabled={isOffline || !loteSelecionadoId}
+              onClick={() => {
+                if (loteSelecionadoId) {
+                  onAddLoteAnimais(loteSelecionadoId);
+                  setLoteSelecionadoId('');
+                }
+              }}
+            >
+              Adicionar do Lote
+            </Button>
+            <p className="text-[11px] text-gray-500 dark:text-gray-400">
+              Os animais do lote são somados à seleção atual. Desmarque individualmente se necessário.
+            </p>
+          </div>
+
           <div className="flex items-center justify-between">
             <span className="text-xs font-bold text-gray-700 dark:text-gray-300">
               Selecione os animais para este manejo:
@@ -104,4 +147,5 @@ export const SanitarioModals: React.FC<SanitarioModalsProps> = ({
         </p>
       </Modal>
   </>
-);
+  );
+};
