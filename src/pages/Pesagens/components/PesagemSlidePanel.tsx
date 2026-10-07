@@ -146,7 +146,7 @@ export const PesagemSlidePanel: React.FC<PesagemSlidePanelProps> = ({
       isOpen={slideOpen}
       onClose={() => { if (!isSaving) setSlideOpen(false); }}
       title={slideMode === 'create' ? 'Nova Pesagem' : slideMode === 'edit' ? 'Editar Pesagem' : 'Detalhes e Comparativo de Pesagem'}
-      subtitle="Acompanhe as duas pesagens, intervalo de dias e ganho diário (GMD)."
+      subtitle="Acompanhe as pesagens, o intervalo de dias e o ganho diário (GMD)."
       width="lg"
       actions={
         <div className="flex items-center space-x-2">
@@ -192,7 +192,7 @@ export const PesagemSlidePanel: React.FC<PesagemSlidePanelProps> = ({
             <div>
               <div className="flex items-center justify-between mb-3">
                 <h4 className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                  Comparativo das Duas Pesagens
+                  Comparativo das Pesagens
                 </h4>
                 <span className="text-xs text-emerald-600 dark:text-emerald-400 font-medium">
                   {selectedPesagem.dias_intervalo ? `${selectedPesagem.dias_intervalo} dias de intervalo` : 'Registro inicial'}
@@ -204,20 +204,20 @@ export const PesagemSlidePanel: React.FC<PesagemSlidePanelProps> = ({
                 <div className="p-4 rounded-xl bg-gray-50 dark:bg-gray-800/80 border border-gray-200/80 dark:border-gray-700 flex flex-col justify-between space-y-3">
                   <div className="flex items-center justify-between">
                     <span className="text-xs font-semibold px-2 py-0.5 rounded bg-gray-200/70 dark:bg-gray-700 text-gray-700 dark:text-gray-300">
-                      1ª Pesagem (Anterior)
+                      {selectedPesagem.peso_anterior !== undefined ? 'Pesagem Anterior' : 'Pesagem Inicial'}
                     </span>
                     <Calendar className="w-4 h-4 text-gray-400" />
                   </div>
                   <div>
-                    <p className="text-xs text-gray-400 mb-0.5">Data da 1ª Pesagem</p>
+                    <p className="text-xs text-gray-400 mb-0.5">{selectedPesagem.peso_anterior !== undefined ? 'Data da Pesagem Anterior' : 'Sem pesagem anterior'}</p>
                     <p className="text-sm font-semibold text-gray-800 dark:text-gray-200">
-                      {selectedPesagem.data_pesagem_anterior || 'Data inicial (1ª pesagem)'}
+                      {selectedPesagem.data_pesagem_anterior || '—'}
                     </p>
                   </div>
                   <div className="pt-2 border-t border-gray-200/60 dark:border-gray-700/60">
                     <p className="text-xs text-gray-400 mb-0.5">Peso Registrado</p>
                     <p className="text-xl font-bold text-gray-900 dark:text-white">
-                      {selectedPesagem.peso_anterior !== undefined ? `${selectedPesagem.peso_anterior} kg` : `${selectedPesagem.peso_kg} kg`}
+                      {selectedPesagem.peso_anterior !== undefined ? `${selectedPesagem.peso_anterior} kg` : '—'}
                     </p>
                   </div>
                 </div>
@@ -226,12 +226,12 @@ export const PesagemSlidePanel: React.FC<PesagemSlidePanelProps> = ({
                 <div className="p-4 rounded-xl bg-emerald-50/70 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800 flex flex-col justify-between space-y-3">
                   <div className="flex items-center justify-between">
                     <span className="text-xs font-semibold px-2 py-0.5 rounded bg-emerald-100 dark:bg-emerald-900/60 text-emerald-800 dark:text-emerald-300">
-                      2ª Pesagem (Atual)
+                      Pesagem Atual
                     </span>
                     <Scale className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
                   </div>
                   <div>
-                    <p className="text-xs text-emerald-800/70 dark:text-emerald-300/70 mb-0.5">Data da 2ª Pesagem</p>
+                    <p className="text-xs text-emerald-800/70 dark:text-emerald-300/70 mb-0.5">Data da Pesagem Atual</p>
                     <p className="text-sm font-semibold text-gray-900 dark:text-white">
                       {selectedPesagem.data_pesagem}
                     </p>
@@ -252,7 +252,7 @@ export const PesagemSlidePanel: React.FC<PesagemSlidePanelProps> = ({
                 <div className="flex items-center space-x-2">
                   <TrendingUp className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
                   <span className="font-semibold text-sm text-gray-900 dark:text-gray-100">
-                    Ganho Médio Diário (GMD) das Duas Pesagens
+                    Ganho Médio Diário (GMD) entre as Pesagens
                   </span>
                 </div>
                 {selectedPesagem.gmd_calculado !== undefined ? (

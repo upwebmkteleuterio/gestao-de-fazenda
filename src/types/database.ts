@@ -170,7 +170,7 @@ export interface ManejoSanitario {
 export interface Insumo {
   id: string;
   nome_produto: string;
-  unidade_medida: 'Frasco' | 'Dose' | 'Kg' | 'Saco' | 'Litro' | 'Unidade';
+  unidade_medida: 'Frasco' | 'Dose' | 'Kg' | 'Saco' | 'Litro' | 'Unidade' | 'ml';
   categoria: 'medicamento' | 'suplemento' | 'racao' | 'defensivo' | 'outros';
   estoque_minimo: number;
   estoque_atual: number;

@@ -534,7 +534,7 @@ export const sanitarioService = {
       medicamentos: updated.medicamentos,
       animais_ids: updated.animais_ids,
       criar_lembrete: updated.criar_lembrete ?? false,
-      data_lembrete: updated.data_lembrete ?? null,
+      data_lembrete: updated.data_lembrete || null,
       status_sincronizacao: false,
     }).eq('id', id);
     if (error) throw error;
@@ -563,7 +563,7 @@ export const sanitarioService = {
         medicamentos: previous.medicamentos,
         animais_ids: previous.animais_ids,
         criar_lembrete: previous.criar_lembrete ?? false,
-        data_lembrete: previous.data_lembrete ?? null,
+        data_lembrete: previous.data_lembrete || null,
         status_sincronizacao: previous.status_sincronizacao,
       }).eq('id', id);
       await syncRelations(previous);

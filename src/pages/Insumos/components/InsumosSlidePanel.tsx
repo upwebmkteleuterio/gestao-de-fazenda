@@ -48,7 +48,10 @@ export const InsumosSlidePanel: React.FC<InsumosSlidePanelProps> = ({
   formBaixa, setFormBaixa, handleSaveBaixa,
   setItemToDelete, setModalOpen, insumos, isMovimentacaoDisabledOffline,
   isMutating, isSaving,
-}) => (
+}) => {
+  const selectedBaixaInsumo = insumos.find((insumo) => insumo.id === formBaixa.insumo_id);
+
+  return (
   <SlidePanel
     isOpen={slideOpen}
     onClose={() => { if (!isMutating) setSlideOpen(false); }}
@@ -132,6 +135,7 @@ export const InsumosSlidePanel: React.FC<InsumosSlidePanelProps> = ({
           onChange={(e) => setFormCadastro({ ...formCadastro, unidade_medida: e.target.value as Insumo['unidade_medida'] })}
           options={[
             { label: 'Frasco', value: 'Frasco' },
+            { label: 'ml (Mililitro)', value: 'ml' },
             { label: 'Dose', value: 'Dose' },
             { label: 'Saco (30kg / 50kg)', value: 'Saco' },
             { label: 'Kg (Quilograma)', value: 'Kg' },
@@ -193,7 +197,7 @@ export const InsumosSlidePanel: React.FC<InsumosSlidePanelProps> = ({
           }))}
         />
         <Input
-          label="Quantidade Utilizada *"
+          label={selectedBaixaInsumo ? `Quantidade Utilizada (${selectedBaixaInsumo.unidade_medida}) *` : 'Quantidade Utilizada *'}
           id="baixa_qtd_utilizada"
           type="number"
           value={formBaixa.quantidade_utilizada}
@@ -225,6 +229,7 @@ export const InsumosSlidePanel: React.FC<InsumosSlidePanelProps> = ({
       </form>
     )}
   </SlidePanel>
-);
+  );
+};
 
 export type { CadastroForm, BaixaForm };

@@ -228,7 +228,7 @@ export const PesagensPage: React.FC = () => {
         : <span className="text-xs text-gray-400">Individual</span>,
     },
     {
-      header: '1ª Pesagem (Anterior)',
+      header: 'Pesagem Anterior',
       render: (row) => {
         if (row.data_pesagem_anterior && row.peso_anterior !== undefined) {
           return (
@@ -246,7 +246,7 @@ export const PesagensPage: React.FC = () => {
       },
     },
     {
-      header: '2ª Pesagem (Atual)',
+      header: 'Pesagem Atual',
       render: (row) => (
         <div>
           <span className="font-semibold text-gray-900 dark:text-gray-100 block text-xs">

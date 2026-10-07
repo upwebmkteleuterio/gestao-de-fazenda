@@ -359,7 +359,7 @@ export const validateSanitarioFields = (
 };
 
 const insumoCategorias: Insumo['categoria'][] = ['medicamento', 'suplemento', 'racao', 'defensivo', 'outros'];
-const insumoUnidades: Insumo['unidade_medida'][] = ['Frasco', 'Dose', 'Kg', 'Saco', 'Litro', 'Unidade'];
+const insumoUnidades: Insumo['unidade_medida'][] = ['Frasco', 'Dose', 'Kg', 'Saco', 'Litro', 'Unidade', 'ml'];
 
 export const validateInsumoFields = (item: Partial<Insumo>): void => {
   if (typeof item.nome_produto !== 'string' || !item.nome_produto.trim()) throw new DomainValidationError('Informe o nome do produto.');
