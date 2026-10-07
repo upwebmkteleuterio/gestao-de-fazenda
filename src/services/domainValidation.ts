@@ -93,10 +93,11 @@ const requireTrimmedText = (value: unknown, label: string, maxLength = MAX_REPRO
   return normalized;
 };
 
-const validateReproducaoDate = (value: unknown, label: string, optional = false, allowFuture = false): string => {
+// Eventos reprodutivos podem ser lançados com datas futuras (protocolos programados,
+// inseminação/TETF agendados, DG previsto), por isso não há bloqueio de data futura aqui.
+const validateReproducaoDate = (value: unknown, label: string, optional = false): string => {
   if (optional && (value === undefined || value === null || value === '')) return '';
   if (!isValidDate(value)) throw new DomainValidationError(`Informe uma data válida para ${label}.`);
-  if (!allowFuture && isFutureDate(value)) throw new DomainValidationError(`A data de ${label} não pode ser futura.`);
   return value;
 };
 
@@ -107,8 +108,8 @@ const validateReproducaoDates = (item: Partial<EventoReproducao>): void => {
   if (item.tipo_protocolo !== 'iatf') return;
   const dados = item.dados_protocolo ?? {};
   const d0 = validateReproducaoDate(dados.d0, 'D0', true);
-  const d8 = validateReproducaoDate(dados.d8, 'D8', true, true);
-  const d10 = validateReproducaoDate(dados.d10, 'D10', true, true);
+  const d8 = validateReproducaoDate(dados.d8, 'D8', true);
+  const d10 = validateReproducaoDate(dados.d10, 'D10', true);
   if (d8 && d0 && d8 < d0) throw new DomainValidationError('A data D8 deve ser igual ou posterior ao D0.');
   if (d10 && (d8 || d0) && d10 < (d8 || d0)) throw new DomainValidationError('A data D10 deve ser igual ou posterior à etapa anterior.');
   if (dados.data_ultrassom) validateReproducaoDate(dados.data_ultrassom, 'o ultrassom/DG', true);
