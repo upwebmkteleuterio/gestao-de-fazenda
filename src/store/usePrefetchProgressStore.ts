@@ -3,7 +3,7 @@ import { create } from 'zustand';
 export const PREFETCH_STAGES = [
   'Animais (cadastro completo)',
   'Lotes (primeira página)',
-  'Pesagens (histórico recente)',
+  'Pesagens (histórico completo)',
   'Manejo Reprodutivo (últimos 30 dias)',
   'Manejo Sanitário (duas abas, primeira página)',
   'Pastagens (cadastro)',

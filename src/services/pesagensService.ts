@@ -189,15 +189,79 @@ const cacheOnlinePage = async (userId: string, items: Pesagem[]) => {
   const existing = await listOfflineRecords<LocalPesagem>({ userId, entity: ENTITY });
   const pending = new Map(existing.filter((record) => record.data.syncStatus && record.data.syncStatus !== 'synced').map((record) => [record.entityId, record.data]));
   await saveOfflineRecords(items.map((item) => localRecord(userId, pending.get(item.id) ?? { ...item, syncStatus: 'synced', localDeleted: false })));
-  const ids = new Set(items.map((item) => item.id));
-  await deleteOfflineRecords(existing.filter((record) => !ids.has(record.entityId) && !pending.has(record.entityId)).map((record) => record.key));
   await saveOfflineSnapshot({ key: SNAPSHOT_KEY(userId), scope: `${ENTITY}:${userId}`, data: items, capturedAt: new Date().toISOString() });
 };
 
-const fetchAllRemote = async (): Promise<Pesagem[]> => {
-  const { data, error } = await supabase.from('pesagens').select('*');
-  if (error) throw error;
-  return ((data ?? []) as unknown as PesagemDbRow[]).map(toPesagem);
+const HISTORY_PAGE_SIZE = 1000;
+
+const fetchHistory = async (): Promise<Pesagem[]> => {
+  const all: Pesagem[] = [];
+  for (let from = 0; ; from += HISTORY_PAGE_SIZE) {
+    const { data, error } = await supabase
+      .from('pesagens')
+      .select('*')
+      .order('data_pesagem', { ascending: true })
+      .order('id', { ascending: true })
+      .range(from, from + HISTORY_PAGE_SIZE - 1);
+    if (error) throw error;
+    const rows = ((data ?? []) as unknown as PesagemDbRow[]).map(toPesagem);
+    all.push(...rows);
+    if (rows.length < HISTORY_PAGE_SIZE) break;
+  }
+  return all;
+};
+
+const fetchAllRemote = (): Promise<Pesagem[]> => fetchHistory();
+
+const isPendingPesagem = (item: LocalPesagem): boolean => Boolean(item.syncStatus && item.syncStatus !== 'synced');
+
+const getHistoryForCalc = async (userId: string): Promise<Pesagem[]> => {
+  const records = await listOfflineRecords<LocalPesagem>({ userId, entity: ENTITY });
+  const localActive = records.filter((record) => !record.data.localDeleted).map((record) => record.data);
+  if (!isBrowserOnline()) return localActive;
+  try {
+    const remote = await fetchHistory();
+    const localById = new Map(records.map((record) => [record.entityId, record.data]));
+    const byId = new Map<string, Pesagem>();
+    remote.forEach((item) => {
+      const local = localById.get(item.id);
+      if (local?.localDeleted) return;
+      byId.set(item.id, local && isPendingPesagem(local) ? local : item);
+    });
+    localActive.forEach((item) => {
+      if (!byId.has(item.id) && isPendingPesagem(item)) byId.set(item.id, item);
+    });
+    return [...byId.values()];
+  } catch {
+    return localActive;
+  }
+};
+
+const cacheFullHistory = async (userId: string): Promise<void> => {
+  if (!isBrowserOnline()) return;
+  let remote: Pesagem[];
+  try {
+    remote = await fetchHistory();
+  } catch {
+    return;
+  }
+  const existing = await listOfflineRecords<LocalPesagem>({ userId, entity: ENTITY });
+  const existingById = new Map(existing.map((record) => [record.entityId, record]));
+  const remoteIds = new Set(remote.map((item) => item.id));
+  await saveOfflineRecords(remote.map((item) => {
+    const local = existingById.get(item.id);
+    if (local && isPendingPesagem(local.data)) return local;
+    return localRecord(userId, { ...item, syncStatus: 'synced', localDeleted: false });
+  }));
+  await deleteOfflineRecords(existing
+    .filter((record) => !remoteIds.has(record.entityId) && !isPendingPesagem(record.data))
+    .map((record) => record.key));
+  await saveOfflineSnapshot({
+    key: SNAPSHOT_KEY(userId),
+    scope: `${ENTITY}:${userId}`,
+    data: sortPesagens(remote).slice(0, PAGE_SIZE),
+    capturedAt: new Date().toISOString(),
+  });
 };
 
 const findAnimalForPesagem = async (animalId: string): Promise<Animal | null> => {
@@ -275,7 +339,7 @@ const annotatePesagens = async (items: Pesagem[]): Promise<Pesagem[]> => {
 const recalculateLocalChain = async (userId: string, animalIds: string[]) => {
   const records = await listOfflineRecords<LocalPesagem>({ userId, entity: ENTITY });
   const activeRecords = records.filter((record) => !record.data.localDeleted);
-  const all = activeRecords.map((record) => record.data);
+  const all = await getHistoryForCalc(userId);
   for (const animalId of [...new Set(animalIds)]) {
     const chain = sortPesagens(all.filter((item) => item.animal_id === animalId));
     for (const item of chain) {
@@ -451,6 +515,7 @@ export const syncPesagens = async (requestedUserId?: string): Promise<void> => {
     }
     if (retryAt) scheduleRetry(userId, retryAt);
     else {
+      await cacheFullHistory(userId).catch(() => undefined);
       await syncAnimais(userId);
       useConnectivityStore.getState().setOnline();
     }
@@ -503,10 +568,7 @@ export const pesagensService = {
 
   prefetchFirstPage: async (userId: string): Promise<void> => {
     if (!userId || !isBrowserOnline() || (await getCurrentUserId()) !== userId) return;
-    const { data, error } = await supabase.from('pesagens').select('*').order('data_pesagem', { ascending: false }).order('created_at', { ascending: false }).order('id', { ascending: false }).range(0, PAGE_SIZE - 1);
-    if (error) throw error;
-    const items = await annotatePesagens(((data ?? []) as unknown as PesagemDbRow[]).map(toPesagem));
-    await cacheOnlinePage(userId, items);
+    await cacheFullHistory(userId);
   },
 
   getRecent: async (): Promise<Pesagem[]> => {
@@ -525,8 +587,8 @@ export const pesagensService = {
     if (!userId) throw new Error('Sua sessão expirou. Entre novamente.');
     const valid = validateInput(item);
     await ensurePesagemReference(valid);
-    const existing = (await listOfflineRecords<LocalPesagem>({ userId, entity: ENTITY })).map((record) => record.data).filter((record) => !record.localDeleted);
-    const calc = calcularGMD(valid.animal_id, valid.peso_kg, valid.data_pesagem, existing);
+    const history = await getHistoryForCalc(userId);
+    const calc = calcularGMD(valid.animal_id, valid.peso_kg, valid.data_pesagem, history);
     const id = `pes-${crypto.randomUUID()}`;
     const local: LocalPesagem = { ...valid, id, createdAt: new Date().toISOString(), status_sincronizacao: false, peso_anterior: calc.pesoAnterior, data_pesagem_anterior: calc.dataAnterior, ganho_peso_kg: calc.ganhoPeso, gmd_calculado: calc.gmd, dias_intervalo: calc.diasIntervalo, syncStatus: 'pending', localDeleted: false };
     await saveOfflineRecordAndEnqueue(localRecord(userId, local), { userId, entity: ENTITY, operation: 'create', payload: { id, item: toCreateItem(local) } });
@@ -548,10 +610,7 @@ export const pesagensService = {
     });
     for (const item of validItems) await ensurePesagemReference(item);
 
-    const existing = (await listOfflineRecords<LocalPesagem>({ userId, entity: ENTITY }))
-      .map((record) => record.data)
-      .filter((record) => !record.localDeleted);
-    const working = [...existing];
+    const working = [...(await getHistoryForCalc(userId))];
     const locals: LocalPesagem[] = [];
     const records = [] as ReturnType<typeof localRecord>[];
     const operations: Array<{ userId: string; entity: string; operation: 'create'; payload: CreatePayload }> = [];
@@ -587,8 +646,8 @@ export const pesagensService = {
     if (!current || current.data.localDeleted) throw new Error('Pesagem não encontrada no cache local.');
     const valid = validateInput({ ...current.data, ...updates });
     await ensurePesagemReference(valid, id, current.data.animal_id, current.data.data_pesagem);
-    const allLocal = (await listOfflineRecords<LocalPesagem>({ userId, entity: ENTITY })).map((record) => record.data).filter((record) => !record.localDeleted && record.id !== id);
-    const calc = calcularGMD(valid.animal_id, valid.peso_kg, valid.data_pesagem, allLocal);
+    const history = (await getHistoryForCalc(userId)).filter((item) => item.id !== id);
+    const calc = calcularGMD(valid.animal_id, valid.peso_kg, valid.data_pesagem, history);
     const local: LocalPesagem = { ...current.data, ...valid, peso_anterior: calc.pesoAnterior, data_pesagem_anterior: calc.dataAnterior, ganho_peso_kg: calc.ganhoPeso, gmd_calculado: calc.gmd, dias_intervalo: calc.diasIntervalo, syncStatus: 'pending', syncError: undefined, localDeleted: false };
     await saveOfflineRecordAndEnqueue({ ...current, data: local, updatedAt: new Date().toISOString() }, { userId, entity: ENTITY, operation: 'update', payload: { id, updates: toUpdatePayload(valid) } });
     await recalculateLocalChain(userId, [current.data.animal_id, valid.animal_id]);
