@@ -290,7 +290,7 @@ export const AnimaisSlidePanel: React.FC<AnimaisSlidePanelProps> = (
                         )}
                     </div>
                     {}
-                    {(["bezerro", "bezerra"].includes(selectedAnimal.tipo_animal) || selectedAnimal.cdc || selectedAnimal.cdn) && (<div
+                    {(!["bezerro", "bezerra"].includes(selectedAnimal.tipo_animal) || selectedAnimal.cdc || selectedAnimal.cdn) && (<div
                         className="bg-blue-50/70 dark:bg-blue-950/30 p-4 rounded-xl border border-blue-100 dark:border-blue-800/40 space-y-3">
                         <div className="flex items-center justify-between">
                             <h4
@@ -722,7 +722,7 @@ export const AnimaisSlidePanel: React.FC<AnimaisSlidePanelProps> = (
                                     }))]} />
                             </div>
                         </div>
-                        {["bezerro", "bezerra"].includes(formData.tipo_animal) && (<div className="space-y-4 p-4 bg-blue-50/50 dark:bg-blue-950/20 rounded-xl border border-blue-100 dark:border-blue-800/40 mt-4">
+                        {!["bezerro", "bezerra"].includes(formData.tipo_animal) && (<div className="space-y-4 p-4 bg-blue-50/50 dark:bg-blue-950/20 rounded-xl border border-blue-100 dark:border-blue-800/40 mt-4">
                             <div className="space-y-2.5">
                                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
                                     <div>

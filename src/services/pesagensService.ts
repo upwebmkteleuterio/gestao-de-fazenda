@@ -187,7 +187,7 @@ const readLocalPage = async (userId: string, filters?: { search?: string; tipoAn
 
 const cacheOnlinePage = async (userId: string, items: Pesagem[]) => {
   const existing = await listOfflineRecords<LocalPesagem>({ userId, entity: ENTITY });
-  const pending = new Map(existing.filter((record) => record.data.syncStatus && record.data.syncStatus !== 'synced').map((record) => [record.entityId, record.data]));
+  const pending = new Map(existing.filter((record) => isPendingPesagem(record.data)).map((record) => [record.entityId, record.data]));
   await saveOfflineRecords(items.map((item) => localRecord(userId, pending.get(item.id) ?? { ...item, syncStatus: 'synced', localDeleted: false })));
   await saveOfflineSnapshot({ key: SNAPSHOT_KEY(userId), scope: `${ENTITY}:${userId}`, data: items, capturedAt: new Date().toISOString() });
 };
@@ -213,7 +213,7 @@ const fetchHistory = async (): Promise<Pesagem[]> => {
 
 const fetchAllRemote = (): Promise<Pesagem[]> => fetchHistory();
 
-const isPendingPesagem = (item: LocalPesagem): boolean => Boolean(item.syncStatus && item.syncStatus !== 'synced');
+const isPendingPesagem = (item: LocalPesagem): boolean => Boolean(item.localDeleted) || Boolean(item.syncStatus && item.syncStatus !== 'synced');
 
 const getHistoryForCalc = async (userId: string): Promise<Pesagem[]> => {
   const records = await listOfflineRecords<LocalPesagem>({ userId, entity: ENTITY });
@@ -433,6 +433,9 @@ const remoteDelete = async (id: string): Promise<void> => {
   const current = before.find((item) => item.id === id);
   const { error } = await supabase.from('pesagens').delete().eq('id', id);
   if (error) throw error;
+  const { data: stillThere, error: verifyError } = await supabase.from('pesagens').select('id').eq('id', id).maybeSingle();
+  if (verifyError) throw verifyError;
+  if (stillThere) throw new Error('A exclusão da pesagem não foi confirmada pelo servidor. Tente novamente.');
   if (current) {
     const all = await recalculateRemoteChain([current.animal_id]);
     await syncRemoteAnimalWeight([current.animal_id], all);
@@ -455,6 +458,7 @@ const compactCreateDelete = async (userId: string) => {
 };
 
 let activeSync: { userId: string; promise: Promise<void> } | null = null;
+let resyncRequested = false;
 let retryTimer: { userId: string; timeoutId: ReturnType<typeof setTimeout> } | null = null;
 const cancelRetry = () => { if (retryTimer) { clearTimeout(retryTimer.timeoutId); retryTimer = null; } };
 const scheduleRetry = (userId: string, nextRetryAt: string) => {
@@ -481,7 +485,10 @@ const readMutationRecord = async (userId: string, id: string) => {
 export const syncPesagens = async (requestedUserId?: string): Promise<void> => {
   const userId = requestedUserId ?? await getCurrentUserId();
   if (!userId || !isBrowserOnline() || (await getCurrentUserId()) !== userId) return;
-  if (activeSync) return activeSync.promise;
+  if (activeSync) {
+    resyncRequested = true;
+    return activeSync.promise;
+  }
   let promise: Promise<void>;
   promise = (async () => {
     await compactCreateDelete(userId);
@@ -519,7 +526,13 @@ export const syncPesagens = async (requestedUserId?: string): Promise<void> => {
       await syncAnimais(userId);
       useConnectivityStore.getState().setOnline();
     }
-  })().finally(() => { if (activeSync?.promise === promise) activeSync = null; });
+  })().finally(() => {
+    if (activeSync?.promise === promise) activeSync = null;
+    if (resyncRequested) {
+      resyncRequested = false;
+      void syncPesagens(userId).catch(() => undefined);
+    }
+  });
   activeSync = { userId, promise };
   return promise;
 };

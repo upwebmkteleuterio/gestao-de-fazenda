@@ -277,7 +277,8 @@ export const useReproducaoForm = ({
           showToast(`${selectedCowIds.length} registro(s) de Monta Natural lançado(s) com sucesso!`);
         }
       } else if (activeTab === 'iatf') {
-        if (!formData.brinco_matriz && !formData.animal_id) {
+        const isBatchIatf = slideMode !== 'edit' && selectedCowIds.length > 0;
+        if (!isBatchIatf && !formData.brinco_matriz && !formData.animal_id) {
           showToast('Informe ou selecione o brinco da matriz.', 'error');
           return;
         }
@@ -286,10 +287,9 @@ export const useReproducaoForm = ({
         const calculatedParto = typeof formData.dias_previsao_parto === 'number' && Number.isFinite(formData.dias_previsao_parto)
           ? calcularPrevisaoParto(baseInseminacaoDate, formData.dias_previsao_parto)
           : '';
-
-        const payload = {
-          animal_id: formData.animal_id,
-          brinco_matriz: formData.brinco_matriz.trim(),
+        const buildIatfPayload = (animalId: string, brinco: string) => ({
+          animal_id: animalId,
+          brinco_matriz: brinco.trim(),
           tipo_protocolo: 'iatf' as const,
           data_principal: formData.d10 || formData.data_principal,
           dados_protocolo: {
@@ -306,13 +306,23 @@ export const useReproducaoForm = ({
           resultado_dg: formData.dg_radio,
           data_dg: formData.data_ultrassom || formData.data_principal,
           previsao_parto: calculatedParto,
-        };
+        });
 
         if (slideMode === 'edit' && selectedEvento) {
-          await updateEvento({ id: selectedEvento.id, updates: payload });
+          await updateEvento({ id: selectedEvento.id, updates: buildIatfPayload(formData.animal_id, formData.brinco_matriz) });
           showToast('Protocolo IATF atualizado com sucesso!');
+        } else if (isBatchIatf) {
+          const cows = selectedCowIds.map((cowId) => matrizes.find((matriz) => matriz.id === cowId));
+          if (cows.some((cow) => !cow)) {
+            showToast('Uma das matrizes selecionadas não está mais cadastrada como ativa. Atualize a lista e tente novamente.', 'error');
+            return;
+          }
+          const payloads = cows.map((cow) => buildIatfPayload(cow!.id, cow!.brinco));
+          if (payloads.length > 1) await createEventosBatch(payloads);
+          else await createEvento(payloads[0]);
+          showToast(`${payloads.length} protocolo(s) IATF lançado(s) com sucesso!`);
         } else {
-          await createEvento(payload);
+          await createEvento(buildIatfPayload(formData.animal_id, formData.brinco_matriz));
           showToast('Protocolo IATF cadastrado com sucesso!');
         }
       } else if (activeTab === 'tetf') {
@@ -406,6 +416,7 @@ export const useReproducaoForm = ({
     selectedCowIds,
     toggleCowSelection,
     selectAllCows,
+    clearCowSelection: () => setSelectedCowIds([]),
     modalOpen,
     setModalOpen,
     eventoToDelete,

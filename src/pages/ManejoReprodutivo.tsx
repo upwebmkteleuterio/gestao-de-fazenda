@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useMemo } from 'react';
 import { WifiOff } from 'lucide-react';
 import { useUIStore } from '@/store/useUIStore';
 import { useConnectivityStore } from '@/store/useConnectivityStore';
@@ -6,7 +6,7 @@ import { useConnectivityStore } from '@/store/useConnectivityStore';
 // Hooks locais de lógica
 import { useReproducaoTable } from './ManejoReprodutivo/hooks/useReproducaoTable';
 import { useReproducaoForm } from './ManejoReprodutivo/hooks/useReproducaoForm';
-import { calcularPrevisaoParto } from './ManejoReprodutivo/utils/reproducaoUtils';
+import { calcularPrevisaoParto, matchesReproducaoSearch } from './ManejoReprodutivo/utils/reproducaoUtils';
 
 // Sub-componentes visuais
 import { ReprodutivoHeader } from './ManejoReprodutivo/components/ReprodutivoHeader';
@@ -60,6 +60,10 @@ export const ManejoReprodutivoPage: React.FC = () => {
     isSaving: mutationIsSaving,
   } = useReproducaoTable();
   const offline = isOffline || source === 'local' || connectivityStatus === 'offline' || (typeof navigator !== 'undefined' && !navigator.onLine);
+  const filteredEventos = useMemo(
+    () => eventos.filter((evento) => matchesReproducaoSearch(evento, search)),
+    [eventos, search],
+  );
 
   // Hook de Formulário Reprodutivo (IATF, Monta, TETF, DG) e SlidePanel
   const {
@@ -73,6 +77,7 @@ export const ManejoReprodutivoPage: React.FC = () => {
     selectedCowIds,
     toggleCowSelection,
     selectAllCows,
+    clearCowSelection,
     modalOpen,
     setModalOpen,
     eventoToDelete,
@@ -157,7 +162,7 @@ export const ManejoReprodutivoPage: React.FC = () => {
 
       {/* Tabela de Listagem de Eventos Reprodutivos */}
       <ReprodutivoTable
-        eventos={eventos}
+        eventos={filteredEventos}
         total={totalEventos}
         page={page}
         onPageChange={setPage}
@@ -208,6 +213,7 @@ export const ManejoReprodutivoPage: React.FC = () => {
         selectedCowIds={selectedCowIds}
         toggleCowSelection={toggleCowSelection}
         toggleAllCows={selectAllCows}
+        clearCowSelection={clearCowSelection}
         matrizes={matrizes}
         matrizesDisponiveis={matrizesDisponiveis}
         lotes={lotes}

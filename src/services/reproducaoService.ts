@@ -554,7 +554,11 @@ export const reproducaoService = {
         .from('eventos_reproducao')
         .select('*', { count: 'exact' });
 
-      const search = sanitizeReportSearch(filters?.search);
+      const search = sanitizeReportSearch(filters?.search)
+        .replace(/[\\,().:"']/g, ' ')
+        .replace(/[%_]/g, (character) => `\\${character}`)
+        .replace(/\s+/g, ' ')
+        .trim();
       if (search) query = query.or(`brinco_matriz.ilike.%${search}%,dados_protocolo->>touro.ilike.%${search}%`);
       if (filters?.dataEspecifica) query = query.eq('data_principal', filters.dataEspecifica);
       if (filters?.dataInicio) query = query.gte('data_principal', filters.dataInicio);
@@ -662,14 +666,14 @@ export const reproducaoService = {
 
   createBatch: async (items: ReproducaoInput[]): Promise<EventoReproducao[]> => {
     if (!isBrowserOnline()) throw new Error('Ação indisponível offline.');
-    if (!items.length) throw new DomainValidationError('Selecione ao menos uma matriz para registrar a Monta Natural.');
+    if (!items.length) throw new DomainValidationError('Selecione ao menos uma matriz para registrar o lançamento.');
     const normalized = await Promise.all(items.map((item) => normalizeEventInput(item)));
     await ensureNoLogicalDuplicate(normalized);
     const payload = normalized.map((item) => buildEventoPayload(item, `rep-${crypto.randomUUID()}`, item.previsao_parto ?? ''));
     const { data, error } = await supabase.from('eventos_reproducao').insert(payload).select('*');
     if (error) throw error;
     const created = ((data ?? []) as unknown as ReproducaoDbRow[]).map(toEvento);
-    if (created.length !== payload.length) throw new Error('O banco não confirmou todos os lançamentos da Monta Natural.');
+    if (created.length !== payload.length) throw new Error('O banco não confirmou todos os lançamentos.');
     await syncAffectedMatrizes(created.map((evento) => evento.animal_id), await fetchEventos());
     return created;
   },

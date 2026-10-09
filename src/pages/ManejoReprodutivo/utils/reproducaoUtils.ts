@@ -1,6 +1,18 @@
+import { EventoReproducao } from '@/types/database';
+
 /**
  * Utilitários para cálculos e formatação de manejo reprodutivo
  */
+
+export const normalizeReproducaoSearch = (value: string): string =>
+  value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase().replace(/[\s#.\-]+/g, '');
+
+export const matchesReproducaoSearch = (evento: EventoReproducao, term: string): boolean => {
+  const needle = normalizeReproducaoSearch(term);
+  if (!needle) return true;
+  return normalizeReproducaoSearch(evento.brinco_matriz).includes(needle)
+    || normalizeReproducaoSearch(evento.dados_protocolo?.touro ?? '').includes(needle);
+};
 
 /**
  * Calcula a previsão estimada de parto somando dias de gestação (padrão 300 dias para gado de corte)

@@ -14,7 +14,7 @@ import { EventoReproducao, DGToqueResultado, Animal } from '../../../types/datab
 export const ReprodutivoSlidePanel = ({
   slideOpen, setSlideOpen, slideMode, setSlideMode, selectedEvento,
   formData, setFormData, isSaving, handleSave, activeTab, setActiveTab,
-  selectedCowIds, toggleCowSelection, toggleAllCows, matrizes, matrizesDisponiveis, touros,
+  selectedCowIds, toggleCowSelection, toggleAllCows, clearCowSelection, matrizes, matrizesDisponiveis, touros,
   lotes, selectedLoteId, setSelectedLoteId,
   isFormValid, calcularPrevisaoParto, setModalOpen, setEventoToDelete, mutationsDisabled = false
 }: any) => {
@@ -226,7 +226,10 @@ export const ReprodutivoSlidePanel = ({
                     </button>
                     <button
                       type="button"
-                      onClick={() => setModoManualIatf(true)}
+                      onClick={() => {
+                        clearCowSelection();
+                        setModoManualIatf(true);
+                      }}
                       className={`px-3 py-1.5 rounded-md font-semibold transition-all flex items-center space-x-1.5 cursor-pointer ${
                         modoManualIatf
                           ? 'bg-emerald-600 text-white shadow-xs'
@@ -240,52 +243,58 @@ export const ReprodutivoSlidePanel = ({
                 </div>
 
                 {!modoManualIatf ? (
-                  <div className="space-y-1.5">
-                    <div className="flex gap-2 items-start">
-                      <div className="flex-1 min-w-0">
-                        <Select
-                          id="iatf_matriz"
-                          value={formData.animal_id || ''}
-                          onChange={(e) => {
-                            const id = e.target.value;
-                            if (id === '__manual__') {
-                              setModoManualIatf(true);
-                              return;
-                            }
-                            const found = matrizes.find((m: any) => m.id === id);
-                            setFormData({ ...formData, animal_id: id, brinco_matriz: found?.brinco || '' });
-                          }}
-                          options={[
-                            { label: 'Selecione a matriz da lista...', value: '' },
-                            ...matrizes.map((m: any) => ({
-                              label: `Brinco #${m.brinco} (${m.raca || 'Nelore'} - ${m.status_reprodutivo || 'Solteira'})`,
-                              value: m.id,
-                            })),
-                            { label: '✏️ Digitar brinco cadastrado...', value: '__manual__' },
-                          ]}
-                          noMargin
-                        />
+                  <div className="space-y-3">
+                    <Select
+                      label="Lote de matrizes"
+                      id="iatf_lote"
+                      value={selectedLoteId}
+                      onChange={(e) => setSelectedLoteId(e.target.value)}
+                      options={[
+                        { label: 'Todos os animais (sem lote)', value: '' },
+                        ...lotes.map((lote: { id: string; nome: string }) => ({ label: lote.nome, value: lote.id })),
+                      ]}
+                    />
+                    <div>
+                      <div className="flex justify-between items-center mb-2">
+                        <label className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+                          Vacas / Matrizes Selecionadas ({selectedCowIds.length} de {matrizesDisponiveis.length}) *
+                        </label>
+                        <Button variant="ghost" onClick={toggleAllCows} className="text-xs text-emerald-600 dark:text-emerald-400">
+                          {selectedCowIds.length === matrizesDisponiveis.length ? 'Desmarcar Todas' : 'Selecionar Todas'}
+                        </Button>
                       </div>
-                      <button
-                        type="button"
-                        onClick={() => setModoManualIatf(true)}
-                        className="px-3.5 py-2.5 text-xs font-semibold rounded-lg border border-emerald-300 dark:border-emerald-700 bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/60 dark:hover:bg-emerald-900 text-emerald-700 dark:text-emerald-300 flex items-center gap-1.5 whitespace-nowrap shadow-2xs transition-all cursor-pointer"
-                        title="Alternar para lançamento manual digitando o brinco"
-                      >
-                        <PenLine className="w-4 h-4" />
-                        <span className="hidden sm:inline">Lançar</span> Manual
-                      </button>
-                    </div>
-                    <div className="flex items-center justify-between text-[11px] text-gray-500 dark:text-gray-400 px-1 pt-0.5">
-                      <span>{matrizes.length} matrizes disponíveis no rebanho</span>
-                      <button
-                        type="button"
-                        onClick={() => setModoManualIatf(true)}
-                        className="text-emerald-600 dark:text-emerald-400 hover:underline font-medium inline-flex items-center gap-1"
-                      >
-                        <PenLine className="w-3 h-3" />
-                        Alternar para lançamento manual
-                      </button>
+                      <div className="max-h-52 overflow-y-auto border border-gray-200 dark:border-gray-800 rounded-xl p-2 space-y-1 bg-white dark:bg-gray-900">
+                        {matrizesDisponiveis.length === 0 ? (
+                          <p className="text-xs text-gray-400 p-3 text-center">Nenhuma fêmea cadastrada neste lote.</p>
+                        ) : (
+                          matrizesDisponiveis.map((cow: Animal) => {
+                            const isSelected = selectedCowIds.includes(cow.id);
+                            return (
+                              <div
+                                key={cow.id}
+                                onClick={() => toggleCowSelection(cow.id)}
+                                className={`flex items-center justify-between p-2.5 rounded-lg cursor-pointer transition-all text-xs font-medium ${
+                                  isSelected
+                                    ? 'bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-300 dark:border-emerald-800 text-emerald-900 dark:text-emerald-200'
+                                    : 'bg-gray-50/50 dark:bg-gray-800/40 border border-transparent hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-700 dark:text-gray-300'
+                                }`}
+                              >
+                                <div className="flex items-center space-x-2">
+                                  <input
+                                    type="checkbox"
+                                    checked={isSelected}
+                                    onChange={() => {}}
+                                    className="w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500"
+                                  />
+                                  <span className="font-bold">Brinco #{cow.brinco}</span>
+                                  <span className="text-gray-400">&bull; {cow.raca || 'Nelore'}</span>
+                                </div>
+                                <Badge variant="neutral">{cow.status_reprodutivo || 'Solteira'}</Badge>
+                              </div>
+                            );
+                          })
+                        )}
+                      </div>
                     </div>
                   </div>
                 ) : (
