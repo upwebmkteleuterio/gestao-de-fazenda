@@ -396,7 +396,7 @@ const recalculateRemoteChain = async (animalIds: string[]): Promise<Pesagem[]> =
 
 const remoteCreate = async (payload: CreatePayload): Promise<Pesagem> => {
   validateInput(payload.item);
-  await ensurePesagemReference(payload.item);
+  await ensurePesagemReference(payload.item, payload.id);
   const existing = await fetchAllRemote();
   const calc = calcularGMD(payload.item.animal_id, payload.item.peso_kg, payload.item.data_pesagem, existing);
   const { data, error } = await supabase.from('pesagens').insert(buildCreatePayload(payload.item, payload.id, calc)).select('*').single();
@@ -499,8 +499,8 @@ export const syncPesagens = async (requestedUserId?: string): Promise<void> => {
     for (const operation of operations) {
       if ((await getCurrentUserId()) !== userId) return;
       if (operation.nextRetryAt && operation.nextRetryAt > new Date().toISOString()) {
-        retryAt = operation.nextRetryAt;
-        break;
+        if (!retryAt || operation.nextRetryAt < retryAt) retryAt = operation.nextRetryAt;
+        continue;
       }
       try {
         await markOutboxOperationProcessing(operation.id);
@@ -514,10 +514,11 @@ export const syncPesagens = async (requestedUserId?: string): Promise<void> => {
         console.error('[SYNC PESAGENS ERROR]', error);
         const message = error instanceof Error ? error.message : 'Falha ao sincronizar pesagem';
         const failed = await markOutboxOperationFailed(operation.id, message, new Date(Date.now() + 5000).toISOString());
-        retryAt = failed?.nextRetryAt ?? null;
+        const failedRetryAt = failed?.nextRetryAt ?? null;
+        if (failedRetryAt && (!retryAt || failedRetryAt < retryAt)) retryAt = failedRetryAt;
         await setLocalStatus(userId, operation.payload.id, 'error', message, operation.operation === 'delete');
         useConnectivityStore.getState().setError(message);
-        break;
+        continue;
       }
     }
     if (retryAt) scheduleRetry(userId, retryAt);
