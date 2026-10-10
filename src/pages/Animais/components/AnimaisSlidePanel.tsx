@@ -48,7 +48,6 @@ import {
 } from "../../../types/database";
 
 import { Tabs } from "../../../components/Tabs";
-import { animalTypeLabels } from "@/services/animalClassification";
 import { isPlausibleAnimalWeight } from "@/services/domainValidation";
 import { useAnimalChildren } from "@/hooks/useAnimais";
 import { MaeSearchInput } from "./MaeSearchInput";
@@ -290,7 +289,7 @@ export const AnimaisSlidePanel: React.FC<AnimaisSlidePanelProps> = (
                         )}
                     </div>
                     {}
-                    {(!["bezerro", "bezerra"].includes(selectedAnimal.tipo_animal) || selectedAnimal.cdc || selectedAnimal.cdn) && (<div
+                    <div
                         className="bg-blue-50/70 dark:bg-blue-950/30 p-4 rounded-xl border border-blue-100 dark:border-blue-800/40 space-y-3">
                         <div className="flex items-center justify-between">
                             <h4
@@ -313,10 +312,10 @@ export const AnimaisSlidePanel: React.FC<AnimaisSlidePanelProps> = (
                                     className="text-xs text-blue-700 dark:text-blue-400 uppercase font-semibold">CDN - Cadastro de Nascimento</p>
                                 <p className="font-bold text-gray-900 dark:text-white mt-0.5">{selectedAnimal.cdn || "Não informado"}</p>
                                 <p className="text-[10px] text-gray-500 dark:text-gray-400 mt-0.5">Registro de nascimento oficial ABCZ</p>
-                            </div>
                         </div>
-                    </div>)}
-                    {childrenParentId && (<div
+                    </div>
+                </div>
+                {childrenParentId && (<div
                         className="space-y-3 rounded-xl border border-amber-100 bg-amber-50/50 p-4 dark:border-amber-800/40 dark:bg-amber-950/20">
                         <div className="flex items-center justify-between gap-3">
                             <div>
@@ -546,19 +545,6 @@ export const AnimaisSlidePanel: React.FC<AnimaisSlidePanelProps> = (
                         </div>
                         {}
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                            <div className="space-y-1.5">
-                                <label
-                                    htmlFor="tipo_animal_automatico"
-                                    className="block text-sm font-medium text-gray-700 dark:text-gray-300">Tipo de Animal (automático)
-                                                    </label>
-                                <div
-                                    id="tipo_animal_automatico"
-                                    className="flex min-h-[42px] items-center rounded-lg border border-gray-200 bg-gray-50 px-3 text-sm font-semibold text-gray-700 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-200"
-                                    aria-live="polite">
-                                    {animalTypeLabels[formData.tipo_animal || "vaca"]}
-                                </div>
-                                <p className="text-xs text-gray-500 dark:text-gray-400">Calculado pelo sexo, idade e informações reprodutivas.</p>
-                            </div>
                             <Input
                                 label="Raça"
                                 id="raca"
@@ -722,7 +708,7 @@ export const AnimaisSlidePanel: React.FC<AnimaisSlidePanelProps> = (
                                     }))]} />
                             </div>
                         </div>
-                        {!["bezerro", "bezerra"].includes(formData.tipo_animal) && (<div className="space-y-4 p-4 bg-blue-50/50 dark:bg-blue-950/20 rounded-xl border border-blue-100 dark:border-blue-800/40 mt-4">
+                        <div className="space-y-4 p-4 bg-blue-50/50 dark:bg-blue-950/20 rounded-xl border border-blue-100 dark:border-blue-800/40 mt-4">
                             <div className="space-y-2.5">
                                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
                                     <div>
@@ -757,7 +743,7 @@ export const AnimaisSlidePanel: React.FC<AnimaisSlidePanelProps> = (
                                         noMargin />
                                 </div>
                             </div>
-                        </div>)}
+                        </div>
                         {}
                         {["matriz", "vaca", "novilha"].includes(formData.tipo_animal) && (<div
                             className="space-y-4 p-4 bg-purple-50/50 dark:bg-purple-950/20 rounded-xl border border-purple-100 dark:border-purple-800/40 mt-4">
