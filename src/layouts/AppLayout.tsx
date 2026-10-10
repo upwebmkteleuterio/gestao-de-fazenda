@@ -83,7 +83,7 @@ export const AppLayout: React.FC = () => {
         <Navbar onOpenAccountSettings={() => setIsAccountSettingsOpen(true)} />
 
         {/* Dynamic Page Content Rendered via Outlet */}
-        <main className="flex-1 p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto w-full">
+        <main className="flex-1 p-4 sm:p-6 lg:p-8 max-w-[1600px] mx-auto w-full">
           <Outlet />
         </main>
       </div>
