@@ -175,15 +175,17 @@ const matchesPesagemFilters = (item: Pesagem, filters?: { search?: string; tipoA
     && (!filters?.endDate || item.data_pesagem <= filters.endDate);
 };
 
-const readLocalPage = async (userId: string, filters?: { search?: string; tipoAnimal?: string; startDate?: string; endDate?: string }) => {
+const readLocalPage = async (userId: string, filters?: { search?: string; tipoAnimal?: string; startDate?: string; endDate?: string; page?: number; limit?: number }) => {
   const [records, snapshot] = await Promise.all([
     listOfflineRecords<LocalPesagem>({ userId, entity: ENTITY }),
     getOfflineSnapshot<Pesagem[]>(SNAPSHOT_KEY(userId)),
   ]);
-  const data = sortPesagens(records
+  const all = sortPesagens(records
     .filter((record) => !record.data.localDeleted && matchesPesagemFilters(record.data, filters))
-    .map((record) => record.data)).slice(0, PAGE_SIZE);
-  return { data, capturedAt: snapshot?.capturedAt };
+    .map((record) => record.data));
+  const limit = filters?.limit ?? PAGE_SIZE;
+  const start = Math.max(0, ((filters?.page ?? 1) - 1) * limit);
+  return { data: all.slice(start, start + limit), total: all.length, capturedAt: snapshot?.capturedAt };
 };
 
 const cacheOnlinePage = async (userId: string, items: Pesagem[]) => {
@@ -266,16 +268,26 @@ const cacheFullHistory = async (userId: string): Promise<void> => {
   });
 };
 
-const findAnimalForPesagem = async (animalId: string): Promise<Animal | null> => {
+type PesagemAnimalReference =
+  | { status: 'found'; animal: Animal }
+  | { status: 'missing' }
+  | { status: 'unknown' };
+
+const findAnimalForPesagem = async (animalId: string): Promise<PesagemAnimalReference> => {
   const userId = await getCurrentUserId();
-  if (!userId) return null;
+  if (!userId) return { status: 'unknown' };
   const local = await listOfflineRecords<Animal>({ userId, entity: 'animal' });
   const localAnimal = local.find((record) => record.entityId === animalId && !record.data.localDeleted)?.data;
-  if (localAnimal) return localAnimal;
-  if (!isBrowserOnline()) return null;
-  const { data, error } = await supabase.from('animais').select('*').eq('id', animalId).maybeSingle();
-  if (error) throw error;
-  return data as unknown as Animal | null;
+  if (localAnimal) return { status: 'found', animal: localAnimal };
+  if (!isBrowserOnline()) return { status: 'unknown' };
+  try {
+    const { data, error } = await supabase.from('animais').select('*').eq('id', animalId).maybeSingle();
+    if (error) throw error;
+    return data ? { status: 'found', animal: data as unknown as Animal } : { status: 'missing' };
+  } catch (error) {
+    if (isTransportError(error)) return { status: 'unknown' };
+    throw error;
+  }
 };
 
 const ensurePesagemReference = async (
@@ -284,8 +296,11 @@ const ensurePesagemReference = async (
   originalAnimalId?: string,
   originalDate?: string,
 ): Promise<void> => {
-  const animal = await findAnimalForPesagem(item.animal_id);
-  if (!animal || animal.brinco !== item.brinco_animal) throw new DomainValidationError('O animal selecionado não corresponde ao brinco informado. Selecione o animal novamente.');
+  const reference = await findAnimalForPesagem(item.animal_id);
+  // Sem rede (ou sem sessão) não é possível conferir a referência agora: a sincronização
+  // continua e a conferência fica com o servidor, em vez de marcar o registro como inválido.
+  if (reference.status === 'missing') throw new DomainValidationError('O animal selecionado não corresponde ao brinco informado. Selecione o animal novamente.');
+  if (reference.status === 'found' && reference.animal.brinco !== item.brinco_animal) throw new DomainValidationError('O animal selecionado não corresponde ao brinco informado. Selecione o animal novamente.');
   const identityChanged = !exceptId || item.animal_id !== originalAnimalId || item.data_pesagem !== originalDate;
   if (!identityChanged) return;
   const userId = await getCurrentUserId();
@@ -531,8 +546,8 @@ export const syncPesagens = async (requestedUserId?: string): Promise<void> => {
     else {
       await cacheFullHistory(userId).catch(() => undefined);
       await syncAnimais(userId);
-      useConnectivityStore.getState().setOnline();
     }
+    useConnectivityStore.getState().resolveAfterSync();
   })().finally(() => {
     if (activeSync?.promise === promise) activeSync = null;
     if (resyncRequested) {
@@ -551,7 +566,7 @@ export const pesagensService = {
     if (!isBrowserOnline()) {
       const local = await readLocalPage(userId, filters);
       const data = await annotatePesagens(local.data);
-      return { data, total: data.length, source: 'local', capturedAt: local.capturedAt };
+      return { data, total: local.total, source: 'local', capturedAt: local.capturedAt };
     }
     try {
       let query = supabase.from('pesagens').select('*', { count: 'exact' });
@@ -580,7 +595,7 @@ export const pesagensService = {
       if (!isBrowserOnline() || /network|fetch|offline|load failed|failed to fetch/.test(message)) {
         const local = await readLocalPage(userId, filters);
         const data = await annotatePesagens(local.data);
-        return { data, total: data.length, source: 'local', capturedAt: local.capturedAt };
+        return { data, total: local.total, source: 'local', capturedAt: local.capturedAt };
       }
       throw error;
     }

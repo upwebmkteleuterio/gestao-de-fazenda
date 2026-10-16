@@ -10,6 +10,7 @@ type ConnectivityState = {
   setSyncing: () => void;
   setError: (message: string) => void;
   clearError: () => void;
+  resolveAfterSync: () => void;
 };
 
 const getInitialStatus = (): ConnectivityStatus => (
@@ -24,4 +25,10 @@ export const useConnectivityStore = create<ConnectivityState>((set) => ({
   setSyncing: () => set((state) => state.status === 'offline' ? state : { status: 'syncing', errorMessage: null }),
   setError: (message) => set({ status: 'error', errorMessage: message }),
   clearError: () => set((state) => ({ status: state.status === 'error' ? 'online' : state.status, errorMessage: null })),
+  // Fim de um ciclo de sincronização: o status volta a refletir a conectividade real.
+  // Erros de registros individuais continuam visíveis no próprio item da listagem.
+  resolveAfterSync: () => set(() => ({
+    status: typeof navigator === 'undefined' || navigator.onLine ? 'online' : 'offline',
+    errorMessage: null,
+  })),
 }));

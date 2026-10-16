@@ -275,7 +275,7 @@ export const syncInsumos = async (requestedUserId?: string): Promise<void> => {
         break;
       }
     }
-    if ((await listOutboxOperations({ userId, entity: ENTITY })).length === 0) useConnectivityStore.getState().setOnline();
+    useConnectivityStore.getState().resolveAfterSync();
   })().finally(() => { if (activeSync?.promise === promise) activeSync = null; });
   activeSync = { userId, promise };
   return promise;

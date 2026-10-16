@@ -51,10 +51,13 @@ const localDateString = (date: Date): string => {
   return `${year}-${month}-${day}`;
 };
 
+// Janela baixada para uso offline: 12 meses cobrem o histórico reprodutivo usado no dia a dia.
+const OFFLINE_WINDOW_DAYS = 365;
+
 const getRecentWindow = (): { coverageStart: string; coverageEnd: string } => {
   const end = new Date();
   const start = new Date(end);
-  start.setDate(start.getDate() - 29);
+  start.setDate(start.getDate() - (OFFLINE_WINDOW_DAYS - 1));
   return { coverageStart: localDateString(start), coverageEnd: localDateString(end) };
 };
 
@@ -416,7 +419,7 @@ const readRecentWindow = async (
   };
   if (!snapshot?.coverageStart || !snapshot.coverageEnd) {
     throw new ReproducaoOfflineCoverageError(
-      'O histórico reprodutivo offline ainda não foi sincronizado. Conecte-se para baixar os últimos 30 dias.',
+      'O histórico reprodutivo offline ainda não foi sincronizado. Conecte-se para baixar os últimos 12 meses.',
       coverage,
     );
   }

@@ -990,7 +990,6 @@ const runAnimalSync = async (userId: string): Promise<void> => {
     return;
   }
   useConnectivityStore.getState().setSyncing();
-  let encounteredFailure = false;
   let failedOperationRetryAt: string | null = null;
 
   for (const operation of operations) {
@@ -1023,7 +1022,6 @@ const runAnimalSync = async (userId: string): Promise<void> => {
     } catch (error) {
       if (!(await isCurrentUser(userId))) return;
       const message = errorMessage(error);
-      encounteredFailure = true;
       const failedOperation = await markOutboxOperationFailed(operation.id, message, new Date(Date.now() + 5000).toISOString());
       failedOperationRetryAt = failedOperation?.nextRetryAt ?? null;
       await setLocalSyncStatus(userId, operation.payload.id, 'error', message, operation.operation === 'delete');
@@ -1035,12 +1033,10 @@ const runAnimalSync = async (userId: string): Promise<void> => {
   const remaining = await listOutboxOperations({ userId, entity: ENTITY });
   if (remaining.length === 0) {
     cancelScheduledAnimalRetry(userId);
-    useConnectivityStore.getState().setOnline();
   } else if (failedOperationRetryAt && (await isCurrentUser(userId)) && isBrowserOnline()) {
     scheduleAnimalRetry(userId, failedOperationRetryAt);
-  } else if (!encounteredFailure) {
-    useConnectivityStore.getState().setOnline();
   }
+  useConnectivityStore.getState().resolveAfterSync();
 };
 
 export const syncAnimais = async (requestedUserId?: string): Promise<void> => {

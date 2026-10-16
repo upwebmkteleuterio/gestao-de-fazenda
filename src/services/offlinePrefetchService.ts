@@ -1,5 +1,5 @@
 import { getCurrentUserId as readCurrentUserId } from '@/integrations/supabase/client';
-import { saveOfflineSnapshot } from '@/offline/database';
+import { getOfflineSnapshot, saveOfflineSnapshot } from '@/offline/database';
 import { animaisService, syncAnimais } from '@/services/animaisService';
 import { pastagensService, syncPastagens } from '@/services/pastagensService';
 import { appSettingsService } from '@/services/appSettingsService';
@@ -35,17 +35,44 @@ const canContinue = async (userId: string): Promise<boolean> => (
   isBrowserOnline() && (await getCurrentUserId()) === userId
 );
 
+const PREFETCH_PROGRESS_SCOPE = 'offline-prefetch-progress';
+// Um download interrompido (queda de conexão) é retomado de onde parou; passado esse
+// intervalo o cache offline é renovado por inteiro.
+const PREFETCH_RESUME_WINDOW_MS = 30 * 60 * 1000;
+
+const prefetchProgressKey = (userId: string): string => `${PREFETCH_PROGRESS_SCOPE}:${userId}`;
+
+const readCompletedStages = async (userId: string): Promise<string[]> => {
+  try {
+    const snapshot = await getOfflineSnapshot<{ completed: string[] }>(prefetchProgressKey(userId));
+    const capturedAt = snapshot?.capturedAt ? new Date(snapshot.capturedAt).getTime() : 0;
+    if (!capturedAt || Date.now() - capturedAt > PREFETCH_RESUME_WINDOW_MS) return [];
+    return snapshot?.data?.completed ?? [];
+  } catch {
+    return [];
+  }
+};
+
+const writeCompletedStages = async (userId: string, completed: string[]): Promise<void> => {
+  try {
+    await saveOfflineSnapshot({
+      key: prefetchProgressKey(userId),
+      scope: `${PREFETCH_PROGRESS_SCOPE}:${userId}`,
+      data: { completed },
+      capturedAt: new Date().toISOString(),
+    });
+  } catch {
+    // O progresso é apenas uma otimização: falhar aqui não pode interromper o download.
+  }
+};
+
 const runSource = async (userId: string, stage: PrefetchStage, source: () => Promise<void>): Promise<boolean> => {
   const progress = usePrefetchProgressStore.getState();
   progress.beginStage(stage);
-  if (!(await canContinue(userId))) {
-    progress.failStage(stage, 'Sincronização interrompida antes da conclusão.');
-    return false;
-  }
   try {
     await source();
     progress.completeStage(stage);
-    return await canContinue(userId);
+    return true;
   } catch (error) {
     if (usePrefetchProgressStore.getState().userId === userId) {
       progress.failStage(stage, error instanceof Error ? error.message : 'Não foi possível baixar esta etapa.');
@@ -63,7 +90,7 @@ const runPrefetch = async (userId: string): Promise<void> => {
       { name: 'Animais (cadastro completo)', source: async () => { await syncAnimais(userId); await animaisService.getAll({ includeHistorico: true }); } },
       { name: 'Lotes (primeira página)', source: async () => { await syncLotes(userId); await lotesService.getAll(userId, { page: 1, limit: 10 }); } },
       { name: 'Pesagens (histórico completo)', source: async () => { await syncPesagens(userId); await pesagensService.prefetchFirstPage(userId); } },
-      { name: 'Manejo Reprodutivo (últimos 30 dias)', source: async () => { await reproducaoService.prefetchRecentWindow(userId); } },
+      { name: 'Manejo Reprodutivo (últimos 12 meses)', source: async () => { await reproducaoService.prefetchRecentWindow(userId); } },
       { name: 'Manejo Sanitário (duas abas, primeira página)', source: async () => { await sanitarioService.prefetchFirstPages(userId); } },
       { name: 'Pastagens (cadastro)', source: async () => { await syncPastagens(userId); await pastagensService.getAll(userId); } },
       { name: 'Financeiro (mês atual)', source: async () => { await syncFinanceiro(userId); await financeiroService.prefetchCurrentMonth(userId); } },
@@ -81,17 +108,24 @@ const runPrefetch = async (userId: string): Promise<void> => {
       },
     ];
 
+    const completed = await readCompletedStages(userId);
+    const progress = usePrefetchProgressStore.getState();
+    completed.forEach((stage) => progress.completeStage(stage as PrefetchStage));
+
     for (const stage of stages) {
-      if (!(await canContinue(userId))) return;
-      await runSource(userId, stage.name, stage.source);
+      if (completed.includes(stage.name)) continue;
+      if (!(await canContinue(userId))) {
+        usePrefetchProgressStore.getState().failStage(stage.name, 'Sincronização interrompida antes da conclusão.');
+        return;
+      }
+      if (await runSource(userId, stage.name, stage.source)) {
+        completed.push(stage.name);
+        await writeCompletedStages(userId, completed);
+      }
     }
   } finally {
     usePrefetchProgressStore.getState().finish(userId);
-    if (isBrowserOnline() && (await getCurrentUserId()) === userId) {
-      useConnectivityStore.getState().setOnline();
-    } else if (!isBrowserOnline()) {
-      useConnectivityStore.getState().setOffline();
-    }
+    useConnectivityStore.getState().resolveAfterSync();
   }
 };
 

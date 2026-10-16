@@ -546,8 +546,9 @@ export const syncFinanceiro = async (requestedUserId?: string): Promise<void> =>
       }
     }
     const remaining = await listOutboxOperations({ userId, entity: ENTITY });
-    if (remaining.length === 0) { cancelRetry(userId); useConnectivityStore.getState().setOnline(); }
+    if (remaining.length === 0) cancelRetry(userId);
     else if (retryAt && isBrowserOnline()) scheduleRetry(userId, retryAt);
+    useConnectivityStore.getState().resolveAfterSync();
   })().finally(() => { if (activeSync?.promise === promise) activeSync = null; });
   activeSync = { userId, promise };
   return promise;

@@ -137,7 +137,7 @@ export const ManejoReprodutivoPage: React.FC = () => {
                 Cache sincronizado em {capturedAt ? new Date(capturedAt).toLocaleString('pt-BR') : 'data não informada'} · cobertura: {coverageStart} a {coverageEnd}.
               </p>
             ) : (
-              <p className="mt-0.5 text-xs">O cache dos últimos 30 dias ainda não está disponível. Conecte-se para sincronizar o histórico.</p>
+              <p className="mt-0.5 text-xs">O cache dos últimos 12 meses ainda não está disponível. Conecte-se para sincronizar o histórico.</p>
             )}
           </div>
         </div>

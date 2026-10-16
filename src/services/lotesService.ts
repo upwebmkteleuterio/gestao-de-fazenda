@@ -565,10 +565,10 @@ const runLoteSync = async (userId: string): Promise<void> => {
   const remaining = await listOutboxOperations({ userId, entity: ENTITY });
   if (remaining.length === 0) {
     cancelScheduledRetry(userId);
-    useConnectivityStore.getState().setOnline();
   } else if (retryAt && isBrowserOnline()) {
     scheduleRetry(userId, retryAt);
   }
+  useConnectivityStore.getState().resolveAfterSync();
 };
 
 export const syncLotes = async (requestedUserId?: string): Promise<void> => {

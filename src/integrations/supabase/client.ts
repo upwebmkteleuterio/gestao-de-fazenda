@@ -53,15 +53,16 @@ const readOnlineSession = async (): Promise<SessionReadResult> => {
       cachedSession = data.session;
     }
     if (error) {
-      return { session: isCurrentRead ? null : cachedSession, error };
+      // Falha de leitura (rede/renovação de token) não significa ausência de sessão:
+      // mantém a última sessão conhecida para não esvaziar as telas offline.
+      return { session: cachedSession, error };
     }
     return { session: isCurrentRead ? data.session : cachedSession, error: null };
   } catch (error) {
     if (error instanceof SessionReadTimeoutError) {
       return { session: authStateKnown ? cachedSession : null, error: null };
     }
-    const isCurrentRead = authStateVersion === readVersion;
-    return { session: isCurrentRead ? null : cachedSession, error };
+    return { session: cachedSession, error };
   } finally {
     if (timeoutId !== undefined) clearTimeout(timeoutId);
   }
