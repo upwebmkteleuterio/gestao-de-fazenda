@@ -701,7 +701,7 @@ export const AnimaisSlidePanel: React.FC<AnimaisSlidePanelProps> = (
                                         label: "Sem pai informado",
                                         value: ""
                                     }, ...animais.filter(
-                                        a => ["touro", "novilho", "garrote", "bezerro"].includes(a.tipo_animal) && a.id !== selectedAnimal?.id
+                                        a => a.id !== selectedAnimal?.id && ((a.tipo_animal === "touro" && a.status === "ativo") || a.id === formData.pai_id)
                                     ).map(a => ({
                                         label: `${a.brinco} - ${a.tipo_animal}`,
                                         value: a.id

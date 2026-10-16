@@ -4,6 +4,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useConnectivityStore } from '@/store/useConnectivityStore';
 import { animaisService, AnimalCreateInput, syncAnimais } from '../services/animaisService';
 import { Animal } from '../types/database';
+import { AnimalSortField, SortDirection } from '@/utils/animalSort';
 
 export const useMaeCandidates = (search: string, excludeId?: string) => {
   const { session } = useAuth();
@@ -44,6 +45,8 @@ type AnimalFilters = {
   includeHistorico?: boolean;
   page?: number;
   limit?: number;
+  sortBy?: AnimalSortField;
+  sortDir?: SortDirection;
 };
 
 type AnimalQueryData = {

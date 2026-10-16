@@ -72,6 +72,10 @@ export const PastagensPage: React.FC = () => {
     animaisNoPasto,
     animaisDisponiveis,
     animaisSelecionados,
+    lotes,
+    loteSelecionadoId,
+    setLoteSelecionadoId,
+    handleAddLoteAnimais,
     handleSelectAnimal,
     handleRemoveSelectedAnimal,
     resumoRebanhoPasto,
@@ -161,6 +165,10 @@ export const PastagensPage: React.FC = () => {
         animaisNoPasto={animaisNoPasto}
         animaisDisponiveis={animaisDisponiveis}
         animaisSelecionados={animaisSelecionados}
+        lotes={lotes}
+        loteSelecionadoId={loteSelecionadoId}
+        onLoteChange={setLoteSelecionadoId}
+        onAddLoteAnimais={handleAddLoteAnimais}
         onSelectAnimal={handleSelectAnimal}
         onRemoveSelectedAnimal={handleRemoveSelectedAnimal}
         resumoRebanhoPasto={resumoRebanhoPasto}

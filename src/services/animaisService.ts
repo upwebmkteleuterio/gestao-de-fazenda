@@ -19,6 +19,21 @@ import { useConnectivityStore } from '@/store/useConnectivityStore';
 import { Animal, AnimalSyncStatus, RegistroToqueAno } from '@/types/database';
 import { classifyAnimalType, classifyAnimals } from './animalClassification';
 import { DomainValidationError, isValidParentRecord, validateAnimalFields } from './domainValidation';
+import { AnimalSortField, SortDirection, sortAnimalList } from '@/utils/animalSort';
+
+type AnimalQueryFilters = {
+  search?: string;
+  sexo?: string;
+  status?: string;
+  categoria?: string;
+  tipo?: string;
+  pasto_id?: string;
+  includeHistorico?: boolean;
+  page?: number;
+  limit?: number;
+  sortBy?: AnimalSortField;
+  sortDir?: SortDirection;
+};
 
 type AnimalDbRow = {
   id: string;
@@ -498,7 +513,7 @@ const cacheOnlineAnimals = async (userId: string, animals: Animal[], replaceComp
   return pendingAnimals;
 };
 
-const filterLocalAnimals = (animals: Animal[], filters?: { search?: string; sexo?: string; status?: string; categoria?: string; tipo?: string; pasto_id?: string; page?: number; limit?: number }) => {
+const filterLocalAnimals = (animals: Animal[], filters?: AnimalQueryFilters) => {
   const search = filters?.search ? sanitizeSearch(filters.search).toLocaleLowerCase() : '';
   const filtered = animals
     .filter((animal) => !search || [animal.brinco, animal.raca, animal.cdc, animal.cdn].some((value) => value?.toLocaleLowerCase().includes(search)))
@@ -506,19 +521,19 @@ const filterLocalAnimals = (animals: Animal[], filters?: { search?: string; sexo
     .filter((animal) => !filters?.status || filters.status === 'all' || animal.status === filters.status)
     .filter((animal) => !filters?.categoria || filters.categoria === 'all' || animal.categoria === filters.categoria)
     .filter((animal) => !filters?.tipo || filters.tipo === 'all' || animal.tipo_animal === filters.tipo)
-    .filter((animal) => !filters?.pasto_id || filters.pasto_id === 'all' || animal.pasto_id === filters.pasto_id)
-    .sort((left, right) => (right.createdAt || '').localeCompare(left.createdAt || ''));
-  const total = filtered.length;
-  if (filters?.page === undefined || filters.limit === undefined) return { data: filtered, total };
+    .filter((animal) => !filters?.pasto_id || filters.pasto_id === 'all' || animal.pasto_id === filters.pasto_id);
+  const sorted = sortAnimalList(filtered, filters?.sortBy, filters?.sortDir);
+  const total = sorted.length;
+  if (filters?.page === undefined || filters.limit === undefined) return { data: sorted, total };
   const start = Math.max(0, (filters.page - 1) * filters.limit);
-  return { data: filtered.slice(start, start + filters.limit), total };
+  return { data: sorted.slice(start, start + filters.limit), total };
 };
 
 const mergePendingAnimals = (
   animals: Animal[],
   total: number,
   pendingAnimals: Animal[],
-  filters?: { search?: string; sexo?: string; status?: string; categoria?: string; tipo?: string; pasto_id?: string; page?: number; limit?: number },
+  filters?: AnimalQueryFilters,
 ) => {
   if (pendingAnimals.length === 0) return { data: animals, total };
   const remoteIds = new Set(animals.map((animal) => animal.id));
@@ -786,7 +801,7 @@ const getChildrenByMother = async (userId: string, motherId: string): Promise<An
 };
 
 export const animaisService = {
-  getAll: async (filters?: { search?: string; sexo?: string; status?: string; categoria?: string; tipo?: string; pasto_id?: string; includeHistorico?: boolean; page?: number; limit?: number }): Promise<{ data: Animal[]; total: number; source: 'remote' | 'local'; capturedAt?: string }> => {
+  getAll: async (filters?: AnimalQueryFilters): Promise<{ data: Animal[]; total: number; source: 'remote' | 'local'; capturedAt?: string }> => {
     const userId = await getCurrentUserId();
     if (!userId) return { data: [], total: 0, source: 'local' };
     if (!isBrowserOnline()) {
@@ -796,7 +811,14 @@ export const animaisService = {
     }
 
     try {
-      let query = supabase.from('animais').select('*', { count: 'exact' }).order('created_at', { ascending: false });
+      let query = supabase.from('animais').select('*', { count: 'exact' });
+      if (filters?.sortBy !== 'brinco') {
+        if (!filters?.sortBy) {
+          query = query.order('created_at', { ascending: false });
+        } else {
+          query = query.order(filters.sortBy, { ascending: filters.sortDir !== 'desc' }).order('id', { ascending: true });
+        }
+      }
       const search = filters?.search ? sanitizeSearch(filters.search) : '';
       if (search) query = query.or(`brinco.ilike.*${search}*,raca.ilike.*${search}*,cdc.ilike.*${search}*,cdn.ilike.*${search}*`);
       if (filters?.sexo && filters.sexo !== 'all') query = query.eq('sexo', filters.sexo);
@@ -804,7 +826,7 @@ export const animaisService = {
       if (filters?.categoria && filters.categoria !== 'all') query = query.eq('categoria', filters.categoria);
       if (filters?.tipo && filters.tipo !== 'all') query = query.eq('tipo_animal', filters.tipo);
       if (filters?.pasto_id && filters.pasto_id !== 'all') query = query.eq('pasto_id', filters.pasto_id);
-      if (filters?.page !== undefined && filters.limit !== undefined) {
+      if (filters?.sortBy !== 'brinco' && filters?.page !== undefined && filters.limit !== undefined) {
         const start = (filters.page - 1) * filters.limit;
         query = query.range(start, start + filters.limit - 1);
       }
@@ -830,13 +852,18 @@ export const animaisService = {
         && filters?.page === undefined
         && filters?.limit === undefined;
       const pendingAnimals = await cacheOnlineAnimals(userId, animals, isCompleteCacheQuery);
-      const merged = mergePendingAnimals(animals, count ?? 0, pendingAnimals, filters);
+      const mergeFilters = filters?.sortBy === 'brinco' ? { ...filters, page: 1 } : filters;
+      const merged = mergePendingAnimals(animals, count ?? 0, pendingAnimals, mergeFilters);
+      const sortedAnimals = sortAnimalList(merged.data, filters?.sortBy, filters?.sortDir);
+      const pageData = filters?.sortBy === 'brinco' && filters.page !== undefined && filters.limit !== undefined
+        ? sortedAnimals.slice(Math.max(0, (filters.page - 1) * filters.limit), Math.max(0, (filters.page - 1) * filters.limit) + filters.limit)
+        : sortedAnimals;
       const { data: activeRows, error: activeError } = await supabase.from('animais').select('id, brinco').eq('status', 'ativo');
       if (activeError) throw activeError;
-      const mergedIds = new Set(merged.data.map((animal) => animal.id));
+      const mergedIds = new Set(pageData.map((animal) => animal.id));
       const activeBrincosOutsidePage = ((activeRows ?? []) as Array<{ id: string; brinco: string }>)
         .filter((row) => !mergedIds.has(row.id)).map((row) => row.brinco);
-      return { ...merged, data: annotateBrincoConflicts(merged.data, activeBrincosOutsidePage), source: 'remote' };
+      return { ...merged, data: annotateBrincoConflicts(pageData, activeBrincosOutsidePage), source: 'remote' };
     } catch (error) {
       if (!isTransportError(error)) throw error;
       const local = await readLocalAnimals(userId);

@@ -2,6 +2,7 @@ import { useState, useMemo, FormEvent } from 'react';
 import { Animal, Pastagem, ServicoPastagem } from '@/types/database';
 import { validatePastagemFields, validateServicoPastagemFields } from '@/services/domainValidation';
 import { useAnimais } from '@/hooks/useAnimais';
+import { useLotes } from '@/hooks/useLotes';
 import { useUIStore } from '@/store/useUIStore';
 
 const INITIAL_PASTO_FORM: Partial<Pastagem> = {
@@ -46,9 +47,11 @@ export const usePastagemForm = ({
 }: UsePastagemFormParams) => {
   const { showToast } = useUIStore();
   const { animais, updateAnimalPasture, syncLocalMutation: syncAnimaisLocalMutation } = useAnimais();
+  const { lotes } = useLotes();
 
   const [slideOpen, setSlideOpen] = useState(false);
   const [selectedAnimalIds, setSelectedAnimalIds] = useState<string[]>([]);
+  const [loteSelecionadoId, setLoteSelecionadoId] = useState('');
   const [pendingCreatedPasto, setPendingCreatedPasto] = useState<Pastagem | null>(null);
   const [isEditing, setIsEditing] = useState(false);
   const [activeTab, setActiveTab] = useState<'dados' | 'servicos'>('dados');
@@ -71,6 +74,7 @@ export const usePastagemForm = ({
   const handleOpenCreate = () => {
     setSelectedPasto(null);
     setSelectedAnimalIds([]);
+    setLoteSelecionadoId('');
     setPendingCreatedPasto(null);
     setIsEditing(false);
     setActiveTab('dados');
@@ -85,6 +89,7 @@ export const usePastagemForm = ({
   const handleOpenDetails = (pasto: Pastagem) => {
     setSelectedPasto(pasto);
     setSelectedAnimalIds(animais.filter((animal) => animal.status === 'ativo' && animal.pasto_id === pasto.id).map((animal) => animal.id));
+    setLoteSelecionadoId('');
     setPendingCreatedPasto(null);
     setIsEditing(true);
     setActiveTab('dados');
@@ -236,6 +241,16 @@ export const usePastagemForm = ({
     if (animal.status !== 'ativo') return;
     setSelectedAnimalIds((current) => current.includes(animal.id) ? current : [...current, animal.id]);
   };
+  const handleAddLoteAnimais = (loteId: string) => {
+    const lote = lotes.find((item) => item.id === loteId);
+    if (!lote) return;
+    const availableIds = new Set(animaisDisponiveis.map((animal) => animal.id));
+    setSelectedAnimalIds((current) => {
+      const selectedIds = new Set(current);
+      const newIds = lote.animais_ids.filter((id) => availableIds.has(id) && !selectedIds.has(id));
+      return [...current, ...newIds];
+    });
+  };
   const handleRemoveSelectedAnimal = (animalId: string) => {
     setSelectedAnimalIds((current) => current.filter((id) => id !== animalId));
   };
@@ -298,6 +313,10 @@ export const usePastagemForm = ({
     animaisNoPasto,
     animaisDisponiveis,
     animaisSelecionados,
+    lotes,
+    loteSelecionadoId,
+    setLoteSelecionadoId,
+    handleAddLoteAnimais,
     handleSelectAnimal,
     handleRemoveSelectedAnimal,
     resumoRebanhoPasto,

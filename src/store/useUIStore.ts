@@ -1,10 +1,11 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import { AnimalSortField, SortDirection } from '@/utils/animalSort';
 
-export type PageRoute = 
-  | 'Dashboard' 
-  | 'Animais' 
-  | 'Pesagens' 
+export type PageRoute =
+  | 'Dashboard'
+  | 'Animais'
+  | 'Pesagens'
   | 'Pastagens' 
   | 'Manejo Reprodutivo' 
   | 'Manejo Sanitário' 
@@ -49,6 +50,11 @@ interface UIStore {
   activePage: PageRoute;
   setActivePage: (page: PageRoute) => void;
 
+  animaisSortBy: AnimalSortField;
+  setAnimaisSortBy: (sortBy: AnimalSortField) => void;
+  animaisSortDir: SortDirection;
+  setAnimaisSortDir: (sortDir: SortDirection) => void;
+
   sidebarOpen: boolean;
   setSidebarOpen: (open: boolean) => void;
   toggleSidebar: () => void;
@@ -91,6 +97,11 @@ export const useUIStore = create<UIStore>()(
 
       activePage: 'Dashboard',
       setActivePage: (activePage) => set({ activePage }),
+
+      animaisSortBy: 'created_at',
+      setAnimaisSortBy: (animaisSortBy) => set({ animaisSortBy }),
+      animaisSortDir: 'desc',
+      setAnimaisSortDir: (animaisSortDir) => set({ animaisSortDir }),
 
       sidebarOpen: true,
       setSidebarOpen: (sidebarOpen) => set({ sidebarOpen }),
@@ -150,6 +161,8 @@ export const useUIStore = create<UIStore>()(
         theme: state.theme,
         activePage: state.activePage,
         sidebarOpen: state.sidebarOpen,
+        animaisSortBy: state.animaisSortBy,
+        animaisSortDir: state.animaisSortDir,
       }),
     }
   )

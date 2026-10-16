@@ -14,6 +14,10 @@ export const useAnimaisTable = () => {
     toggleSelectAnimal,
     selectAllAnimals,
     clearSelectedAnimals,
+    animaisSortBy,
+    setAnimaisSortBy,
+    animaisSortDir,
+    setAnimaisSortDir,
   } = useUIStore();
 
   const { lotes, createLote, moverPasto } = useLotes();
@@ -41,6 +45,8 @@ export const useAnimaisTable = () => {
     tipo,
     page,
     limit,
+    sortBy: animaisSortBy,
+    sortDir: animaisSortDir,
   });
 
   // Consulta geral para descarte e exportação
@@ -50,7 +56,7 @@ export const useAnimaisTable = () => {
   // Resetar para página 1 ao alterar qualquer filtro
   useEffect(() => {
     setPage(1);
-  }, [search, sexo, status, categoria, tipo]);
+  }, [search, sexo, status, categoria, tipo, animaisSortBy, animaisSortDir]);
 
   // Modais de gerenciamento de Lote a partir dos selecionados
   const [loteModalOpen, setLoteModalOpen] = useState(false);
@@ -155,6 +161,10 @@ export const useAnimaisTable = () => {
     setCategoria,
     tipo,
     setTipo,
+    sortBy: animaisSortBy,
+    sortDir: animaisSortDir,
+    setSortBy: setAnimaisSortBy,
+    setSortDir: setAnimaisSortDir,
     page,
     setPage,
     limit,

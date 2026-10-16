@@ -30,6 +30,10 @@ export const AnimaisPage: React.FC = () => {
     setCategoria,
     tipo,
     setTipo,
+    sortBy,
+    sortDir,
+    setSortBy,
+    setSortDir,
     page,
     setPage,
     limit,
@@ -146,6 +150,10 @@ export const AnimaisPage: React.FC = () => {
               onStatusChange={setStatus}
               categoria={categoria}
               onCategoriaChange={setCategoria}
+              sortBy={sortBy}
+              sortDir={sortDir}
+              onSortByChange={setSortBy}
+              onSortDirChange={setSortDir}
             />
 
             <AnimaisTable

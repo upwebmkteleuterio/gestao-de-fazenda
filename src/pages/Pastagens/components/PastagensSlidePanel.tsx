@@ -8,7 +8,7 @@ import {
   Plus, Map, Sprout, Search, AlertTriangle, Calendar, Users, Edit3, Trash2, 
   Clock, CheckCircle2, ShieldAlert, Layers, Wrench, ChevronRight, Filter, X
 } from 'lucide-react';
-import { Animal, Pastagem, ServicoPastagem } from '../../../types/database';
+import { Animal, Lote, Pastagem, ServicoPastagem } from '../../../types/database';
 import type { ServicoFormValues } from '../hooks/usePastagemForm';
 
 type ResumoRebanhoPasto = { vacas: number; bezerras: number; bezerros: number; matrizes: number; touros: number; total: number; isManual: boolean };
@@ -34,6 +34,10 @@ interface PastagensSlidePanelProps {
   animaisNoPasto: Animal[];
   animaisDisponiveis: Animal[];
   animaisSelecionados: Animal[];
+  lotes: Lote[];
+  loteSelecionadoId: string;
+  onLoteChange: (loteId: string) => void;
+  onAddLoteAnimais: (loteId: string) => void;
   onSelectAnimal: (animal: Animal) => void;
   onRemoveSelectedAnimal: (animalId: string) => void;
   resumoRebanhoPasto: ResumoRebanhoPasto;
@@ -45,8 +49,8 @@ export const PastagensSlidePanel = ({
   slideOpen, setSlideOpen, isEditing, isSaving, isDeleting, isAddingServico, activeTab, setActiveTab,
   selectedPasto, pastoForm, setPastoForm, servicoForm, setServicoForm,
   handleSavePasto, handleAddServico, setModalOpen, setPastoToDelete,
-  animaisNoPasto, animaisDisponiveis, animaisSelecionados, onSelectAnimal, onRemoveSelectedAnimal,
-  resumoRebanhoPasto, servicosDoPasto, checkSaidaVencida
+  animaisNoPasto, animaisDisponiveis, animaisSelecionados, lotes, loteSelecionadoId, onLoteChange, onAddLoteAnimais,
+  onSelectAnimal, onRemoveSelectedAnimal, resumoRebanhoPasto, servicosDoPasto, checkSaidaVencida
 }: PastagensSlidePanelProps) => {
   const [animalSearch, setAnimalSearch] = React.useState('');
   const [animalDropdownOpen, setAnimalDropdownOpen] = React.useState(false);
@@ -193,6 +197,43 @@ export const PastagensSlidePanel = ({
                 />
 
                 <div className="space-y-3">
+                    {lotes.length > 0 && (
+                      <div className="space-y-2 rounded-xl border border-emerald-100 bg-emerald-50/50 p-3.5 dark:border-emerald-900/40 dark:bg-emerald-950/20">
+                        <label htmlFor="select-lote-pastagem" className="block text-xs font-bold text-emerald-800 dark:text-emerald-200">
+                          Adicionar animais por lote
+                        </label>
+                        <Select
+                          id="select-lote-pastagem"
+                          noMargin
+                          value={loteSelecionadoId}
+                          onChange={(event) => onLoteChange(event.target.value)}
+                          options={[
+                            { label: 'Selecione um lote...', value: '' },
+                            ...lotes.map((lote) => ({
+                              label: `${lote.nome} (${lote.animais_ids.length} animais)`,
+                              value: lote.id,
+                            })),
+                          ]}
+                        />
+                        <Button
+                          variant="secondary"
+                          icon={Users}
+                          className="text-xs font-bold"
+                          disabled={!loteSelecionadoId}
+                          onClick={() => {
+                            if (loteSelecionadoId) {
+                              onAddLoteAnimais(loteSelecionadoId);
+                              onLoteChange('');
+                            }
+                          }}
+                        >
+                          Adicionar do Lote
+                        </Button>
+                        <p className="text-[11px] text-gray-500 dark:text-gray-400">
+                          Os animais do lote são somados à seleção atual. Desmarque individualmente se necessário.
+                        </p>
+                      </div>
+                    )}
                     <div ref={animalComboboxRef} className="relative">
                       <Input
                         label={selectedPasto ? 'Gerenciar animais deste piquete' : 'Adicionar animais ao novo piquete'}
