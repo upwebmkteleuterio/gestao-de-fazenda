@@ -1,4 +1,5 @@
 import { Check, ChevronDown } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import {
   AnimatePresence,
   motion,
@@ -368,11 +369,12 @@ export interface MorphSelectItemProps {
   value: string;
   disabled?: boolean;
   className?: string;
+  icon?: LucideIcon;
   children: ReactNode;
   key?: string;
 }
 
-export function MorphSelectItem({ value, disabled = false, className, children }: MorphSelectItemProps) {
+export function MorphSelectItem({ value, disabled = false, className, icon: Icon, children }: MorphSelectItemProps) {
   const context = useMorphContext('MorphSelectItem');
   const selected = context.value === value;
   const label = typeof children === 'string' ? children : value;
@@ -399,7 +401,10 @@ export function MorphSelectItem({ value, disabled = false, className, children }
           className,
         )}
       >
-        {children}
+        <span className="flex min-w-0 items-center gap-2">
+          {Icon ? <Icon className="h-4 w-4 shrink-0 text-gray-500 dark:text-gray-400" aria-hidden="true" /> : null}
+          {children}
+        </span>
         {selected ? <Check className="h-3.5 w-3.5 shrink-0" /> : null}
       </button>
     </motion.li>

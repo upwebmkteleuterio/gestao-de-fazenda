@@ -1,4 +1,5 @@
 import React from 'react';
+import type { LucideIcon } from 'lucide-react';
 import {
   MorphSelect,
   MorphSelectContent,
@@ -11,6 +12,7 @@ export interface SelectOption {
   label: string;
   value: string | number;
   disabled?: boolean;
+  icon?: LucideIcon;
 }
 
 export interface SelectProps extends React.SelectHTMLAttributes<HTMLSelectElement> {
@@ -96,7 +98,7 @@ export const Select: React.FC<SelectProps> = ({
         </MorphSelectTrigger>
         <MorphSelectContent className="shadow-sm">
           {optionValues.map((option, index) => (
-            <MorphSelectItem key={`${option.value}-${index}`} value={option.value} disabled={option.disabled}>
+            <MorphSelectItem key={`${option.value}-${index}`} value={option.value} disabled={option.disabled} icon={option.icon}>
               {option.label}
             </MorphSelectItem>
           ))}

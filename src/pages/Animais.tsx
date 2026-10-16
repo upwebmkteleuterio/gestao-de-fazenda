@@ -1,5 +1,7 @@
 import React from 'react';
+import { Search } from 'lucide-react';
 import { Card } from '@/components/Card';
+import { Input } from '@/components/Input';
 import { Tabs } from '@/components/Tabs';
 
 // Hooks locais especializados
@@ -124,24 +126,34 @@ export const AnimaisPage: React.FC = () => {
 
       {/* Card da Listagem com Abas e Filtros Integrados */}
       <Card noPadding>
-        <Tabs
-          tabs={[
-            { id: 'rebanho', label: 'Rebanho Geral' },
-            {
-              id: 'descartadas',
-              label: 'Vacas Descartadas',
-              badge: vacasDescartadas.length > 0 ? vacasDescartadas.length : undefined,
-            },
-          ]}
-          activeTab={mainTab}
-          onChange={(t) => setMainTab(t as 'rebanho' | 'descartadas')}
-        />
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+          <Tabs
+            tabs={[
+              { id: 'rebanho', label: 'Rebanho Geral' },
+              {
+                id: 'descartadas',
+                label: 'Vacas Descartadas',
+                badge: vacasDescartadas.length > 0 ? vacasDescartadas.length : undefined,
+              },
+            ]}
+            activeTab={mainTab}
+            onChange={(t) => setMainTab(t as 'rebanho' | 'descartadas')}
+          />
+          <div className="w-full lg:w-[420px] lg:shrink-0">
+            <Input
+              noMargin
+              id="search-animais"
+              icon={Search}
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Buscar brinco, CDC, CDN..."
+            />
+          </div>
+        </div>
 
         {mainTab === 'rebanho' ? (
           <>
             <AnimaisFilters
-              search={search}
-              onSearchChange={setSearch}
               tipo={tipo}
               onTipoChange={setTipo}
               sexo={sexo}

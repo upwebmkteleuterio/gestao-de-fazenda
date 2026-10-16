@@ -1,12 +1,9 @@
 import React from 'react';
-import { Search } from 'lucide-react';
-import { Input } from '@/components/Input';
+import { Calendar, FileText, Hash, Tag } from 'lucide-react';
 import { Select } from '@/components/Select';
 import { AnimalSortField, SortDirection } from '@/utils/animalSort';
 
 interface AnimaisFiltersProps {
-  search: string;
-  onSearchChange: (value: string) => void;
   tipo: string;
   onTipoChange: (value: string) => void;
   sexo: string;
@@ -22,8 +19,6 @@ interface AnimaisFiltersProps {
 }
 
 export const AnimaisFilters: React.FC<AnimaisFiltersProps> = ({
-  search,
-  onSearchChange,
   tipo,
   onTipoChange,
   sexo,
@@ -38,14 +33,25 @@ export const AnimaisFilters: React.FC<AnimaisFiltersProps> = ({
   onSortDirChange,
 }) => {
   return (
-    <div className="p-4 border-b border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-800 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3">
-      <Input
-        noMargin
-        id="search"
-        icon={Search}
-        value={search}
-        onChange={(e) => onSearchChange(e.target.value)}
-        placeholder="Buscar brinco, CDC, CDN..."
+    <div className="p-4 border-b border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-800 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3">
+      <Select
+        id="filter-ordenacao"
+        value={`${sortBy}:${sortDir}`}
+        onChange={(event) => {
+          const [field, direction] = event.target.value.split(':') as [AnimalSortField, SortDirection];
+          onSortByChange(field);
+          onSortDirChange(direction);
+        }}
+        options={[
+          { label: 'Data de cadastro (mais recentes)', value: 'created_at:desc', icon: Calendar },
+          { label: 'Data de cadastro (mais antigos)', value: 'created_at:asc', icon: Calendar },
+          { label: 'Brinco (número crescente)', value: 'brinco:asc', icon: Hash },
+          { label: 'Brinco (número decrescente)', value: 'brinco:desc', icon: Hash },
+          { label: 'CDC (crescente)', value: 'cdc:asc', icon: FileText },
+          { label: 'CDC (decrescente)', value: 'cdc:desc', icon: FileText },
+          { label: 'CDN (crescente)', value: 'cdn:asc', icon: Tag },
+          { label: 'CDN (decrescente)', value: 'cdn:desc', icon: Tag },
+        ]}
       />
 
       <Select
@@ -97,27 +103,6 @@ export const AnimaisFilters: React.FC<AnimaisFiltersProps> = ({
           { label: 'PC – Puro por Cruzamento', value: 'PC' },
           { label: 'PO – Puro de Origem', value: 'PO' },
           { label: 'CO – Comum', value: 'CO' },
-        ]}
-      />
-
-      <Select
-        id="filter-ordenacao"
-        label="Ordenar por"
-        value={`${sortBy}:${sortDir}`}
-        onChange={(event) => {
-          const [field, direction] = event.target.value.split(':') as [AnimalSortField, SortDirection];
-          onSortByChange(field);
-          onSortDirChange(direction);
-        }}
-        options={[
-          { label: 'Data de cadastro (mais recentes)', value: 'created_at:desc' },
-          { label: 'Data de cadastro (mais antigos)', value: 'created_at:asc' },
-          { label: 'Brinco (número crescente)', value: 'brinco:asc' },
-          { label: 'Brinco (número decrescente)', value: 'brinco:desc' },
-          { label: 'CDC (crescente)', value: 'cdc:asc' },
-          { label: 'CDC (decrescente)', value: 'cdc:desc' },
-          { label: 'CDN (crescente)', value: 'cdn:asc' },
-          { label: 'CDN (decrescente)', value: 'cdn:desc' },
         ]}
       />
     </div>

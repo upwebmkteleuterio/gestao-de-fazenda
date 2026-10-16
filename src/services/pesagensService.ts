@@ -62,6 +62,7 @@ const isBrowserOnline = () => (
   (typeof navigator === 'undefined' || navigator.onLine)
   && useConnectivityStore.getState().status !== 'offline'
 );
+const isTransportError = (error: unknown) => !isBrowserOnline() || /network|fetch|offline|load failed|failed to fetch/i.test(error instanceof Error ? error.message : '');
 const getCurrentUserId = () => readCurrentUserId(isBrowserOnline());
 const sanitizeSearchForPostgrest = (value: string) => value
   .trim()
@@ -204,6 +205,7 @@ const fetchHistory = async (): Promise<Pesagem[]> => {
       .order('id', { ascending: true })
       .range(from, from + HISTORY_PAGE_SIZE - 1);
     if (error) throw error;
+    if (!data) throw new Error('Não foi possível carregar as pesagens do servidor. Tente novamente.');
     const rows = ((data ?? []) as unknown as PesagemDbRow[]).map(toPesagem);
     all.push(...rows);
     if (rows.length < HISTORY_PAGE_SIZE) break;
@@ -415,7 +417,11 @@ const remoteCreate = async (payload: CreatePayload): Promise<Pesagem> => {
 const remoteUpdate = async (payload: UpdatePayload): Promise<Pesagem> => {
   const before = await fetchAllRemote();
   const current = before.find((item) => item.id === payload.id);
-  if (!current) throw new Error('Pesagem não encontrada.');
+  if (!current) {
+    // A pesagem ainda não existe no servidor (ex.: criada/alterada offline e a criação
+    // ainda não foi enviada). Envia como criação com o mesmo id para não travar a sincronização.
+    return remoteCreate({ id: payload.id, item: payload.updates as PesagemInput });
+  }
   const next = validateInput({ ...current, ...payload.updates });
   await ensurePesagemReference(next, payload.id, current.animal_id, current.data_pesagem);
   const calc = calcularGMD(next.animal_id, next.peso_kg, next.data_pesagem, before.filter((item) => item.id !== payload.id));
@@ -517,7 +523,7 @@ export const syncPesagens = async (requestedUserId?: string): Promise<void> => {
         const failedRetryAt = failed?.nextRetryAt ?? null;
         if (failedRetryAt && (!retryAt || failedRetryAt < retryAt)) retryAt = failedRetryAt;
         await setLocalStatus(userId, operation.payload.id, 'error', message, operation.operation === 'delete');
-        useConnectivityStore.getState().setError(message);
+        if (!isTransportError(error)) useConnectivityStore.getState().setError(message);
         continue;
       }
     }
