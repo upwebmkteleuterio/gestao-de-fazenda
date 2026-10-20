@@ -15,7 +15,7 @@ export const AppLayout: React.FC = () => {
   const { theme, toast, hideToast, slidePanel, closeSlidePanel } = useUIStore();
   const { session } = useAuth();
   const queryClient = useQueryClient();
-  const { status: connectivityStatus } = useConnectivityStore();
+  const { status: connectivityStatus, reachable } = useConnectivityStore();
   useConnectivity();
   const [isAccountSettingsOpen, setIsAccountSettingsOpen] = useState(false);
   const location = useLocation();
@@ -30,7 +30,7 @@ export const AppLayout: React.FC = () => {
       prefetchRequestedUserId.current = null;
       return;
     }
-    if (connectivityStatus !== 'online' || prefetchRequestedUserId.current === session.user.id) return;
+    if (connectivityStatus !== 'online' || reachable !== true || prefetchRequestedUserId.current === session.user.id) return;
 
     const userId = session.user.id;
     prefetchRequestedUserId.current = userId;
@@ -44,7 +44,7 @@ export const AppLayout: React.FC = () => {
         void queryClient.invalidateQueries({ queryKey: ['dashboard-summary'] });
       })
       .catch(() => undefined);
-  }, [connectivityStatus, queryClient, session?.user.id]);
+  }, [connectivityStatus, queryClient, reachable, session?.user.id]);
 
   // Listener de Atalho de Teclado Global: 'Esc' para fechar formulários e modais abertos
   useEffect(() => {

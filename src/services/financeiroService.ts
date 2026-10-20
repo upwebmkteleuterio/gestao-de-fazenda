@@ -16,6 +16,7 @@ import {
   saveOfflineSnapshot,
   type OutboxOperation,
 } from '@/offline/database';
+import { isNetworkFailure } from '@/offline/network';
 import { useConnectivityStore } from '@/store/useConnectivityStore';
 import { MAX_FINANCEIRO_DESCRIPTION_LENGTH, MAX_FINANCEIRO_VALUE, sanitizeReportSearch, validateFinanceiroFields } from '@/services/domainValidation';
 import type { TransacaoFinanceira } from '@/types/database';
@@ -301,10 +302,7 @@ const mergePendingTransactions = (items: TransacaoFinanceira[], total: number, p
   return { data: Array.from(merged.values()).sort((left, right) => `${right.data}${right.createdAt}`.localeCompare(`${left.data}${left.createdAt}`)), total: Math.max(0, total + totalAdjustment) };
 };
 
-const isNetworkError = (error: unknown) => {
-  const message = error instanceof Error ? error.message.toLowerCase() : '';
-  return !isBrowserOnline() || /network|fetch|offline|load failed|failed to fetch/.test(message);
-};
+const isNetworkError = (error: unknown) => !isBrowserOnline() || isNetworkFailure(error);
 
 const querySummary = async (startDate?: string, endDate?: string): Promise<FinanceiroResumo> => {
   validateDateRange(startDate, endDate);

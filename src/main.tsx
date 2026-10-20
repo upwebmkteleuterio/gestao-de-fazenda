@@ -5,10 +5,12 @@ import App from '@/App';
 import { AppSplashScreen } from '@/components/AppSplashScreen';
 import { SessionContextProvider } from '@/contexts/AuthContext';
 import { queryClient } from '@/lib/queryClient';
+import { startConnectivityMonitor } from '@/offline/connectivity';
 import { registerServiceWorker } from '@/offline/serviceWorker';
 import './index.css';
 
 registerServiceWorker();
+startConnectivityMonitor();
 
 function AppBootstrap() {
   const [isSplashVisible, setIsSplashVisible] = useState(true);

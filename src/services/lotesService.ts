@@ -17,6 +17,7 @@ import {
   saveOfflineSnapshot,
   type OutboxOperation,
 } from '@/offline/database';
+import { isNetworkFailure } from '@/offline/network';
 import { useConnectivityStore } from '@/store/useConnectivityStore';
 import { animaisService, syncAnimais } from '@/services/animaisService';
 import { validateLoteFields } from '@/services/domainValidation';
@@ -411,8 +412,7 @@ export const lotesService = {
       }
       return { ...mergePendingLotes(items, count ?? 0, pending, filters), source: 'remote', capturedAt };
     } catch (error) {
-      const message = error instanceof Error ? error.message.toLowerCase() : '';
-      if (!isBrowserOnline() || /network|fetch|offline|load failed|timeout/.test(message)) {
+      if (!isBrowserOnline() || isNetworkFailure(error)) {
         const local = await readLocalLotes(userId);
         const recent = sortRecent(local.data).slice(0, filters?.limit ?? local.data.length);
         return { data: recent, total: recent.length, source: 'local', capturedAt: local.capturedAt };
@@ -429,8 +429,7 @@ export const lotesService = {
       if (!row) return null;
       return withMemberships([row], await getMemberships([id]))[0] ?? null;
     } catch (error) {
-      const message = error instanceof Error ? error.message.toLowerCase() : '';
-      if ((!isBrowserOnline() || /network|fetch|offline|load failed|timeout/.test(message)) && local && !local.data.localDeleted) {
+      if ((!isBrowserOnline() || isNetworkFailure(error)) && local && !local.data.localDeleted) {
         return local.data;
       }
       throw error;

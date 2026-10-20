@@ -15,6 +15,7 @@ import {
   saveOfflineRecords,
   saveOfflineSnapshot,
 } from '@/offline/database';
+import { RemoteTimeoutError, isNetworkFailure } from '@/offline/network';
 import { useConnectivityStore } from '@/store/useConnectivityStore';
 import { Animal, AnimalSyncStatus, RegistroToqueAno } from '@/types/database';
 import { classifyAnimalType, classifyAnimals } from './animalClassification';
@@ -94,12 +95,6 @@ const isBrowserOnline = () => (
 );
 
 const REMOTE_TIMEOUT_MS = 4000;
-class RemoteTimeoutError extends Error {
-  constructor() {
-    super('A solicitação excedeu o tempo limite de rede');
-    this.name = 'RemoteTimeoutError';
-  }
-}
 
 const withRemoteTimeout = async <T>(request: PromiseLike<T>, timeoutMs = REMOTE_TIMEOUT_MS): Promise<T> => {
   let timeoutId: ReturnType<typeof setTimeout>;
@@ -113,25 +108,7 @@ const withRemoteTimeout = async <T>(request: PromiseLike<T>, timeoutMs = REMOTE_
   }
 };
 
-const getErrorStatus = (error: unknown): number | undefined => {
-  if (!error || typeof error !== 'object') return undefined;
-  const candidate = error as { status?: unknown; statusCode?: unknown };
-  const status = candidate.status ?? candidate.statusCode;
-  return typeof status === 'number' ? status : undefined;
-};
-
-const isTransportError = (error: unknown): boolean => {
-  const status = getErrorStatus(error);
-  if (status !== undefined) return status === 0;
-  if (error instanceof RemoteTimeoutError) return true;
-  if (!isBrowserOnline()) return true;
-  if (!error || typeof error !== 'object') return false;
-  const candidate = error as { name?: unknown; message?: unknown };
-  const name = typeof candidate.name === 'string' ? candidate.name : '';
-  const message = typeof candidate.message === 'string' ? candidate.message : '';
-  return ['TypeError', 'NetworkError', 'AbortError'].includes(name)
-    || /failed to fetch|network request failed|networkerror|load failed|offline/i.test(message);
-};
+const isTransportError = (error: unknown): boolean => !isBrowserOnline() || isNetworkFailure(error);
 
 const getCurrentUserId = (): Promise<string | undefined> => readCurrentUserId(isBrowserOnline());
 

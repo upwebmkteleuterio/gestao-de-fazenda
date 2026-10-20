@@ -17,6 +17,7 @@ import {
   saveOfflineSnapshot,
   type OutboxOperation,
 } from '@/offline/database';
+import { isNetworkFailure } from '@/offline/network';
 import { useConnectivityStore } from '@/store/useConnectivityStore';
 import type { Insumo, MovimentacaoInsumo } from '@/types/database';
 import { MAX_DOMAIN_QUANTITY, validateInsumoFields, validateMovimentacaoFields } from '@/services/domainValidation';
@@ -233,7 +234,7 @@ const remapCreatedId = async (userId: string, temporaryId: string, remote: Insum
 };
 
 let activeSync: { userId: string; promise: Promise<void> } | null = null;
-const isTransportError = (error: unknown) => !isBrowserOnline() || /network|fetch|offline|load failed|failed to fetch/i.test(error instanceof Error ? error.message : '');
+const isTransportError = (error: unknown) => !isBrowserOnline() || isNetworkFailure(error);
 
 export const syncInsumos = async (requestedUserId?: string): Promise<void> => {
   const userId = requestedUserId ?? await getCurrentUserId();

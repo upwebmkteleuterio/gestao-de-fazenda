@@ -17,6 +17,7 @@ import {
   saveOfflineSnapshot,
   type OutboxOperation,
 } from '@/offline/database';
+import { isNetworkFailure } from '@/offline/network';
 import { useConnectivityStore } from '@/store/useConnectivityStore';
 import { animaisService, syncAnimais } from './animaisService';
 import { lotesService } from './lotesService';
@@ -62,7 +63,7 @@ const isBrowserOnline = () => (
   (typeof navigator === 'undefined' || navigator.onLine)
   && useConnectivityStore.getState().status !== 'offline'
 );
-const isTransportError = (error: unknown) => !isBrowserOnline() || /network|fetch|offline|load failed|failed to fetch/i.test(error instanceof Error ? error.message : '');
+const isTransportError = (error: unknown) => !isBrowserOnline() || isNetworkFailure(error);
 const getCurrentUserId = () => readCurrentUserId(isBrowserOnline());
 const sanitizeSearchForPostgrest = (value: string) => value
   .trim()
@@ -591,8 +592,7 @@ export const pesagensService = {
       const mergedData = await annotatePesagens(sortPesagens([...merged.values()]));
       return { data: mergedData, total: Math.max(0, (count ?? itemsWithConflicts.length) + localPending.filter((item) => !itemsWithConflicts.some((remote) => remote.id === item.id) && !item.localDeleted).length), source: 'remote' };
     } catch (error) {
-      const message = error instanceof Error ? error.message.toLowerCase() : '';
-      if (!isBrowserOnline() || /network|fetch|offline|load failed|failed to fetch/.test(message)) {
+      if (!isBrowserOnline() || isNetworkFailure(error)) {
         const local = await readLocalPage(userId, filters);
         const data = await annotatePesagens(local.data);
         return { data, total: local.total, source: 'local', capturedAt: local.capturedAt };

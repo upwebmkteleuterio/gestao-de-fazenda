@@ -1,10 +1,16 @@
 import { createClient } from '@supabase/supabase-js';
 import type { Session } from '@supabase/supabase-js';
+import { fetchWithRemoteTimeout } from '@/offline/network';
 
-const supabaseUrl = 'https://zipoizwadfyatilohcon.supabase.co';
-const supabasePublishableKey = 'sb_publishable_WwsF1dYAe_cLVN0S1d3fOg_JXmi3adz';
+export const SUPABASE_URL = 'https://zipoizwadfyatilohcon.supabase.co';
+export const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_WwsF1dYAe_cLVN0S1d3fOg_JXmi3adz';
 
-export const supabase = createClient(supabaseUrl, supabasePublishableKey);
+// Toda requisição feita pelo cliente Supabase passa por aqui: se o servidor não responder
+// dentro do tempo limite, a requisição é abortada, o app assume o modo offline e as telas
+// caem para o cache local em vez de ficarem presas no esqueleto.
+export const supabase = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
+  global: { fetch: fetchWithRemoteTimeout },
+});
 
 type AuthStateListener = (session: Session | null) => void;
 type SessionReadResult = { session: Session | null; error: unknown | null };

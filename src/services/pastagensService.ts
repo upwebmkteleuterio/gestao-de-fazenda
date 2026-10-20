@@ -16,6 +16,7 @@ import {
   saveOfflineSnapshot,
   type OutboxOperation,
 } from '@/offline/database';
+import { isNetworkFailure } from '@/offline/network';
 import { useConnectivityStore } from '@/store/useConnectivityStore';
 import { validatePastagemFields, validateServicoPastagemFields } from '@/services/domainValidation';
 import { Pastagem, ServicoPastagem } from '@/types/database';
@@ -483,8 +484,7 @@ export const pastagensService = {
       }
       return { ...mergePendingPastagens(items, total, pending, filters), source: 'remote', capturedAt };
     } catch (error) {
-      const message = error instanceof Error ? error.message.toLowerCase() : '';
-      if (!isBrowserOnline() || /network|fetch|offline|load failed/.test(message)) {
+      if (!isBrowserOnline() || isNetworkFailure(error)) {
         const local = await readLocalPastagens(userId);
         return { ...filterLocalPastagens(local.data, filters), source: 'local', capturedAt: local.capturedAt };
       }
@@ -502,8 +502,7 @@ export const pastagensService = {
       if (error) throw error;
       return data ? toPastagem(data as unknown as PastagemDbRow) : null;
     } catch (error) {
-      const message = error instanceof Error ? error.message.toLowerCase() : '';
-      if (/network|fetch|offline|load failed|timeout/.test(message) && local && !local.data.localDeleted) return local.data;
+      if ((!isBrowserOnline() || isNetworkFailure(error)) && local && !local.data.localDeleted) return local.data;
       throw error;
     }
   },

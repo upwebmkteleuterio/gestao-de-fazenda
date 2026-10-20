@@ -6,6 +6,7 @@ import {
   saveOfflineRecords,
   saveOfflineSnapshot,
 } from '@/offline/database';
+import { isNetworkFailure } from '@/offline/network';
 import { useConnectivityStore } from '@/store/useConnectivityStore';
 import { ManejoSanitario, MedicamentoAplicado } from '@/types/database';
 import { MAX_DOMAIN_QUANTITY, validateSanitarioFields } from '@/services/domainValidation';
@@ -67,10 +68,7 @@ const isBrowserOnline = (): boolean => (
   && useConnectivityStore.getState().status !== 'offline'
 );
 const getCurrentUserId = () => readCurrentUserId(isBrowserOnline());
-const isNetworkError = (error: unknown): boolean => {
-  const message = error instanceof Error ? error.message.toLowerCase() : String(error).toLowerCase();
-  return !isBrowserOnline() || /network|fetch|offline|load failed|failed to fetch|timeout|timed out/.test(message);
-};
+const isNetworkError = (error: unknown): boolean => !isBrowserOnline() || isNetworkFailure(error);
 
 const toNumber = (value: number | string): number => Number(value);
 

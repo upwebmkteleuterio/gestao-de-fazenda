@@ -1,5 +1,6 @@
 import { getCurrentUserId as readCurrentUserId, supabase } from '@/integrations/supabase/client';
 import { getOfflineSnapshot, listOfflineRecords, saveOfflineRecords, saveOfflineSnapshot, deleteOfflineRecords, replaceOfflineRecordsAndSnapshot } from '@/offline/database';
+import { isNetworkFailure } from '@/offline/network';
 import { useConnectivityStore } from '@/store/useConnectivityStore';
 import { Animal, EventoReproducao } from '@/types/database';
 import { DomainValidationError, sanitizeReportSearch, validateReportFilters, validateReproducaoFields } from './domainValidation';
@@ -61,10 +62,7 @@ const getRecentWindow = (): { coverageStart: string; coverageEnd: string } => {
   return { coverageStart: localDateString(start), coverageEnd: localDateString(end) };
 };
 
-const isNetworkError = (error: unknown): boolean => {
-  const message = error instanceof Error ? error.message.toLowerCase() : '';
-  return !isBrowserOnline() || /network|fetch|offline|load failed|failed to fetch/.test(message);
-};
+const isNetworkError = (error: unknown): boolean => !isBrowserOnline() || isNetworkFailure(error);
 
 const localRecord = (userId: string, evento: LocalEvento) => ({
   key: localRecordKey(userId, evento.id),
