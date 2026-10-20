@@ -494,7 +494,7 @@ export const ReprodutivoSlidePanel = ({
                         noMargin
                       />
                       <div className="flex items-center justify-between text-[11px] text-gray-400 px-1 pt-0.5">
-                        <span>{touros.length} reprodutores no rebanho</span>
+                        <span>{touros.length} touros cadastrados</span>
                         <button
                           type="button"
                           onClick={() => setModoManualTouro(true)}
@@ -516,7 +516,7 @@ export const ReprodutivoSlidePanel = ({
                       />
                       <div className="flex items-center justify-between text-[11px] px-1 pt-0.5">
                         <span className="text-gray-400">
-                          {touros && touros.length > 0 ? 'Inserção manual de touro / código de central' : 'Nenhum touro macho cadastrado no rebanho'}
+                          {touros && touros.length > 0 ? 'Inserção manual de touro / código de central' : 'Nenhum touro cadastrado'}
                         </span>
                         {touros && touros.length > 0 && (
                           <button

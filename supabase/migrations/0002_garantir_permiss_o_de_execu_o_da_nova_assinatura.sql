@@ -1,0 +1,1 @@
+GRANT EXECUTE ON FUNCTION public.get_reproducao_report_summary(date, date, date, text, text, text, text, text) TO authenticated, service_role;

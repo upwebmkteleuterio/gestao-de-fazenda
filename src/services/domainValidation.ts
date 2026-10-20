@@ -213,6 +213,7 @@ export const validateReportFilters = (filters: {
   touro?: string;
   protocolo?: string;
   resultadoDg?: string;
+  categoria?: string;
   search?: string;
   page?: number;
   limit?: number;
@@ -227,6 +228,7 @@ export const validateReportFilters = (filters: {
   if (filters.touro !== undefined && filters.touro !== '' && filters.touro !== 'all' && !sanitizeReportSearch(filters.touro)) throw new DomainValidationError('Selecione um touro válido.');
   if (filters.protocolo !== undefined && !['all', 'iatf', 'monta_natural', 'tetf', 'dg'].includes(filters.protocolo)) throw new DomainValidationError('Selecione um protocolo válido.');
   if (filters.resultadoDg !== undefined && !['all', 'cheia', 'vazia', 'pendente'].includes(filters.resultadoDg)) throw new DomainValidationError('Selecione um resultado de DG válido.');
+  if (filters.categoria !== undefined && !['all', 'PA', 'PC', 'PO', 'CO'].includes(filters.categoria)) throw new DomainValidationError('Selecione uma categoria válida.');
   sanitizeReportSearch(filters.search);
   if (filters.page !== undefined && (!Number.isInteger(filters.page) || filters.page < 1)) throw new DomainValidationError('A página do relatório é inválida.');
   if (filters.limit !== undefined && (!Number.isInteger(filters.limit) || filters.limit < 1 || filters.limit > 500)) throw new DomainValidationError('O limite do relatório deve estar entre 1 e 500.');

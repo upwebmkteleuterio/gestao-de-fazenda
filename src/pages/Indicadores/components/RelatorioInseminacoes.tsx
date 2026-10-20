@@ -15,6 +15,7 @@ import { ModalImpressaoInseminacoes } from './ModalImpressaoInseminacoes';
 import { InseminacaoRelatorioItem, exportarInseminacoesXLSX, formatarDataBR } from '../utils/inseminacaoReportUtils';
 import { DomainValidationError, validateReportFilters } from '@/services/domainValidation';
 import { useUIStore } from '@/store/useUIStore';
+import { CATEGORIA_ANIMAL_OPTIONS } from '@/utils/categoriaAnimal';
 
 const PAGE_SIZE = 25;
 const addDays = (date: string, days: number) => {
@@ -55,6 +56,7 @@ export const RelatorioInseminacoes: React.FC = () => {
   const [dataInicio, setDataInicio] = useState('');
   const [dataFim, setDataFim] = useState('');
   const [touro, setTouro] = useState('all');
+  const [categoria, setCategoria] = useState('all');
   const [protocolo, setProtocolo] = useState('all');
   const [resultadoDg, setResultadoDg] = useState('all');
   const [search, setSearch] = useState('');
@@ -68,9 +70,9 @@ export const RelatorioInseminacoes: React.FC = () => {
     dataEspecifica: modoData === 'especifica' ? dataEspecifica || undefined : undefined,
     dataInicio: modoData === 'periodo' ? dataInicio || undefined : undefined,
     dataFim: modoData === 'periodo' ? dataFim || undefined : undefined,
-    touro, protocolo, resultadoDg, search,
+    touro, categoria, protocolo, resultadoDg, search,
     page, limit: PAGE_SIZE,
-  }), [modoData, dataEspecifica, dataInicio, dataFim, touro, protocolo, resultadoDg, search, page]);
+  }), [modoData, dataEspecifica, dataInicio, dataFim, touro, categoria, protocolo, resultadoDg, search, page]);
   const filterError = useMemo(() => {
     try {
       validateReportFilters(filters);
@@ -85,12 +87,14 @@ export const RelatorioInseminacoes: React.FC = () => {
   const { animais, fetchAllAnimais } = useAnimais({ page: 1, limit: 100, includeHistorico: false });
   const animaisMap = useMemo(() => new Map(animais.flatMap((animal) => [[animal.id, animal], [animal.brinco, animal]])), [animais]);
   const itensPagina = useMemo(() => buildItems(eventos, animaisMap), [eventos, animaisMap]);
-  const descricaoFiltro = modoData === 'especifica' ? `Data: ${formatarDataBR(dataEspecifica)}` : modoData === 'periodo' ? `Período: ${dataInicio || dataFim ? `${formatarDataBR(dataInicio)} até ${formatarDataBR(dataFim)}` : 'todas as datas'}` : 'Todas as datas de inseminação';
+  const descricaoDataFiltro = modoData === 'especifica' ? `Data: ${formatarDataBR(dataEspecifica)}` : modoData === 'periodo' ? `Período: ${dataInicio || dataFim ? `${formatarDataBR(dataInicio)} até ${formatarDataBR(dataFim)}` : 'todas as datas'}` : 'Todas as datas de inseminação';
+  const categoriaDescricao = CATEGORIA_ANIMAL_OPTIONS.find((option) => option.value === categoria)?.label;
+  const descricaoFiltro = categoria === 'all' ? descricaoDataFiltro : `${descricaoDataFiltro} • Categoria: ${categoriaDescricao}`;
   const taxaConcepcao = summary && summary.prenhas_count + summary.vazias_count > 0 ? Math.round(summary.prenhas_count / (summary.prenhas_count + summary.vazias_count) * 100) : null;
 
   const resetFilters = () => {
     setModoData('todas'); setDataEspecifica(''); setDataInicio(''); setDataFim('');
-    setTouro('all'); setProtocolo('all'); setResultadoDg('all'); setSearch(''); setPage(1);
+    setTouro('all'); setCategoria('all'); setProtocolo('all'); setResultadoDg('all'); setSearch(''); setPage(1);
   };
   const openComplete = async (action: 'print' | 'pdf' | 'view') => {
     if (loadingComplete || filterError) return;
@@ -145,6 +149,14 @@ export const RelatorioInseminacoes: React.FC = () => {
               { value: 'all', label: 'Todos os Touros' },
               ...(summary?.touros ?? []).map((value) => ({ value, label: value })),
             ]}
+          />
+          <Select
+            noMargin
+            label="Categoria"
+            value={categoria}
+            onChange={(e) => { setCategoria(e.target.value); setPage(1); }}
+            className="mt-1 w-full px-3 py-2 text-sm rounded-xl bg-gray-50 dark:bg-gray-900"
+            options={CATEGORIA_ANIMAL_OPTIONS}
           />
           <Select
             noMargin

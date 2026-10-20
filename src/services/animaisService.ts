@@ -516,7 +516,7 @@ const cacheOnlineAnimals = async (userId: string, animals: Animal[], replaceComp
 const filterLocalAnimals = (animals: Animal[], filters?: AnimalQueryFilters) => {
   const search = filters?.search ? sanitizeSearch(filters.search).toLocaleLowerCase() : '';
   const filtered = animals
-    .filter((animal) => !search || [animal.brinco, animal.raca, animal.cdc, animal.cdn].some((value) => value?.toLocaleLowerCase().includes(search)))
+    .filter((animal) => !search || [animal.brinco, animal.raca].some((value) => value?.toLocaleLowerCase().includes(search)))
     .filter((animal) => !filters?.sexo || filters.sexo === 'all' || animal.sexo === filters.sexo)
     .filter((animal) => !filters?.status || filters.status === 'all' || animal.status === filters.status)
     .filter((animal) => !filters?.categoria || filters.categoria === 'all' || animal.categoria === filters.categoria)
@@ -820,7 +820,7 @@ export const animaisService = {
         }
       }
       const search = filters?.search ? sanitizeSearch(filters.search) : '';
-      if (search) query = query.or(`brinco.ilike.*${search}*,raca.ilike.*${search}*,cdc.ilike.*${search}*,cdn.ilike.*${search}*`);
+      if (search) query = query.or(`brinco.ilike.*${search}*,raca.ilike.*${search}*`);
       if (filters?.sexo && filters.sexo !== 'all') query = query.eq('sexo', filters.sexo);
       if (filters?.status && filters.status !== 'all') query = query.eq('status', filters.status);
       if (filters?.categoria && filters.categoria !== 'all') query = query.eq('categoria', filters.categoria);

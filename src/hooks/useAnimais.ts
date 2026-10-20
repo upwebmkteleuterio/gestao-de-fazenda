@@ -58,7 +58,7 @@ type AnimalQueryData = {
 
 const matchesAnimalFilters = (animal: Animal, filters?: AnimalFilters): boolean => {
   const search = filters?.search?.trim().toLocaleLowerCase();
-  return (!search || [animal.brinco, animal.raca, animal.cdc, animal.cdn].some((value) => value?.toLocaleLowerCase().includes(search)))
+  return (!search || [animal.brinco, animal.raca].some((value) => value?.toLocaleLowerCase().includes(search)))
     && (!filters?.sexo || filters.sexo === 'all' || animal.sexo === filters.sexo)
     && (!filters?.status || filters.status === 'all' || animal.status === filters.status)
     && (!filters?.categoria || filters.categoria === 'all' || animal.categoria === filters.categoria)

@@ -1,0 +1,1 @@
+DROP FUNCTION IF EXISTS public.get_reproducao_report_summary(date, date, date, text, text, text, text);

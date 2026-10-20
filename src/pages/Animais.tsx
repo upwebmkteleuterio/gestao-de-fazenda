@@ -146,7 +146,7 @@ export const AnimaisPage: React.FC = () => {
               icon={Search}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Buscar brinco, CDC, CDN..."
+              placeholder="Buscar brinco ou raça..."
             />
           </div>
         </div>

@@ -2,6 +2,7 @@ import React from 'react';
 import { Calendar, FileText, Hash, Tag } from 'lucide-react';
 import { Select } from '@/components/Select';
 import { AnimalSortField, SortDirection } from '@/utils/animalSort';
+import { CATEGORIA_ANIMAL_OPTIONS } from '@/utils/categoriaAnimal';
 
 interface AnimaisFiltersProps {
   tipo: string;
@@ -97,13 +98,7 @@ export const AnimaisFilters: React.FC<AnimaisFiltersProps> = ({
         id="filter-categoria"
         value={categoria}
         onChange={(e) => onCategoriaChange(e.target.value)}
-        options={[
-          { label: 'Todas Categorias', value: 'all' },
-          { label: 'PA – Puro por Avaliação', value: 'PA' },
-          { label: 'PC – Puro por Cruzamento', value: 'PC' },
-          { label: 'PO – Puro de Origem', value: 'PO' },
-          { label: 'CO – Comum', value: 'CO' },
-        ]}
+        options={CATEGORIA_ANIMAL_OPTIONS}
       />
     </div>
   );

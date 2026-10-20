@@ -103,7 +103,7 @@ export const useReproducaoForm = ({
 
   // Lista de Touros da fazenda
   const tourosList = useMemo(() => {
-    return animais.filter((a) => a.sexo === 'M' && a.status === 'ativo');
+    return animais.filter((a) => a.tipo_animal === 'touro' && a.status === 'ativo');
   }, [animais]);
 
   // Abertura do Slide Panel para Novo Registro

@@ -399,6 +399,7 @@ export type ReproducaoReportFilters = {
   touro?: string;
   protocolo?: string;
   resultadoDg?: string;
+  categoria?: string;
   search?: string;
   page?: number;
   limit?: number;
@@ -408,10 +409,12 @@ const readRecentWindow = async (
   userId: string,
   filters?: ReproducaoReportFilters,
 ): Promise<ReproducaoQuery> => {
-  const [records, snapshot] = await Promise.all([
+  const [records, snapshot, animalRecords] = await Promise.all([
     listOfflineRecords<LocalEvento>({ userId, entity: RECENT_WINDOW_ENTITY }),
     getOfflineSnapshot<{ count: number }>(recentWindowSnapshotKey(userId)),
+    listOfflineRecords<Animal>({ userId, entity: 'animal' }),
   ]);
+  const animalCategories = new Map(animalRecords.map((record) => [record.entityId, record.data.categoria]));
   const coverage = {
     capturedAt: snapshot?.capturedAt,
     coverageStart: snapshot?.coverageStart,
@@ -467,6 +470,7 @@ const readRecentWindow = async (
         if (filters.resultadoDg === 'pendente' && evento.resultado_dg !== undefined) return false;
         if (filters.resultadoDg !== 'pendente' && evento.resultado_dg !== filters.resultadoDg) return false;
       }
+      if (filters?.categoria && filters.categoria !== 'all' && animalCategories.get(evento.animal_id) !== filters.categoria) return false;
       return true;
     })
     .sort(compareEventosMaisRecentes);
@@ -504,6 +508,7 @@ const toReportParams = (filters?: ReproducaoReportFilters) => ({
   p_protocolo: filters?.protocolo && filters.protocolo !== 'all' ? filters.protocolo : null,
   p_resultado_dg: filters?.resultadoDg && filters.resultadoDg !== 'all' ? filters.resultadoDg : null,
   p_search: sanitizeReportSearch(filters?.search) || null,
+  p_categoria: filters?.categoria && filters.categoria !== 'all' ? filters.categoria : null,
 });
 
 export const reproducaoService = {
@@ -544,6 +549,7 @@ export const reproducaoService = {
       && !filters?.dataFim
       && !filters?.touro
       && !filters?.resultadoDg
+      && (!filters?.categoria || filters.categoria === 'all')
       && filters?.page === 1
       && filters.limit === PAGE_SIZE;
 
@@ -555,8 +561,9 @@ export const reproducaoService = {
     try {
       let query = supabase
         .from('eventos_reproducao')
-        .select('*', { count: 'exact' });
+        .select(filters?.categoria && filters.categoria !== 'all' ? '*, animais!inner(categoria)' : '*', { count: 'exact' });
 
+      if (filters?.categoria && filters.categoria !== 'all') query = query.eq('animais.categoria', filters.categoria);
       const search = sanitizeReportSearch(filters?.search)
         .replace(/[\\,().:"']/g, ' ')
         .replace(/[%_]/g, (character) => `\\${character}`)
