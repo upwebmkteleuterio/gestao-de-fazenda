@@ -33,6 +33,7 @@ export const useReproducaoTable = () => {
   const initialRange = getDateRange(30);
   const [search, setSearch] = useState('');
   const [protocolo, setProtocolo] = useState('all');
+  const [categoria, setCategoria] = useState('all');
   const [periodo, setPeriodo] = useState<ReprodutivoPeriod>('30');
   const [dataInicioState, setDataInicioState] = useState(initialRange.dataInicio);
   const [dataFimState, setDataFimState] = useState(initialRange.dataFim);
@@ -75,7 +76,7 @@ export const useReproducaoTable = () => {
   // Reseta para a página 1 ao alterar filtros
   useEffect(() => {
     setPage(1);
-  }, [search, protocolo, periodo, dataInicioState, dataFimState]);
+  }, [search, protocolo, categoria, periodo, dataInicioState, dataFimState]);
 
   const {
     eventos,
@@ -98,6 +99,7 @@ export const useReproducaoTable = () => {
   } = useReproducao({
     search,
     protocolo,
+    categoria,
     dataInicio: dataInicioState,
     dataFim: dataFimState,
     page,
@@ -128,6 +130,7 @@ export const useReproducaoTable = () => {
     const range = getDateRange(30);
     setSearch('');
     setProtocolo('all');
+    setCategoria('all');
     setPeriodo('30');
     setDataInicioState(range.dataInicio);
     setDataFimState(range.dataFim);
@@ -141,7 +144,7 @@ export const useReproducaoTable = () => {
   }, []);
 
   const hasActiveFilters = Boolean(
-    search || protocolo !== 'all' || periodo !== '30'
+    search || protocolo !== 'all' || categoria !== 'all' || periodo !== '30'
   );
 
   return {
@@ -149,6 +152,8 @@ export const useReproducaoTable = () => {
     setSearch,
     protocolo,
     setProtocolo,
+    categoria,
+    setCategoria,
     periodo,
     handlePeriodoChange,
     dataInicio: dataInicioState,

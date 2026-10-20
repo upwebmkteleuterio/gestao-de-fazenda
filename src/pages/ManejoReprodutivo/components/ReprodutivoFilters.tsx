@@ -4,6 +4,7 @@ import { Card } from '@/components/Card';
 import { Input } from '@/components/Input';
 import { Select } from '@/components/Select';
 import { Button } from '@/components/Button';
+import { CATEGORIA_ANIMAL_OPTIONS } from '@/utils/categoriaAnimal';
 import type { ReprodutivoPeriod } from '../hooks/useReproducaoTable';
 import { formatarDataBR } from '../utils/reproducaoUtils';
 
@@ -12,6 +13,8 @@ interface ReprodutivoFiltersProps {
   onSearchChange: (value: string) => void;
   protocolo: string;
   onProtocoloChange: (value: string) => void;
+  categoria: string;
+  onCategoriaChange: (value: string) => void;
   periodo: ReprodutivoPeriod;
   onPeriodoChange: (value: ReprodutivoPeriod) => void;
   dataInicio: string;
@@ -29,6 +32,8 @@ export const ReprodutivoFilters: React.FC<ReprodutivoFiltersProps> = ({
   onSearchChange,
   protocolo,
   onProtocoloChange,
+  categoria,
+  onCategoriaChange,
   periodo,
   onPeriodoChange,
   dataInicio,
@@ -43,7 +48,7 @@ export const ReprodutivoFilters: React.FC<ReprodutivoFiltersProps> = ({
   return (
     <Card>
       <div className="space-y-3">
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
           {/* Busca por Brinco da Matriz */}
           <div>
             <Input
@@ -74,6 +79,19 @@ export const ReprodutivoFilters: React.FC<ReprodutivoFiltersProps> = ({
                 { label: 'TETF (Transferência Embrião)', value: 'tetf' },
                 { label: 'Diagnóstico DG', value: 'dg' },
               ]}
+            />
+          </div>
+
+          {/* Filtro Categoria */}
+          <div>
+            <Select
+              noMargin
+              id="filter_categoria"
+              label="Categoria"
+              value={categoria}
+              onChange={(e) => onCategoriaChange(e.target.value)}
+              options={CATEGORIA_ANIMAL_OPTIONS}
+              disabled={disabled}
             />
           </div>
 

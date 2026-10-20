@@ -20,6 +20,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useAppSettings } from '@/hooks/useAppSettings';
 import { useConnectivityStore } from '@/store/useConnectivityStore';
 import { ConnectionStatus } from '@/components/ConnectionStatus';
+import { FarmNameText } from '@/components/FarmNameText';
 import { PrefetchProgress } from '@/components/PrefetchProgress';
 
 export const Sidebar: React.FC = () => {
@@ -76,9 +77,11 @@ export const Sidebar: React.FC = () => {
             <img src="/assets/logo-faz-carapana.png" alt="Logo da fazenda" className="h-full w-full rounded-xl object-contain" />
           </div>
           {sidebarOpen && (
-            <span className="font-bold text-xl tracking-tight text-white/95">
-              Farm<span className="text-emerald-400">Nexus</span>
-            </span>
+            <FarmNameText
+              className="font-bold text-xl tracking-tight text-white/95"
+              skeletonClassName="inline-block h-6 w-40 animate-pulse rounded bg-emerald-800/70"
+              testId="sidebar-farm-name"
+            />
           )}
         </Link>
         <button

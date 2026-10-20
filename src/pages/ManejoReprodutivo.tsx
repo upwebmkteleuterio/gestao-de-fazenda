@@ -26,6 +26,8 @@ export const ManejoReprodutivoPage: React.FC = () => {
     setSearch,
     protocolo,
     setProtocolo,
+    categoria,
+    setCategoria,
     periodo,
     handlePeriodoChange,
     dataInicio,
@@ -149,6 +151,8 @@ export const ManejoReprodutivoPage: React.FC = () => {
         onSearchChange={setSearch}
         protocolo={protocolo}
         onProtocoloChange={setProtocolo}
+        categoria={categoria}
+        onCategoriaChange={setCategoria}
         periodo={periodo}
         onPeriodoChange={handlePeriodoChange}
         dataInicio={dataInicio}

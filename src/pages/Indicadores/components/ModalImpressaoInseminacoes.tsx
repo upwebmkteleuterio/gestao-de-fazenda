@@ -11,6 +11,7 @@ import React, { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { X, Printer, Download, Sprout, Eye, FileText, Loader2 } from "lucide-react";
 import { Button } from "@/components/Button";
+import { FarmNameText } from "@/components/FarmNameText";
 import { InseminacaoRelatorioItem, formatarDataBR, exportarInseminacoesXLSX } from "../utils/inseminacaoReportUtils";
 import { exportarElementoParaPDF } from "@/utils/pdfExport";
 
@@ -180,7 +181,7 @@ export const ModalImpressaoInseminacoes: React.FC<ModalImpressaoInseminacoesProp
                                 <Sprout className="w-7 h-7" />
                             </div>
                             <div>
-                                <h1 className="text-2xl font-black tracking-tight text-gray-950 uppercase">FARMNEXUS AGROPECUÁRIA</h1>
+                                <h1 className="text-2xl font-black tracking-tight text-gray-950 uppercase"><FarmNameText /></h1>
                                 <p className="text-xs text-gray-600 font-medium">Sistema de Gestão de Rebanho e Melhoramento Genético
                                                       </p>
                             </div>
