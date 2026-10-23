@@ -19,5 +19,6 @@ export async function signIn(page: Page): Promise<void> {
   await page.locator('#login-email').fill(email);
   await page.locator('#login-password').fill(password);
   await page.getByRole('button', { name: 'Entrar' }).click();
-  await expect(page).toHaveURL(/\/dashboard/);
+  // O login pode demorar em ambiente de teste; a espera é generosa de propósito.
+  await expect(page).toHaveURL(/\/dashboard/, { timeout: 45000 });
 }

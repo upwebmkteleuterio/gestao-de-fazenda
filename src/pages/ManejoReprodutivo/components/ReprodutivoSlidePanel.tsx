@@ -50,6 +50,15 @@ export const ReprodutivoSlidePanel = ({
     }
   }, [formData.animal_id, formData.brinco_matriz, matrizes]);
 
+  // O painel de Novo Registro sempre começa pela seleção em lista de matrizes,
+  // mesmo depois de ter aberto um registro em Ver/Editar.
+  React.useEffect(() => {
+    if (slideMode === 'create') {
+      setModoManualIatf(false);
+      setModoManualDg(false);
+    }
+  }, [slideMode]);
+
   React.useEffect(() => {
     if (formData.tipo_semen && !padroesSemen.includes(formData.tipo_semen)) {
       setModoManualTipoSemen(true);

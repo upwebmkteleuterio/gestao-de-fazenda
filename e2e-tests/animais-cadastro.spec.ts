@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { signIn } from './fixtures/test-user';
+import { removerAnimalPelaApi } from './fixtures/reproducao';
 
 test('cadastrar um animal e encontrá-lo pela busca de brinco', async ({ page }) => {
   await signIn(page);
@@ -23,5 +24,9 @@ test('cadastrar um animal e encontrá-lo pela busca de brinco', async ({ page })
   // Limpeza: remove o animal criado pelo teste para não deixar dados fictícios na fazenda.
   await linha.getByRole('button', { name: 'Excluir' }).click();
   await page.getByRole('button', { name: 'Sim, Excluir' }).click();
+  // O aviso confirma que a exclusão foi concluída antes de o teste terminar.
+  await expect(page.getByText(/excluído com sucesso/).first()).toBeVisible({ timeout: 45000 });
   await expect(page.getByRole('row', { name: new RegExp(brinco) })).toHaveCount(0);
+
+  await removerAnimalPelaApi(page, brinco);
 });
