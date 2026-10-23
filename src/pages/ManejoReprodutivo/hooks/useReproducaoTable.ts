@@ -38,7 +38,9 @@ export const useReproducaoTable = () => {
   const [dataInicioState, setDataInicioState] = useState(initialRange.dataInicio);
   const [dataFimState, setDataFimState] = useState(initialRange.dataFim);
   const [page, setPage] = useState(1);
-  const limit = 10;
+  // Com uma busca ativa a lista mostra mais resultados por página, para a matriz
+  // procurada não ficar escondida atrás da paginação.
+  const limit = search.trim() ? 50 : 10;
   const dateRangeError = getDateRangeError(periodo, dataInicioState, dataFimState);
 
   const setDataInicio = (value: string) => {

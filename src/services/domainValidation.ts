@@ -203,7 +203,7 @@ export const sanitizeReportSearch = (value: unknown): string => {
   if (typeof value !== 'string') throw new DomainValidationError('A busca do relatório é inválida.');
   const normalized = value.trim();
   if (normalized.length > MAX_REPORT_SEARCH_LENGTH) throw new DomainValidationError(`A busca deve ter no máximo ${MAX_REPORT_SEARCH_LENGTH} caracteres.`);
-  return normalized.replace(/[^\\p{L}\\p{N} _-]/gu, ' ').replace(/\\s+/g, ' ').trim();
+  return normalized.replace(/[^\p{L}\p{N} _-]/gu, ' ').replace(/\s+/g, ' ').trim();
 };
 
 export const validateReportFilters = (filters: {
