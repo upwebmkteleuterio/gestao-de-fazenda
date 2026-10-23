@@ -38,6 +38,7 @@ import { Pagination } from "../../components/Pagination";
 import { SyncStatusIndicator, type SyncStatus } from "../../components/SyncStatusIndicator";
 import { Lote } from "../../services/lotesService";
 import { MAX_DOMAIN_TEXT_LENGTH } from "../../services/domainValidation";
+import { matchesSearchTerm } from "@/utils/searchText";
 
 type LoteRow = Lote & {
     syncStatus?: SyncStatus;
@@ -124,7 +125,7 @@ export const Lotes: React.FC = () => {
         if (!animal.id || !animal.brinco) return false;
         const query = novoLoteAnimalSearch.trim().toLocaleLowerCase();
         return !query
-            || animal.brinco.toLocaleLowerCase().includes(query)
+            || matchesSearchTerm(animal.brinco, query)
             || animal.id.toLocaleLowerCase().includes(query);
     });
 
@@ -132,7 +133,7 @@ export const Lotes: React.FC = () => {
         if (!animal.id || !animal.brinco || selectedLote?.animais_ids.includes(animal.id)) return false;
         const query = addAnimalSearch.trim().toLocaleLowerCase();
         return !query
-            || animal.brinco.toLocaleLowerCase().includes(query)
+            || matchesSearchTerm(animal.brinco, query)
             || animal.id.toLocaleLowerCase().includes(query);
     });
 

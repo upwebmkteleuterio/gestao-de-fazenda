@@ -1,5 +1,5 @@
 import { getCurrentUserId as readCurrentUserId, supabase } from '@/integrations/supabase/client';
-import { matchesSearchTerm, toSearchPattern } from '@/utils/searchText';
+import { compactSearchTerm, isSameSearchText, matchesSearchTerm, toSearchPattern } from '@/utils/searchText';
 import {
   deleteOfflineRecord,
   deleteOfflineRecords,
@@ -296,12 +296,12 @@ const buildAnimalPatch = (updates: Partial<Animal>): Partial<AnimalDbWrite> => {
 };
 
 const getDiscardCount = async (brinco: string) => {
-  const { count, error } = await supabase.from('animais').select('id', { count: 'exact', head: true }).eq('brinco', brinco).eq('status', 'descarte');
+  const { count, error } = await supabase.from('animais').select('id', { count: 'exact', head: true }).eq('brinco_busca', toSearchPattern(brinco)).eq('status', 'descarte');
   if (error) throw error;
   return count ?? 0;
 };
 
-const normalizeBrinco = (brinco: string) => brinco.trim().toLocaleLowerCase();
+const normalizeBrinco = (brinco: string) => compactSearchTerm(brinco).toLocaleLowerCase();
 
 const findActiveBrincoConflict = async (userId: string, brinco: string, exceptId?: string): Promise<boolean> => {
   const normalizedBrinco = normalizeBrinco(brinco);
@@ -320,7 +320,7 @@ const findParentCandidate = async (
   currentId?: string,
 ): Promise<Animal | undefined> => {
   const local = await readLocalAnimals(userId);
-  const localCandidate = local.data.find((animal) => animal.id === reference || animal.brinco === reference);
+  const localCandidate = local.data.find((animal) => animal.id === reference || isSameSearchText(animal.brinco, reference));
   if (localCandidate && isValidParentRecord(reference, [localCandidate], kind, currentId)) return localCandidate;
   if (!isBrowserOnline()) return undefined;
 
@@ -329,7 +329,7 @@ const findParentCandidate = async (
     if (byId.error) throw byId.error;
     const byIdAnimal = byId.data ? toAnimal(byId.data as unknown as AnimalDbRow) : undefined;
     if (byIdAnimal && isValidParentRecord(reference, [byIdAnimal], kind, currentId)) return byIdAnimal;
-    const byBrinco = await withRemoteTimeout(supabase.from('animais').select('*').eq('brinco', reference).maybeSingle());
+    const byBrinco = await withRemoteTimeout(supabase.from('animais').select('*').eq('brinco_busca', toSearchPattern(reference)).maybeSingle());
     if (byBrinco.error) throw byBrinco.error;
     const byBrincoAnimal = byBrinco.data ? toAnimal(byBrinco.data as unknown as AnimalDbRow) : undefined;
     return byBrincoAnimal && isValidParentRecord(reference, [byBrincoAnimal], kind, currentId) ? byBrincoAnimal : undefined;
@@ -542,7 +542,7 @@ const mergePendingAnimals = (
 const queueLocalCreate = async (userId: string, newAnimal: AnimalCreateInput, id: string): Promise<Animal> => {
   const local = await readLocalAnimals(userId);
   const discardCount = newAnimal.status === 'descarte'
-    ? local.data.filter((animal) => animal.brinco === newAnimal.brinco && animal.status === 'descarte').length + 1
+    ? local.data.filter((animal) => isSameSearchText(animal.brinco, newAnimal.brinco) && animal.status === 'descarte').length + 1
     : newAnimal.qtd_descartes_brinco || 0;
   const animal: Animal = {
     ...cleanAnimal(newAnimal), id, createdAt: new Date().toISOString(), qtd_descartes_brinco: discardCount,

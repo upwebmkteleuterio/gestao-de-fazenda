@@ -1,4 +1,5 @@
 import { Animal, EventoReproducao, Insumo, Lote, ManejoSanitario, MovimentacaoInsumo, Pastagem, Pesagem, ServicoPastagem, TipoAnimal, TransacaoFinanceira } from '@/types/database';
+import { isSameSearchText } from '@/utils/searchText';
 import { calculateAnimalAgeMonths, classifyAnimalType } from './animalClassification';
 
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
@@ -243,13 +244,13 @@ export const isPlausibleAnimalWeight = (peso: number): boolean => peso < 20 || p
 export const isPlausiblePesagem = (peso: number): boolean => peso < 20 || peso > 1500;
 
 export const isValidAnimalReference = (reference: string, animals: Animal[], kind: 'mae' | 'pai', currentId?: string): boolean => {
-  const animal = animals.find((candidate) => candidate.id === reference || candidate.brinco === reference);
+  const animal = animals.find((candidate) => candidate.id === reference || isSameSearchText(candidate.brinco, reference));
   const derivedType = animal ? classifyAnimalType(animal, animals) : undefined;
   return Boolean(animal && animal.id !== currentId && derivedType && parentTypes[kind].includes(derivedType) && animal.status !== 'morto' && animal.status !== 'vendido');
 };
 
 export const isValidParentRecord = (reference: string, animals: Animal[], kind: 'mae' | 'pai', currentId?: string): Animal | undefined => {
-  const animal = animals.find((candidate) => candidate.id === reference || candidate.brinco === reference);
+  const animal = animals.find((candidate) => candidate.id === reference || isSameSearchText(candidate.brinco, reference));
   if (!animal || animal.id === currentId || !parentTypes[kind].includes(classifyAnimalType(animal, animals)) || ['morto', 'vendido'].includes(animal.status)) return undefined;
   return { ...animal, tipo_animal: classifyAnimalType(animal, animals) };
 };

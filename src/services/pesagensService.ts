@@ -23,6 +23,7 @@ import { animaisService, syncAnimais } from './animaisService';
 import { lotesService } from './lotesService';
 import { Animal, Pesagem } from '@/types/database';
 import { DomainValidationError, validatePesagemFields } from './domainValidation';
+import { compactSearchTerm } from '@/utils/searchText';
 
 type PesagemDbRow = {
   id: string;
@@ -345,12 +346,12 @@ const annotatePesagens = async (items: Pesagem[]): Promise<Pesagem[]> => {
   }
   const counts = new Map<string, number>();
   activeBrincos.forEach((brinco) => {
-    const key = brinco.trim().toLocaleLowerCase();
+    const key = compactSearchTerm(brinco).toLocaleLowerCase();
     counts.set(key, (counts.get(key) ?? 0) + 1);
   });
   return items.map((item) => ({
     ...item,
-    brinco_duplicado: (counts.get(item.brinco_animal.trim().toLocaleLowerCase()) ?? 0) > 1,
+    brinco_duplicado: (counts.get(compactSearchTerm(item.brinco_animal).toLocaleLowerCase()) ?? 0) > 1,
   }));
 };
 

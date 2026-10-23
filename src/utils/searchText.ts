@@ -4,6 +4,10 @@
  */
 export const compactSearchTerm = (value: string): string => value.replace(/\s+/g, '');
 
+/** Compara brincos para identificação ignorando espaços e maiúsculas. */
+export const isSameSearchText = (value: string | null | undefined, other: string | null | undefined): boolean =>
+  compactSearchTerm(value ?? '').toLocaleLowerCase() === compactSearchTerm(other ?? '').toLocaleLowerCase();
+
 /** Converte um termo digitado no padrão normalizado usado pelas consultas. */
 export const toSearchPattern = (value: string): string => compactSearchTerm(value).toLocaleUpperCase();
 

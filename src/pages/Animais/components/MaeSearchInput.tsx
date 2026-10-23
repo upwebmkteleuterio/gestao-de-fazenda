@@ -3,6 +3,7 @@ import { Search, X } from 'lucide-react';
 import { Input } from '@/components/Input';
 import { Animal } from '@/types/database';
 import { useMaeCandidates } from '@/hooks/useAnimais';
+import { isSameSearchText } from '@/utils/searchText';
 
 interface MaeSearchInputProps {
   value?: string;
@@ -19,7 +20,7 @@ export const MaeSearchInput: React.FC<MaeSearchInputProps> = ({
   excludeId,
   availableAnimals = [],
 }) => {
-  const availableSelected = availableAnimals.find((animal) => animal.id === value || animal.brinco === value);
+  const availableSelected = availableAnimals.find((animal) => animal.id === value || isSameSearchText(animal.brinco, value));
   const [selectedResult, setSelectedResult] = React.useState<Animal | undefined>();
   const selected = selectedResult?.id === value ? selectedResult : availableSelected;
   const selectedLabel = selected ? motherLabel(selected) : value || '';

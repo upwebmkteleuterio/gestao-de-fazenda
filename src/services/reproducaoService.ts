@@ -4,7 +4,7 @@ import { isNetworkFailure } from '@/offline/network';
 import { useConnectivityStore } from '@/store/useConnectivityStore';
 import { Animal, EventoReproducao } from '@/types/database';
 import { DomainValidationError, sanitizeReportSearch, validateReportFilters, validateReproducaoFields } from './domainValidation';
-import { matchesSearchTerm, toSearchPattern } from '@/utils/searchText';
+import { isSameSearchText, matchesSearchTerm, toSearchPattern } from '@/utils/searchText';
 import { animaisService } from './animaisService';
 
 export type ReproducaoQuery = {
@@ -297,7 +297,7 @@ const resolveAnimalReference = async (
     if (!data) throw new DomainValidationError('O animal selecionado não está cadastrado. Cadastre o animal antes de lançar o evento.');
     if (data.sexo !== 'F') throw new DomainValidationError('O evento reprodutivo deve estar vinculado a uma matriz/vaca cadastrada.');
     if (data.status !== 'ativo' && !allowInactive) throw new DomainValidationError('A matriz selecionada não está ativa. Selecione um animal ativo cadastrado.');
-    if (brinco && data.brinco.trim().toLocaleLowerCase() !== brinco.toLocaleLowerCase()) {
+    if (brinco && !isSameSearchText(data.brinco, brinco)) {
       throw new DomainValidationError('O brinco informado não corresponde ao animal selecionado. Selecione o animal cadastrado correto.');
     }
     return { id: data.id, brinco: data.brinco };
@@ -307,7 +307,7 @@ const resolveAnimalReference = async (
   const { data, error } = await supabase
     .from('animais')
     .select('id, brinco, status, sexo')
-    .eq('brinco', brinco)
+    .eq('brinco_busca', toSearchPattern(brinco))
     .eq('status', 'ativo')
     .limit(2);
   if (error) throw error;
@@ -318,11 +318,10 @@ const resolveAnimalReference = async (
 };
 
 const resolveActiveAnimalByBrinco = async (brinco: string, label: string): Promise<{ id: string; brinco: string }> => {
-  const normalizedBrinco = brinco.trim();
   const { data, error } = await supabase
     .from('animais')
     .select('id, brinco, status, sexo')
-    .eq('brinco', normalizedBrinco)
+    .eq('brinco_busca', toSearchPattern(brinco))
     .eq('status', 'ativo')
     .limit(2);
   if (error) throw error;

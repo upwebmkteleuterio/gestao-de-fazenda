@@ -53,6 +53,7 @@ import { useAnimalChildren } from "@/hooks/useAnimais";
 import { MaeSearchInput } from "./MaeSearchInput";
 import { TouroSearchInput } from "./TouroSearchInput";
 import { AnimalAvatar } from "@/components/AnimalAvatar";
+import { isSameSearchText } from "@/utils/searchText";
 type MatrizTab = "cobertas" | "paridas" | "solteiras" | "toque";
 type Toast = (message: string, type?: "success" | "error" | "info") => void;
 
@@ -129,7 +130,7 @@ export const AnimaisSlidePanel: React.FC<AnimaisSlidePanelProps> = (
         if (!reference)
             return "";
 
-        const parent = animais.find(animal => animal.id === reference || animal.brinco === reference);
+        const parent = animais.find(animal => animal.id === reference || isSameSearchText(animal.brinco, reference));
         return parent ? `${parent.brinco} (${parent.tipo_animal})` : `${reference} (referência legada)`;
     };
 

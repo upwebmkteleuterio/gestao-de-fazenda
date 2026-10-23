@@ -11,6 +11,7 @@ import { MontaNaturalIcon } from '../../../components/MontaNaturalIcon';
 import { InseminacaoIcon } from '../../../components/InseminacaoIcon';
 import { MatrizIdentificacaoCard } from './MatrizIdentificacaoCard';
 import { EventoReproducao, DGToqueResultado, Animal } from '../../../types/database';
+import { isSameSearchText } from '@/utils/searchText';
 
 export const ReprodutivoSlidePanel = ({
   slideOpen, setSlideOpen, slideMode, setSlideMode, selectedEvento,
@@ -145,7 +146,7 @@ export const ReprodutivoSlidePanel = ({
         <fieldset disabled={slideMode === 'view' || mutationsDisabled} className="space-y-6 border-0 p-0 m-0 min-w-0">
           {slideMode !== 'create' && (
             <MatrizIdentificacaoCard
-              animal={animais.find((a: Animal) => a.id === formData.animal_id) ?? animais.find((a: Animal) => a.brinco?.trim().toLowerCase() === (formData.brinco_matriz || '').trim().toLowerCase())}
+              animal={animais.find((a: Animal) => a.id === formData.animal_id) ?? animais.find((a: Animal) => isSameSearchText(a.brinco, formData.brinco_matriz))}
               brinco={formData.brinco_matriz}
             />
           )}
@@ -319,7 +320,7 @@ export const ReprodutivoSlidePanel = ({
                           value={formData.brinco_matriz || ''}
                           onChange={(e) => {
                             const val = e.target.value;
-                            const found = matrizes.find((m: any) => m.brinco.trim().toLowerCase() === val.trim().toLowerCase());
+                            const found = matrizes.find((m: any) => isSameSearchText(m.brinco, val));
                             setFormData({
                               ...formData,
                               brinco_matriz: val,
@@ -349,9 +350,9 @@ export const ReprodutivoSlidePanel = ({
                     </div>
                     <div className="flex items-center justify-between text-[11px] px-1 pt-0.5">
                       <span className="text-gray-500 dark:text-gray-400">
-                        {formData.brinco_matriz && matrizes.some((m: any) => m.brinco.trim().toLowerCase() === formData.brinco_matriz.trim().toLowerCase()) ? (
+                        {formData.brinco_matriz && matrizes.some((m: any) => isSameSearchText(m.brinco, formData.brinco_matriz)) ? (
                           <span className="text-emerald-600 dark:text-emerald-400 font-semibold flex items-center gap-1">
-                            ✓ Matriz identificada no rebanho ({matrizes.find((m: any) => m.brinco.trim().toLowerCase() === formData.brinco_matriz.trim().toLowerCase())?.raca || 'Nelore'})
+                            ✓ Matriz identificada no rebanho ({matrizes.find((m: any) => isSameSearchText(m.brinco, formData.brinco_matriz))?.raca || 'Nelore'})
                           </span>
                         ) : formData.brinco_matriz ? (
                           <span className="text-amber-600 dark:text-amber-400 font-medium">
@@ -388,7 +389,7 @@ export const ReprodutivoSlidePanel = ({
                     value={formData.brinco_matriz || ''}
                     onChange={(e) => {
                       const val = e.target.value;
-                      const found = matrizes.find((m: Animal) => m.brinco.trim().toLowerCase() === val.trim().toLowerCase());
+                      const found = matrizes.find((m: Animal) => isSameSearchText(m.brinco, val));
                       setFormData({ ...formData, brinco_matriz: val, animal_id: found?.id || '' });
                     }}
                     required
@@ -403,9 +404,9 @@ export const ReprodutivoSlidePanel = ({
                   </datalist>
                   <div className="text-[11px] px-1 pt-0.5">
                     <span className="text-gray-500 dark:text-gray-400">
-                      {formData.brinco_matriz && matrizes.some((m: Animal) => m.brinco.trim().toLowerCase() === formData.brinco_matriz.trim().toLowerCase()) ? (
+                      {formData.brinco_matriz && matrizes.some((m: Animal) => isSameSearchText(m.brinco, formData.brinco_matriz)) ? (
                         <span className="text-emerald-600 dark:text-emerald-400 font-semibold">
-                          ✓ Matriz identificada no rebanho ({matrizes.find((m: Animal) => m.brinco.trim().toLowerCase() === formData.brinco_matriz.trim().toLowerCase())?.raca || 'Nelore'})
+                          ✓ Matriz identificada no rebanho ({matrizes.find((m: Animal) => isSameSearchText(m.brinco, formData.brinco_matriz))?.raca || 'Nelore'})
                         </span>
                       ) : formData.brinco_matriz ? (
                         <span className="text-amber-600 dark:text-amber-400 font-medium">
@@ -1251,7 +1252,7 @@ export const ReprodutivoSlidePanel = ({
                         value={formData.receptora || formData.brinco_matriz || ''}
                         onChange={(e) => {
                           const val = e.target.value;
-                          const found = matrizes.find((m: any) => m.brinco.trim().toLowerCase() === val.trim().toLowerCase());
+                          const found = matrizes.find((m: any) => isSameSearchText(m.brinco, val));
                           setFormData({
                             ...formData,
                             receptora: val,
@@ -1265,7 +1266,7 @@ export const ReprodutivoSlidePanel = ({
                       />
                       <div className="flex items-center justify-between text-[11px] px-1 pt-0.5">
                         <span className="text-gray-400">
-                          {formData.receptora && matrizes.some((m: any) => m.brinco.trim().toLowerCase() === (formData.receptora || '').trim().toLowerCase()) ? (
+                          {formData.receptora && matrizes.some((m: any) => isSameSearchText(m.brinco, formData.receptora)) ? (
                             <span className="text-emerald-600 dark:text-emerald-400 font-medium">
                               ✓ Receptora cadastrada no rebanho
                             </span>
@@ -1418,7 +1419,7 @@ export const ReprodutivoSlidePanel = ({
                           value={formData.brinco_matriz || ''}
                           onChange={(e) => {
                             const val = e.target.value;
-                            const found = matrizes.find((m: any) => m.brinco.trim().toLowerCase() === val.trim().toLowerCase());
+                            const found = matrizes.find((m: any) => isSameSearchText(m.brinco, val));
                             setFormData({
                               ...formData,
                               brinco_matriz: val,
@@ -1448,9 +1449,9 @@ export const ReprodutivoSlidePanel = ({
                     </div>
                     <div className="flex items-center justify-between text-[11px] px-1 pt-0.5">
                       <span className="text-gray-500 dark:text-gray-400">
-                        {formData.brinco_matriz && matrizes.some((m: any) => m.brinco.trim().toLowerCase() === formData.brinco_matriz.trim().toLowerCase()) ? (
+                        {formData.brinco_matriz && matrizes.some((m: any) => isSameSearchText(m.brinco, formData.brinco_matriz)) ? (
                           <span className="text-emerald-600 dark:text-emerald-400 font-semibold flex items-center gap-1">
-                            ✓ Vaca cadastrada no rebanho ({matrizes.find((m: any) => m.brinco.trim().toLowerCase() === formData.brinco_matriz.trim().toLowerCase())?.raca || 'Nelore'})
+                            ✓ Vaca cadastrada no rebanho ({matrizes.find((m: any) => isSameSearchText(m.brinco, formData.brinco_matriz))?.raca || 'Nelore'})
                           </span>
                         ) : (
                           <span className="text-amber-600 dark:text-amber-400 font-medium">

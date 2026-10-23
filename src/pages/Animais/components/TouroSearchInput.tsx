@@ -2,6 +2,7 @@ import React from 'react';
 import { Search, X } from 'lucide-react';
 import { Input } from '@/components/Input';
 import { Animal } from '@/types/database';
+import { isSameSearchText, matchesSearchTerm } from '@/utils/searchText';
 
 interface TouroSearchInputProps {
   value?: string;
@@ -16,7 +17,7 @@ const bullLabel = (animal: Animal) => `${animal.brinco} · ${animal.tipo_animal}
 
 export const TouroSearchInput: React.FC<TouroSearchInputProps> = ({ value, onChange, animais }) => {
   const eligibleAnimals = React.useMemo(() => animais.filter(isEligibleBull), [animais]);
-  const selected = eligibleAnimals.find((animal) => animal.id === value || animal.brinco === value);
+  const selected = eligibleAnimals.find((animal) => animal.id === value || isSameSearchText(animal.brinco, value));
   const selectedLabel = selected ? bullLabel(selected) : value || '';
   const [mode, setMode] = React.useState<BullMode>(() => selected ? 'touros' : 'manual');
   const [inputValue, setInputValue] = React.useState(() => selected ? bullLabel(selected) : value || '');
@@ -80,7 +81,7 @@ export const TouroSearchInput: React.FC<TouroSearchInputProps> = ({ value, onCha
   const searchValue = mode === 'touros' && selected && inputValue === selectedLabel ? '' : normalizedSearch;
   const candidates = eligibleAnimals.filter((animal) => (
     !searchValue
-      || animal.brinco.toLocaleLowerCase().includes(searchValue)
+      || matchesSearchTerm(animal.brinco, searchValue)
       || animal.id.toLocaleLowerCase().includes(searchValue)
   ));
 
