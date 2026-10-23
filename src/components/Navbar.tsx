@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Search, Menu, Sprout, LogOut } from 'lucide-react';
+import { Menu, Sprout, LogOut } from 'lucide-react';
 import { useUIStore } from '@/store/useUIStore';
 import { useAuth } from '@/contexts/AuthContext';
 import { AnimatedThemeToggler } from '@/components/AnimatedThemeToggler';
@@ -60,18 +60,6 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenAccountSettings }) => {
           </div>
           <span className="font-bold text-lg text-gray-900 dark:text-white">FarmNexus</span>
         </Link>
-
-        {/* Global Search Bar */}
-        <div className="relative w-64 md:w-80 hidden sm:block">
-          <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-            <Search className="text-gray-400 w-4 h-4" />
-          </div>
-          <input
-            type="text"
-            className="block w-full pl-9 pr-3 py-2 border border-gray-200 dark:border-gray-700 rounded-full text-sm placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 bg-gray-50/50 dark:bg-gray-800 text-gray-900 dark:text-gray-100 transition-all"
-            placeholder="Buscar ID, Brinco, Pasto, Insumo..."
-          />
-        </div>
       </div>
 
       <div className="flex items-center space-x-3 sm:space-x-4">

@@ -1,4 +1,5 @@
 import { getCurrentUserId as readCurrentUserId, supabase } from '@/integrations/supabase/client';
+import { matchesSearchTerm, toSearchPattern } from '@/utils/searchText';
 import {
   deleteOfflineRecord,
   deleteOfflineRecords,
@@ -491,9 +492,9 @@ const cacheOnlineAnimals = async (userId: string, animals: Animal[], replaceComp
 };
 
 const filterLocalAnimals = (animals: Animal[], filters?: AnimalQueryFilters) => {
-  const search = filters?.search ? sanitizeSearch(filters.search).toLocaleLowerCase() : '';
+  const search = filters?.search ? sanitizeSearch(filters.search) : '';
   const filtered = animals
-    .filter((animal) => !search || [animal.brinco, animal.raca].some((value) => value?.toLocaleLowerCase().includes(search)))
+    .filter((animal) => matchesSearchTerm(animal.brinco, search) || matchesSearchTerm(animal.raca, search))
     .filter((animal) => !filters?.sexo || filters.sexo === 'all' || animal.sexo === filters.sexo)
     .filter((animal) => !filters?.status || filters.status === 'all' || animal.status === filters.status)
     .filter((animal) => !filters?.categoria || filters.categoria === 'all' || animal.categoria === filters.categoria)
@@ -702,9 +703,9 @@ export type AnimalRelationshipResult = {
 
 const searchMaeCandidates = async (userId: string, value: string, excludeId?: string): Promise<AnimalRelationshipResult> => {
   const local = await readLocalAnimals(userId);
-  const search = sanitizeSearch(value).toLocaleLowerCase();
+  const search = sanitizeSearch(value);
   const localMatches = local.data.filter((animal) => isMotherCandidate(animal, excludeId, local.data)
-    && (!search || animal.brinco.toLocaleLowerCase().includes(search)));
+    && matchesSearchTerm(animal.brinco, search));
   if (!search || !isBrowserOnline()) return { data: localMatches, source: 'local', capturedAt: local.capturedAt };
 
   try {
@@ -719,7 +720,7 @@ const searchMaeCandidates = async (userId: string, value: string, excludeId?: st
         .not('status', 'in', '(morto,vendido)')
         .order('brinco', { ascending: true })
         .range(offset, offset + batchSize - 1);
-      if (search) query = query.ilike('brinco', `%${search}%`);
+      if (search) query = query.ilike('brinco_busca', `%${toSearchPattern(search)}%`);
       const { data, count, error } = await withRemoteTimeout(query);
       if (error) throw error;
       const rows = (data ?? []) as unknown as AnimalDbRow[];
@@ -797,7 +798,7 @@ export const animaisService = {
         }
       }
       const search = filters?.search ? sanitizeSearch(filters.search) : '';
-      if (search) query = query.or(`brinco.ilike.*${search}*,raca.ilike.*${search}*`);
+      if (search) query = query.or(`brinco_busca.ilike.%${toSearchPattern(search)}%,raca.ilike.%${search}%`);
       if (filters?.sexo && filters.sexo !== 'all') query = query.eq('sexo', filters.sexo);
       if (filters?.status && filters.status !== 'all') query = query.eq('status', filters.status);
       if (filters?.categoria && filters.categoria !== 'all') query = query.eq('categoria', filters.categoria);

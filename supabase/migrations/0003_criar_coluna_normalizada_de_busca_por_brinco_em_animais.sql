@@ -1,0 +1,1 @@
+alter table public.animais add column if not exists brinco_busca text generated always as (upper(replace(brinco, ' ', ''))) stored

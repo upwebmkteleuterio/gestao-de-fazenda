@@ -1,0 +1,1 @@
+alter table public.eventos_reproducao add column if not exists brinco_matriz_busca text generated always as (upper(replace(brinco_matriz, ' ', ''))) stored

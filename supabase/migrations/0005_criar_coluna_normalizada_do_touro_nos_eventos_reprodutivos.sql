@@ -1,0 +1,1 @@
+alter table public.eventos_reproducao add column if not exists touro_busca text generated always as (upper(replace(coalesce(dados_protocolo ->> 'touro', ''), ' ', ''))) stored

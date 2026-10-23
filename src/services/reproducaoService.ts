@@ -4,6 +4,7 @@ import { isNetworkFailure } from '@/offline/network';
 import { useConnectivityStore } from '@/store/useConnectivityStore';
 import { Animal, EventoReproducao } from '@/types/database';
 import { DomainValidationError, sanitizeReportSearch, validateReportFilters, validateReproducaoFields } from './domainValidation';
+import { matchesSearchTerm, toSearchPattern } from '@/utils/searchText';
 import { animaisService } from './animaisService';
 
 export type ReproducaoQuery = {
@@ -450,15 +451,15 @@ const readRecentWindow = async (
     );
   }
 
-  const normalizedSearch = sanitizeReportSearch(filters?.search).toLocaleLowerCase();
+  const normalizedSearch = sanitizeReportSearch(filters?.search);
   const data = records
     .map((record) => record.data)
     .filter((evento) => {
-      const brinco = evento.brinco_matriz.toLocaleLowerCase();
+      const brinco = evento.brinco_matriz;
       const touro = typeof evento.dados_protocolo?.touro === 'string'
-        ? evento.dados_protocolo.touro.toLocaleLowerCase()
+        ? evento.dados_protocolo.touro
         : '';
-      if (normalizedSearch && !brinco.includes(normalizedSearch) && !touro.includes(normalizedSearch)) return false;
+      if (!matchesSearchTerm(brinco, normalizedSearch) && !matchesSearchTerm(touro, normalizedSearch)) return false;
       if (filters?.dataEspecifica && evento.data_principal !== filters.dataEspecifica) return false;
       if (filters?.dataInicio && evento.data_principal < filters.dataInicio) return false;
       if (filters?.dataFim && evento.data_principal > filters.dataFim) return false;
@@ -562,12 +563,10 @@ export const reproducaoService = {
         .select(filters?.categoria && filters.categoria !== 'all' ? '*, animais!inner(categoria)' : '*', { count: 'exact' });
 
       if (filters?.categoria && filters.categoria !== 'all') query = query.eq('animais.categoria', filters.categoria);
-      const search = sanitizeReportSearch(filters?.search)
-        .replace(/[\\,().:"']/g, ' ')
-        .replace(/[%_]/g, (character) => `\\${character}`)
-        .replace(/\s+/g, ' ')
-        .trim();
-      if (search) query = query.or(`brinco_matriz.ilike.%${search}%,dados_protocolo->>touro.ilike.%${search}%`);
+      const search = toSearchPattern(
+        sanitizeReportSearch(filters?.search).replace(/[%_]/g, (character) => `\\${character}`),
+      );
+      if (search) query = query.or(`brinco_matriz_busca.ilike.%${search}%,touro_busca.ilike.%${search}%`);
       if (filters?.dataEspecifica) query = query.eq('data_principal', filters.dataEspecifica);
       if (filters?.dataInicio) query = query.gte('data_principal', filters.dataInicio);
       if (filters?.dataFim) query = query.lte('data_principal', filters.dataFim);
