@@ -423,6 +423,7 @@ export const useReproducaoForm = ({
     setEventoToDelete,
     formData,
     setFormData,
+    animais,
     matrizes,
     matrizesDisponiveis,
     lotes,

@@ -9,12 +9,13 @@ import { Button as DummyButton } from '../../../components/Button';
 import { Edit, HeartHandshake, Baby, Plus, Calendar, Filter, Check, X, Trash2, Clock, ChevronRight, Sparkles, Layers, Activity, CheckCircle2, AlertTriangle, HelpCircle, FileText, List, PenLine } from 'lucide-react';
 import { MontaNaturalIcon } from '../../../components/MontaNaturalIcon';
 import { InseminacaoIcon } from '../../../components/InseminacaoIcon';
+import { MatrizIdentificacaoCard } from './MatrizIdentificacaoCard';
 import { EventoReproducao, DGToqueResultado, Animal } from '../../../types/database';
 
 export const ReprodutivoSlidePanel = ({
   slideOpen, setSlideOpen, slideMode, setSlideMode, selectedEvento,
   formData, setFormData, isSaving, handleSave, activeTab, setActiveTab,
-  selectedCowIds, toggleCowSelection, toggleAllCows, clearCowSelection, matrizes, matrizesDisponiveis, touros,
+  selectedCowIds, toggleCowSelection, toggleAllCows, clearCowSelection, animais, matrizes, matrizesDisponiveis, touros,
   lotes, selectedLoteId, setSelectedLoteId,
   isFormValid, calcularPrevisaoParto, setModalOpen, setEventoToDelete, mutationsDisabled = false
 }: any) => {
@@ -97,7 +98,9 @@ export const ReprodutivoSlidePanel = ({
       <SlidePanel
         isOpen={slideOpen}
         onClose={() => setSlideOpen(false)}
-        title={slideMode === 'create' ? 'Novo Lançamento Reprodutivo' : slideMode === 'edit' ? 'Editar Registro Reprodutivo' : 'Detalhes do Registro Reprodutivo'}
+        title={slideMode === 'create'
+          ? 'Novo Lançamento Reprodutivo'
+          : `${slideMode === 'edit' ? 'Editar Registro Reprodutivo' : 'Detalhes do Registro Reprodutivo'}${formData.brinco_matriz ? ` · #${formData.brinco_matriz}` : ''}`}
         subtitle="Inserção e atualização segmentada por protocolo reprodutivo."
         width="lg"
         actions={
@@ -140,6 +143,12 @@ export const ReprodutivoSlidePanel = ({
         }
       >
         <fieldset disabled={slideMode === 'view' || mutationsDisabled} className="space-y-6 border-0 p-0 m-0 min-w-0">
+          {slideMode !== 'create' && (
+            <MatrizIdentificacaoCard
+              animal={animais.find((a: Animal) => a.id === formData.animal_id) ?? animais.find((a: Animal) => a.brinco?.trim().toLowerCase() === (formData.brinco_matriz || '').trim().toLowerCase())}
+              brinco={formData.brinco_matriz}
+            />
+          )}
           {/* TABS SUPERIORES PARA SEGMENTAÇÃO DE PROTOCOLO (TELA 4.1) */}
           <div className="flex border-b border-gray-200 dark:border-gray-800 overflow-x-auto pb-1">
             <button
@@ -206,6 +215,7 @@ export const ReprodutivoSlidePanel = ({
               </div>
 
               {/* Brinco Matriz (Seleção da Lista ou Inserção Manual) */}
+              {slideMode === 'create' && (
               <div>
                 <div className="flex flex-col justify-between gap-1.5 mb-2">
                   <label htmlFor="iatf_matriz" className="block text-sm font-semibold text-gray-900 dark:text-gray-100">
@@ -363,6 +373,51 @@ export const ReprodutivoSlidePanel = ({
                   </div>
                 )}
               </div>
+              )}
+
+              {slideMode === 'edit' && (
+                <div>
+                  <label htmlFor="iatf_matriz" className="block text-sm font-semibold text-gray-900 dark:text-gray-100 mb-2">
+                    Brinco da Matriz (Vaca/Fêmea) *
+                  </label>
+                  <Input
+                    id="iatf_matriz"
+                    type="text"
+                    list="lista-sugestoes-iatf"
+                    placeholder="Digite o brinco da matriz cadastrada (Ex: 1042)"
+                    value={formData.brinco_matriz || ''}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      const found = matrizes.find((m: Animal) => m.brinco.trim().toLowerCase() === val.trim().toLowerCase());
+                      setFormData({ ...formData, brinco_matriz: val, animal_id: found?.id || '' });
+                    }}
+                    required
+                    noMargin
+                  />
+                  <datalist id="lista-sugestoes-iatf">
+                    {matrizes.map((m: Animal) => (
+                      <option key={m.id} value={m.brinco}>
+                        {`Brinco #${m.brinco} - ${m.raca || 'Nelore'} (${m.status_reprodutivo || 'Solteira'})`}
+                      </option>
+                    ))}
+                  </datalist>
+                  <div className="text-[11px] px-1 pt-0.5">
+                    <span className="text-gray-500 dark:text-gray-400">
+                      {formData.brinco_matriz && matrizes.some((m: Animal) => m.brinco.trim().toLowerCase() === formData.brinco_matriz.trim().toLowerCase()) ? (
+                        <span className="text-emerald-600 dark:text-emerald-400 font-semibold">
+                          ✓ Matriz identificada no rebanho ({matrizes.find((m: Animal) => m.brinco.trim().toLowerCase() === formData.brinco_matriz.trim().toLowerCase())?.raca || 'Nelore'})
+                        </span>
+                      ) : formData.brinco_matriz ? (
+                        <span className="text-amber-600 dark:text-amber-400 font-medium">
+                          ✏️ Brinco ainda não identificado no cadastro; cadastre o animal antes de salvar
+                        </span>
+                      ) : (
+                        'Digite o número do brinco ou escolha das sugestões do rebanho'
+                      )}
+                    </span>
+                  </div>
+                </div>
+              )}
 
               {/* Data D10 da inseminação */}
               <div>
@@ -848,16 +903,18 @@ export const ReprodutivoSlidePanel = ({
                   onChange={(e) => setFormData({ ...formData, data_principal: e.target.value })}
                   required
                 />
-                <Select
-                  label="Lote de matrizes"
-                  id="monta_lote"
-                  value={selectedLoteId}
-                  onChange={(e) => setSelectedLoteId(e.target.value)}
-                  options={[
-                    { label: 'Todos os animais (sem lote)', value: '' },
-                    ...lotes.map((lote: { id: string; nome: string }) => ({ label: lote.nome, value: lote.id })),
-                  ]}
-                />
+                {slideMode === 'create' && (
+                  <Select
+                    label="Lote de matrizes"
+                    id="monta_lote"
+                    value={selectedLoteId}
+                    onChange={(e) => setSelectedLoteId(e.target.value)}
+                    options={[
+                      { label: 'Todos os animais (sem lote)', value: '' },
+                      ...lotes.map((lote: { id: string; nome: string }) => ({ label: lote.nome, value: lote.id })),
+                    ]}
+                  />
+                )}
                 {!modoManualTouroMonta ? (
                   <Select
                     label="Touro cadastrado *"
@@ -900,6 +957,7 @@ export const ReprodutivoSlidePanel = ({
               </div>
 
               {/* Checkbox List com as Vacas Selecionadas */}
+              {slideMode === 'create' && (
               <div>
                 <div className="flex justify-between items-center mb-2">
                   <label className="text-sm font-semibold text-gray-900 dark:text-gray-100">
@@ -943,6 +1001,7 @@ export const ReprodutivoSlidePanel = ({
                   )}
                 </div>
               </div>
+              )}
 
               <div>
                 <label htmlFor="monta_obs" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">

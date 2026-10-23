@@ -7,7 +7,7 @@ import { Pagination } from '@/components/Pagination';
 import { EmptyState } from '@/components/EmptyState';
 import { ErrorState } from '@/components/ErrorState';
 import { Animal } from '@/types/database';
-import { calcularIdadeFormatada } from '../utils/animalUtils';
+import { calcularIdadeFormatada } from '@/utils/animalAge';
 
 interface AnimaisTableProps {
   animais: Animal[];

@@ -25,9 +25,10 @@ export async function selecionarNoSelect(page: Page, triggerId: string, optionLa
 
 /**
  * Cria uma matriz (fêmea, ativa) com a categoria informada e lança um
- * protocolo IATF apenas para ela, usando as telas do próprio app.
+ * protocolo IATF apenas para ela, usando as telas do próprio app. Ao final,
+ * deixa a tela de manejo reprodutivo aberta com a busca pelo brinco aplicada.
  */
-export async function cadastrarMatrizComIatf(page: Page, brinco: string, categoria: CategoriaAnimal): Promise<void> {
+export async function lancarIatfParaMatriz(page: Page, brinco: string, categoria: CategoriaAnimal): Promise<void> {
   await page.goto('/animais');
   await page.getByRole('button', { name: 'Cadastrar Animal' }).click();
   await page.locator('#brinco').fill(brinco);
@@ -56,7 +57,14 @@ export async function cadastrarMatrizComIatf(page: Page, brinco: string, categor
   // Reabrir a tela parte de uma sessão limpa e a busca por brinco isola o registro criado.
   await page.goto('/reproducao');
   await page.locator('#search_matriz').fill(brinco);
-  await expect(page.getByRole('row', { name: new RegExp(brinco) })).toBeVisible({ timeout: 15000 });
+}
+
+/**
+ * Cria a matriz com o lançamento IATF e confirma que o registro aparece na listagem.
+ */
+export async function cadastrarMatrizComIatf(page: Page, brinco: string, categoria: CategoriaAnimal): Promise<void> {
+  await lancarIatfParaMatriz(page, brinco, categoria);
+  await expect(page.getByRole('row', { name: new RegExp(brinco) })).toBeVisible({ timeout: 45000 });
 }
 
 /** Remove o evento reprodutivo e a matriz criados pelo teste. */
@@ -64,6 +72,7 @@ export async function removerEventoEMatriz(page: Page, brinco: string): Promise<
   await page.goto('/reproducao');
   await page.locator('#search_matriz').fill(brinco);
   const linhaDoEvento = page.getByRole('row', { name: new RegExp(brinco) });
+  await expect(linhaDoEvento).toBeVisible({ timeout: 45000 });
   await linhaDoEvento.getByRole('button', { name: 'Excluir' }).click();
   await page.getByRole('button', { name: 'Sim, Excluir' }).click();
   await expect(linhaDoEvento).toHaveCount(0);

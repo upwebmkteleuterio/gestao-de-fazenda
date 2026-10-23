@@ -86,6 +86,7 @@ export const ManejoReprodutivoPage: React.FC = () => {
     setEventoToDelete,
     formData,
     setFormData,
+    animais,
     matrizes,
     matrizesDisponiveis,
     lotes,
@@ -218,6 +219,7 @@ export const ManejoReprodutivoPage: React.FC = () => {
         toggleCowSelection={toggleCowSelection}
         toggleAllCows={selectAllCows}
         clearCowSelection={clearCowSelection}
+        animais={animais}
         matrizes={matrizes}
         matrizesDisponiveis={matrizesDisponiveis}
         lotes={lotes}

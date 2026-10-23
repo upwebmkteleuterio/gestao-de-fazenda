@@ -7,7 +7,7 @@ import { Tabs } from '@/components/Tabs';
 // Hooks locais especializados
 import { useAnimaisTable } from './Animais/hooks/useAnimaisTable';
 import { useAnimalForm } from './Animais/hooks/useAnimalForm';
-import { calcularIdadeFormatada } from './Animais/utils/animalUtils';
+import { calcularIdadeFormatada } from '@/utils/animalAge';
 
 // Sub-componentes da página Animais
 import { AnimaisHeader } from './Animais/components/AnimaisHeader';

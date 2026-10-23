@@ -52,7 +52,7 @@ import { isPlausibleAnimalWeight } from "@/services/domainValidation";
 import { useAnimalChildren } from "@/hooks/useAnimais";
 import { MaeSearchInput } from "./MaeSearchInput";
 import { TouroSearchInput } from "./TouroSearchInput";
-import { AnimalAvatar } from "./AnimalAvatar";
+import { AnimalAvatar } from "@/components/AnimalAvatar";
 type MatrizTab = "cobertas" | "paridas" | "solteiras" | "toque";
 type Toast = (message: string, type?: "success" | "error" | "info") => void;
 

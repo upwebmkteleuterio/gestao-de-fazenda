@@ -1,5 +1,5 @@
 import React from 'react';
-import { TipoAnimal } from '../../../types/database';
+import { TipoAnimal } from '@/types/database';
 
 type AnimalAvatarConfig = {
   src: string;
