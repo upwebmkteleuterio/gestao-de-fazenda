@@ -3,6 +3,7 @@ import type { ReactNode } from 'react';
 import type { Session } from '@supabase/supabase-js';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { readCurrentSession, subscribeToAuthState, supabase } from '@/integrations/supabase/client';
+import { isBrowserOnline } from '@/offline/connectivity';
 import { getAuthErrorMessage } from '@/utils/authError';
 
 export const ROLES = ['superadmin', 'assistant'] as const;
@@ -82,11 +83,12 @@ export function SessionContextProvider({ children }: { children: ReactNode }) {
       applySession(nextSession);
     });
 
-    const isOnline = typeof navigator === 'undefined' || navigator.onLine;
-    void readCurrentSession(isOnline).then(({ session: nextSession, error }) => {
+    void readCurrentSession(isBrowserOnline()).then(({ session: nextSession, error }) => {
       if (!mounted) return;
       applySession(nextSession);
-      if (error) setAuthError(getAuthErrorMessage(error));
+      // Um erro de leitura só interessa quando não há sessão para abrir: offline, vale a
+      // sessão salva no aparelho e a validação acontece no envio das alterações ao servidor.
+      if (error && !nextSession) setAuthError(getAuthErrorMessage(error));
     });
 
     return () => {
