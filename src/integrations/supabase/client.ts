@@ -25,10 +25,6 @@ const updateAuthCache = (session: Session | null): void => {
   authStateListeners.forEach((listener) => listener(session));
 };
 
-supabase.auth.onAuthStateChange((_event, session) => {
-  updateAuthCache(session);
-});
-
 export const subscribeToAuthState = (listener: AuthStateListener): (() => void) => {
   authStateListeners.add(listener);
   return () => authStateListeners.delete(listener);
@@ -69,6 +65,15 @@ const readStoredSession = (): Session | null => {
  * nunca pode ser tratada como "sem sessão": era isso que expulsava o usuário logado.
  */
 const resolveKnownSession = (): Session | null => cachedSession ?? readStoredSession();
+
+supabase.auth.onAuthStateChange((_event, session) => {
+  // O Supabase também emite evento com sessão nula quando ele *não conseguiu* ler ou renovar
+  // a sessão (offline, rede lenta, renovação pendente) — não apenas quando o usuário saiu.
+  // Isso não é logout: se a sessão continua salva no aparelho, ela segue valendo, porque quem
+  // valida o acesso é o servidor, no envio de cada alteração. Só tratamos como deslogado
+  // quando não há mais sessão salva (logout real ou sessão revogada).
+  updateAuthCache(session ?? readStoredSession());
+});
 
 const AUTH_SESSION_TIMEOUT_MS = 3000;
 class SessionReadTimeoutError extends Error {
