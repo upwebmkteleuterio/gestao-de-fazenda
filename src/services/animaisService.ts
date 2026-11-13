@@ -156,19 +156,46 @@ const toRegistroToque = (row: RegistroToqueDbRow): RegistroToqueAno => ({
   observacoes: row.observacoes ?? undefined,
 });
 
+// Os ids dos animais vão na URL da consulta (`.in(...)`). Com o rebanho inteiro a URL
+// passava de 25 KB e o servidor respondia 400, derrubando a lista de animais. Em lotes
+// pequenos a URL fica segura e o resultado é o mesmo.
+const TOQUES_BATCH_SIZE = 100;
+
+const fetchRegistrosToque = async (animalIds: string[]): Promise<RegistroToqueDbRow[]> => {
+  const batches: string[][] = [];
+  for (let start = 0; start < animalIds.length; start += TOQUES_BATCH_SIZE) {
+    batches.push(animalIds.slice(start, start + TOQUES_BATCH_SIZE));
+  }
+  const results = await Promise.all(
+    batches.map(async (batch) => {
+      const { data, error } = await supabase
+        .from('registros_toque')
+        .select('id, animal_id, data, ano, brinco, resultado, observacoes')
+        .in('animal_id', batch)
+        .order('data', { ascending: false });
+      if (error) throw error;
+      return (data ?? []) as unknown as RegistroToqueDbRow[];
+    }),
+  );
+  return results.flat();
+};
+
 const withNormalizedToques = async (rows: AnimalDbRow[]): Promise<Animal[]> => {
   const animals = rows.map(toAnimal);
   if (animals.length === 0) return animals;
 
-  const { data, error } = await supabase
-    .from('registros_toque')
-    .select('id, animal_id, data, ano, brinco, resultado, observacoes')
-    .in('animal_id', animals.map((animal) => animal.id))
-    .order('data', { ascending: false });
-  if (error) throw error;
+  let toqueRows: RegistroToqueDbRow[];
+  try {
+    toqueRows = await fetchRegistrosToque(animals.map((animal) => animal.id));
+  } catch (error) {
+    // O histórico de toques é um complemento: se essa consulta falhar, a lista de animais
+    // continua aparecendo. Antes, uma falha aqui deixava várias telas sem nenhum animal.
+    console.error('[animaisService] falha ao carregar o histórico de toques', error);
+    return classifyAnimals(animals);
+  }
 
   const normalizedByAnimal = new Map<string, RegistroToqueAno[]>();
-  ((data ?? []) as unknown as RegistroToqueDbRow[]).forEach((row) => {
+  toqueRows.forEach((row) => {
     const records = normalizedByAnimal.get(row.animal_id) ?? [];
     records.push(toRegistroToque(row));
     normalizedByAnimal.set(row.animal_id, records);
