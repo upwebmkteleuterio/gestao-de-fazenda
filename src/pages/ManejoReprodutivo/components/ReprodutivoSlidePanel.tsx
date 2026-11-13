@@ -10,6 +10,7 @@ import { Edit, HeartHandshake, Baby, Plus, Calendar, Filter, Check, X, Trash2, C
 import { MontaNaturalIcon } from '../../../components/MontaNaturalIcon';
 import { InseminacaoIcon } from '../../../components/InseminacaoIcon';
 import { MatrizIdentificacaoCard } from './MatrizIdentificacaoCard';
+import { MatrizSearchInput } from './MatrizSearchInput';
 import { EventoReproducao, DGToqueResultado, Animal } from '../../../types/database';
 import { isSameSearchText } from '@/utils/searchText';
 
@@ -321,14 +322,10 @@ export const ReprodutivoSlidePanel = ({
                   <div className="space-y-1.5">
                     <div className="flex gap-2 items-start">
                       <div className="flex-1 min-w-0">
-                        <Input
+                        <MatrizSearchInput
                           id="iatf_matriz"
-                          type="text"
-                          list="lista-sugestoes-iatf"
-                          placeholder="Digite o brinco da matriz cadastrada (Ex: 1042)"
                           value={formData.brinco_matriz || ''}
-                          onChange={(e) => {
-                            const val = e.target.value;
+                          onChange={(val) => {
                             const found = matrizes.find((m: any) => isSameSearchText(m.brinco, val));
                             setFormData({
                               ...formData,
@@ -336,16 +333,13 @@ export const ReprodutivoSlidePanel = ({
                               animal_id: found?.id || '',
                             });
                           }}
+                          matrizes={matrizes}
+                          placeholder="Digite o brinco da matriz cadastrada (Ex: 1042)"
+                          optionSuffix={(matriz) => `- ${matriz.raca || 'Nelore'} (${matriz.status_reprodutivo || 'Solteira'})`}
                           required
-                          noMargin
+                          testId="matriz-sugestoes"
+                          panelOpen={slideOpen}
                         />
-                        <datalist id="lista-sugestoes-iatf">
-                          {matrizes.map((m: any) => (
-                            <option key={m.id} value={m.brinco}>
-                              {`Brinco #${m.brinco} - ${m.raca || 'Nelore'} (${m.status_reprodutivo || 'Solteira'})`}
-                            </option>
-                          ))}
-                        </datalist>
                       </div>
                       <button
                         type="button"
@@ -390,27 +384,20 @@ export const ReprodutivoSlidePanel = ({
                   <label htmlFor="iatf_matriz" className="block text-sm font-semibold text-gray-900 dark:text-gray-100 mb-2">
                     Brinco da Matriz (Vaca/Fêmea) *
                   </label>
-                  <Input
+                  <MatrizSearchInput
                     id="iatf_matriz"
-                    type="text"
-                    list="lista-sugestoes-iatf"
-                    placeholder="Digite o brinco da matriz cadastrada (Ex: 1042)"
                     value={formData.brinco_matriz || ''}
-                    onChange={(e) => {
-                      const val = e.target.value;
+                    onChange={(val) => {
                       const found = matrizes.find((m: Animal) => isSameSearchText(m.brinco, val));
                       setFormData({ ...formData, brinco_matriz: val, animal_id: found?.id || '' });
                     }}
+                    matrizes={matrizes}
+                    placeholder="Digite o brinco da matriz cadastrada (Ex: 1042)"
+                    optionSuffix={(matriz) => `- ${matriz.raca || 'Nelore'} (${matriz.status_reprodutivo || 'Solteira'})`}
                     required
-                    noMargin
+                    testId="matriz-sugestoes"
+                    panelOpen={slideOpen}
                   />
-                  <datalist id="lista-sugestoes-iatf">
-                    {matrizes.map((m: Animal) => (
-                      <option key={m.id} value={m.brinco}>
-                        {`Brinco #${m.brinco} - ${m.raca || 'Nelore'} (${m.status_reprodutivo || 'Solteira'})`}
-                      </option>
-                    ))}
-                  </datalist>
                   <div className="text-[11px] px-1 pt-0.5">
                     <span className="text-gray-500 dark:text-gray-400">
                       {formData.brinco_matriz && matrizes.some((m: Animal) => isSameSearchText(m.brinco, formData.brinco_matriz)) ? (
@@ -1420,14 +1407,10 @@ export const ReprodutivoSlidePanel = ({
                   <div className="space-y-1.5">
                     <div className="flex gap-2 items-start">
                       <div className="flex-1 min-w-0">
-                        <Input
+                        <MatrizSearchInput
                           id="dg_vaca_select"
-                          type="text"
-                          list="lista-sugestoes-dg"
-                          placeholder="Digite o brinco da vaca cadastrada (Ex: 2045)"
                           value={formData.brinco_matriz || ''}
-                          onChange={(e) => {
-                            const val = e.target.value;
+                          onChange={(val) => {
                             const found = matrizes.find((m: any) => isSameSearchText(m.brinco, val));
                             setFormData({
                               ...formData,
@@ -1435,16 +1418,13 @@ export const ReprodutivoSlidePanel = ({
                               animal_id: found?.id || '',
                             });
                           }}
+                          matrizes={matrizes}
+                          placeholder="Digite o brinco da vaca cadastrada (Ex: 2045)"
+                          optionSuffix={(matriz) => `- ${matriz.raca || 'Nelore'} (${matriz.status_reprodutivo || 'Sem DG'})`}
                           required
-                          noMargin
+                          testId="matriz-sugestoes-dg"
+                          panelOpen={slideOpen}
                         />
-                        <datalist id="lista-sugestoes-dg">
-                          {matrizes.map((m: any) => (
-                            <option key={m.id} value={m.brinco}>
-                              {`Brinco #${m.brinco} - ${m.raca || 'Nelore'} (${m.status_reprodutivo || 'Sem DG'})`}
-                            </option>
-                          ))}
-                        </datalist>
                       </div>
                       <button
                         type="button"
